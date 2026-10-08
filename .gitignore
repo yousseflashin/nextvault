@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.db
+*.db-journal
+.DS_Store
+.env.local
+.vscode/
+.idea/
+.npmrc
+npm-debug.log*
+electron-builder-output.*
+logs/

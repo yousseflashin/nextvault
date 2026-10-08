@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NexVault - Secure Local-First Vault</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f1117;
+            color: #e0e0e0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            text-align: center;
+            max-width: 500px;
+            padding: 40px;
+        }
+        h1 { font-size: 2.5rem; margin-bottom: 1rem; color: #fff; }
+        p { color: #888; margin-bottom: 2rem; line-height: 1.6; }
+        .btn {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 1rem;
+            cursor: pointer;
+            margin: 0 8px;
+            transition: background 0.2s;
+        }
+        .btn:hover { background: #2563eb; }
+        .btn-secondary {
+            background: #374151;
+        }
+        .btn-secondary:hover { background: #4b5563; }
+        #status { margin-top: 20px; padding: 12px; background: #1f2937; border-radius: 8px; font-family: monospace; font-size: 0.85rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>NexVault</h1>
+        <p>Secure local-first password, OTP, and device network system</p>
+        <button class="btn" onclick="handleNewUser()">New User - Generate Token</button>
+        <button class="btn btn-secondary" onclick="handleExistingUser()">Existing User - Enter Token</button>
+        <button class="btn btn-secondary" onclick="startGrid()">Start NexGrid</button>
+        <hr>
+        <input id="service" placeholder="Service name">
+        <input id="vault-password" type="password" placeholder="Password">
+        <button class="btn" onclick="savePassword()">Save Password</button>
+        <button class="btn btn-secondary" onclick="readPassword()">Read Password</button>
+        <input id="otp-secret" placeholder="Base32 TOTP secret">
+        <button class="btn" onclick="saveOtp()">Save OTP</button>
+        <button class="btn btn-secondary" onclick="readOtp()">Read OTP</button>
+        <div id="status">Status: Initializing...</div>
+    </div>
+    <script src="renderer.js"></script>
+</body>
+</html>
