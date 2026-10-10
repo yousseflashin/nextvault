@@ -123,6 +123,9 @@ The relay server manages WebRTC signaling. **Requires persistent WebSocket suppo
   npm install
   npm start
   ```
+  For hosts that ask for a start command target, set the project/root directory
+  to `apps/relay` and enter `server.js` as the target. Do not enter `node server.js`
+  in a field that expects the output filename; the host adds the Node command itself.
   Set the relay URL in each app via `NEXVAULT_RELAY_URL` environment variable or the settings UI.
 
 ### Dependency Ownership
