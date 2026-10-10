@@ -8,7 +8,7 @@
     "build": "electron-builder"
   },
   "dependencies": {
-    "@nexvault/core": "*",
+    "@nexvault/core": "file:../../packages/core",
     "ws": "^8.18.0"
   },
   "devDependencies": {

@@ -14,46 +14,65 @@ NexVault is a local-first, end-to-end encrypted password manager, OTP authentica
 
 ## Getting Started
 
-NexVault is a workspace monorepo. From the repository root you can:
+NexVault is a monorepo with independently installable projects. From the repository root you can:
 
-### 1. Install dependencies (once)
+### 1. Install dependencies
+
 ```bash
-npm install
+npm install                 # repository scripts and orchestration only
+npm --prefix packages/core install
+npm --prefix apps/desktop install
+npm --prefix apps/mobile install
+npm --prefix apps/website install
 ```
 
 ### 2. Start any app
+
 Each app can be started independently; the desktop app acts as the primary vault and extension bridge, but you can also use mobile or extension alone after pairing.
 
 #### Desktop (Electron)
+
 ```bash
-npm run start:desktop   # or: npm start --workspace=@nexvault/desktop
+npm --prefix apps/desktop install
+npm run start:desktop
 ```
+
 Build: `npm run build:desktop`
 
 #### Mobile (Capacitor + React)
+
 ```bash
-npm run start:mobile    # or: npm start --workspace=@nexvault/mobile
+npm --prefix apps/mobile install
+npm run start:mobile
 ```
+
 Build Android: `npm run build:mobile:android`  
 Build iOS: `npm run build:mobile:ios` (requires Xcode)
 
 #### Browser Extension
+
 Load the unpacked extension from `apps/extension/src` in Chrome/Edge/Brave (developer mode).  
 It will prompt to connect to a running desktop vault.
 
 #### Website (landing page)
+
 ```bash
+npm --prefix apps/website install
 npm run build:website   # generates static files in apps/website/public
 ```
+
 Then serve that folder with any static host (e.g., `npx serve apps/website/public`).
 
 ### 3. Pairing Devices
+
 On each additional device (desktop, mobile, or extension):
+
 1. Choose **Existing Network** and paste the bootstrap token JSON from your first device.
 2. Enter the same master password.
-The devices will discover each other via the relay and sync your vault end‑to‑end encrypted.
+   The devices will discover each other via the relay and sync your vault end‑to‑end encrypted.
 
 ### 4. Signaling Relay (optional for testing)
+
 The apps include a built‑in dev relay (ws://localhost:3456). For production you can self‑host or use a third‑party service; see **Deployment** below.
 
 ---
@@ -73,14 +92,15 @@ nexvault/
 └── scripts/          # Build + publish tooling
 ```
 
-* `scripts/sync-assets.mjs` copies shared cyber‑theme assets (CSS + binary‑shield canvas) into each app on `prestart` and before website builds.
+- `scripts/sync-assets.mjs` copies shared cyber‑theme assets (CSS + binary‑shield canvas) into each app on `prestart` and before website builds.
 
 ---
 
 ## Releases
 
 `npm run release` builds:
-- Desktop AppImage (Linux) from `@nexvault/desktop`
+
+- Desktop Linux bundle from `apps/desktop`
 - Android APK (debug) from `@nexvault/mobile`
 
 Both are copied into `apps/website/public/downloads/` with a `manifest.json`.  
@@ -91,14 +111,33 @@ Deploy `apps/website/public` to a static host (GitHub Pages, Vercel, Netlify) an
 ## Deployment
 
 ### Relay Server
+
 The relay server manages WebRTC signaling. **Requires persistent WebSocket support.**
 
 - **Recommended Platforms:** Render, Railway, Fly.io, or an AWS/DigitalOcean VPS.
-- **Deployment:** Use a platform that supports persistent Node.js processes.
-    ```bash
-    npm run start:relay   # or: npm start --workspace=@nexvault/relay
-    ```
-Set the relay URL in each app via `NEXVAULT_RELAY_URL` environment variable or the settings UI.
+- **Deployment:** Build the relay artifact from the repository root, then deploy only
+  `apps/relay/dist`. This artifact vendors the crypto-only `@nexvault/core` entry
+  used by the relay and does not install Electron or `better-sqlite3-multiple-ciphers`.
+  `bash
+        npm run build:relay
+        cd apps/relay/dist
+        npm install --omit=dev
+        npm start
+    `
+  For local relay development, run `npm --prefix apps/relay install`, then run
+  `npm run start:relay`. The source package installs the full core dependency set;
+  production hosting should use the isolated artifact above.
+  Set the relay URL in each app via `NEXVAULT_RELAY_URL` environment variable or the settings UI.
+
+### Dependency Ownership
+
+- `packages/core` owns shared crypto, grid, security, database, and OTP runtime dependencies.
+- `apps/desktop` owns Electron, Electron Builder, and the native SQLite runtime used by the vault.
+- `apps/relay` owns Express and WebSocket runtime dependencies. Its deployment artifact
+  includes only the core crypto module required for token verification.
+- `apps/mobile` owns React, Capacitor, Vite, TypeScript, and mobile build tooling.
+- `apps/website` owns Tailwind and static-site build tooling.
+- The root package owns orchestration scripts only; it does not install app runtimes.
 
 ---
 

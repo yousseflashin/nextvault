@@ -2,33 +2,21 @@
   "name": "@nexvault/root",
   "private": true,
   "version": "0.1.0",
-  "workspaces": [
-    "packages/*",
-    "apps/*"
-  ],
   "scripts": {
-    "start": "npm run start --workspace=@nexvault/desktop",
+    "start": "npm run start:desktop",
     "prestart": "node scripts/sync-assets.mjs",
-    "test": "jest",
-    "start:desktop": "npm run start --workspace=@nexvault/desktop",
-    "build:desktop": "npm run build --workspace=@nexvault/desktop",
-    "build:mobile": "npm run build --workspace=@nexvault/mobile",
-    "build:mobile:android": "npm run build --workspace=@nexvault/mobile && npm exec --workspace=@nexvault/mobile cap sync android && ./apps/mobile/android/gradlew -p apps/mobile/android assembleDebug",
-    "build:website": "node scripts/sync-assets.mjs && npm run build --workspace=@nexvault/website",
+    "test": "npm run test:core && npm run test:relay",
+    "test:core": "npm --prefix packages/core test",
+    "test:relay": "npm --prefix apps/relay test",
+    "start:desktop": "npm --prefix apps/desktop run start",
+    "build:desktop": "npm --prefix apps/desktop run build",
+    "start:mobile": "npm --prefix apps/mobile run start",
+    "build:mobile": "npm --prefix apps/mobile run build",
+    "build:mobile:android": "npm --prefix apps/mobile run build && npm --prefix apps/mobile exec -- cap sync android && ./apps/mobile/android/gradlew -p apps/mobile/android assembleDebug",
+    "build:website": "node scripts/sync-assets.mjs && npm --prefix apps/website run build",
     "publish:builds": "node scripts/publish-builds.mjs",
     "release": "npm run build:desktop && npm run build:mobile:android && npm run publish:builds && npm run build:website",
-    "start:relay": "npm run start --workspace=@nexvault/relay",
-    "build:relay": "npm run build --workspace=@nexvault/relay"
-  },
-  "devDependencies": {
-    "jest": "^29.7.0"
-  },
-  "allowScripts": {
-    "electron@38.8.6": true,
-    "electron-winstaller@5.4.0": true
-  },
-  "dependencies": {
-    "better-sqlite3-multiple-ciphers": "^13.0.3",
-    "electron": "^38.8.6"
+    "start:relay": "npm --prefix apps/relay run start",
+    "build:relay": "npm --prefix apps/relay run build"
   }
 }
