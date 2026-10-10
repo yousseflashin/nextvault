@@ -115,26 +115,23 @@ Deploy `apps/website/public` to a static host (GitHub Pages, Vercel, Netlify) an
 The relay server manages WebRTC signaling. **Requires persistent WebSocket support.**
 
 - **Recommended Platforms:** Render, Railway, Fly.io, or an AWS/DigitalOcean VPS.
-- **Deployment:** Build the relay artifact from the repository root, then deploy only
-  `apps/relay/dist`. This artifact vendors the crypto-only `@nexvault/core` entry
-  used by the relay and does not install Electron or `better-sqlite3-multiple-ciphers`.
-  `bash
-        npm run build:relay
-        cd apps/relay/dist
-        npm install --omit=dev
-        npm start
-    `
-  For local relay development, run `npm --prefix apps/relay install`, then run
-  `npm run start:relay`. The source package installs the full core dependency set;
-  production hosting should use the isolated artifact above.
+- **Deployment:** Deploy `apps/relay` directly. Its local core dependency has
+  optional desktop-only database peers, so this install does not pull Electron or
+  `better-sqlite3-multiple-ciphers`.
+  ```bash
+  cd apps/relay
+  npm install
+  npm start
+  ```
   Set the relay URL in each app via `NEXVAULT_RELAY_URL` environment variable or the settings UI.
 
 ### Dependency Ownership
 
-- `packages/core` owns shared crypto, grid, security, database, and OTP runtime dependencies.
-- `apps/desktop` owns Electron, Electron Builder, and the native SQLite runtime used by the vault.
-- `apps/relay` owns Express and WebSocket runtime dependencies. Its deployment artifact
-  includes only the core crypto module required for token verification.
+- `packages/core` owns shared crypto, grid, security, and OTP runtime dependencies.
+- `apps/desktop` owns Electron, Electron Builder, Electron Store, and native SQLite.
+- `packages/core` declares database modules as optional peers because only desktop
+  loads `database.js`; core tests install those modules as dev dependencies.
+- `apps/relay` owns Express and WebSocket runtime dependencies and installs no desktop runtime.
 - `apps/mobile` owns React, Capacitor, Vite, TypeScript, and mobile build tooling.
 - `apps/website` owns Tailwind and static-site build tooling.
 - The root package owns orchestration scripts only; it does not install app runtimes.

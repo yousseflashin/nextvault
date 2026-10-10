@@ -9,6 +9,8 @@
   },
   "dependencies": {
     "@nexvault/core": "file:../../packages/core",
+    "better-sqlite3-multiple-ciphers": "^13.0.3",
+    "electron-store": "^8.1.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {

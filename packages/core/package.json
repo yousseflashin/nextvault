@@ -7,16 +7,28 @@
     "./*": "./*.js"
   },
   "scripts": {
-    "test": "jest --runInBand"
+    "test": "NODE_PATH=../../apps/desktop/node_modules npm exec --prefix ../.. -- jest --runInBand"
   },
   "dependencies": {
-    "better-sqlite3-multiple-ciphers": "^13.0.3",
-    "electron-store": "^8.1.0",
     "tweetnacl": "1.0.3",
     "tweetnacl-util": "0.15.1",
     "ws": "^8.18.0"
   },
+  "peerDependencies": {
+    "better-sqlite3-multiple-ciphers": "^13.0.3",
+    "electron-store": "^8.1.0"
+  },
+  "peerDependenciesMeta": {
+    "better-sqlite3-multiple-ciphers": {
+      "optional": true
+    },
+    "electron-store": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "better-sqlite3-multiple-ciphers": "^13.0.3",
+    "electron-store": "^8.1.0",
     "jest": "^29.7.0"
   }
 }

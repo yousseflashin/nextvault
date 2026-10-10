@@ -18,5 +18,8 @@
     "release": "npm run build:desktop && npm run build:mobile:android && npm run publish:builds && npm run build:website",
     "start:relay": "npm --prefix apps/relay run start",
     "build:relay": "npm --prefix apps/relay run build"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
   }
 }

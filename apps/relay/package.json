@@ -8,7 +8,7 @@
 	},
 	"scripts": {
 		"start": "node server.js",
-		"build": "node build-deploy.mjs",
+		"build": "node --check server.js",
 		"test": "jest --runInBand"
 	},
 	"dependencies": {
