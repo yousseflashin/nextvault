@@ -4,10 +4,10 @@
   "version": "0.1.0",
   "workspaces": [
     "packages/*",
-    "apps/*",
-    "website"
+    "apps/*"
   ],
   "scripts": {
+    "start": "npm run start --workspace=@nexvault/desktop",
     "test": "jest",
     "start:desktop": "npm run start --workspace=@nexvault/desktop",
     "build:desktop": "npm run build --workspace=@nexvault/desktop",

@@ -1,11 +1,11 @@
 // Copies desktop (AppImage) and mobile (APK) build artifacts into
-// website/public/downloads/ and writes a manifest.json for the website.
+// apps/website/public/downloads/ and writes a manifest.json for the website.
 import { cp, mkdir, readdir, rm, writeFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..');
-const TARGET = join(ROOT, 'website', 'public', 'downloads');
+const TARGET = join(ROOT, 'apps', 'website', 'public', 'downloads');
 
 const SOURCES = [
   { glob: /^NexVault-.*\.AppImage$/, dir: join(ROOT, 'apps', 'desktop', 'dist'), kind: 'desktop', platform: 'linux' },
@@ -36,4 +36,4 @@ for (const src of SOURCES) {
 }
 
 await writeFile(join(TARGET, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
-console.log(manifest.length ? `${manifest.length} artifact(s) -> website/public/downloads/` : 'No build artifacts found. Run npm run build:desktop / build:mobile:android first.');
+console.log(manifest.length ? `${manifest.length} artifact(s) -> apps/website/public/downloads/` : 'No build artifacts found. Run npm run build:desktop / build:mobile:android first.');

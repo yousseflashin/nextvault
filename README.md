@@ -31,7 +31,7 @@ NexVault is structured as a workspace monorepo.
 The desktop vault acts as the primary vault and extension bridge.
 ```bash
 npm install # Run once from the repository root
-npm run start:desktop
+npm start   # launch the desktop app from the root
 ```
 *To build the production desktop bundle:* `npm run build:desktop` (outputs to `apps/desktop/dist`).
 
@@ -49,11 +49,37 @@ npm install
 npm run build
 npx cap sync android
 ```
+*Build a debug APK from the repository root:* `npm run build:mobile:android` (requires JDK 21 and the Android SDK).
 
-### 4. Website Landing Page
+### 4. Website
 ```bash
 npm run build:website # Run from the repository root
 ```
+
+---
+
+## Project Structure
+```
+nexvault/
+├── apps/
+│   ├── desktop/      # Electron vault (primary app)
+│   ├── mobile/       # Capacitor + React (Android/iOS)
+│   ├── website/      # Static landing + downloads page
+│   ├── extension/    # Browser extension (autofill)
+│   └── relay/        # P2P signaling relay
+├── packages/
+│   └── core/         # Shared crypto, database, grid, OTP, security
+└── scripts/          # Build + publish tooling
+```
+
+---
+
+## Releases
+
+`npm run release` builds the desktop AppImage and Android APK, then copies both into
+`apps/website/public/downloads/` with a `manifest.json`. Deploy `apps/website/public`
+to a static host (GitHub Pages, Vercel, Netlify) and the download links on
+`/downloads.html` resolve automatically.
 
 ---
 
@@ -68,9 +94,9 @@ The relay server manages WebRTC signaling. **Requires persistent WebSocket suppo
     ```
 
 ### Website
-Deploy `website/public` to a static web host.
-*   **Vercel:** `vercel website/public`
-*   **Netlify:** `netlify deploy --dir=website/public`
+Deploy `apps/website/public` to a static web host.
+*   **Vercel:** `vercel apps/website/public`
+*   **Netlify:** `netlify deploy --dir=apps/website/public`
 
 ---
 
