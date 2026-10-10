@@ -5,9 +5,10 @@
   "description": "Connects browser autofill workflows to the local NexVault desktop vault.",
   "permissions": ["storage", "activeTab", "scripting"],
   "host_permissions": ["<all_urls>"],
-  "background": {
-    "service_worker": "background.js"
-  },
+ "background": {
+  "scripts": ["background.js"],
+  "service_worker": "background.js"
+},
   "action": {
     "default_popup": "popup.html",
     "web_accessible_resources": [
