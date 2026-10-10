@@ -1,0 +1,280 @@
+/* ============================================================
+   NexVault Cyber Design System
+   Shared across website, desktop, mobile, and extension.
+   Palette: deep void background, matrix-green primary, cyan accent.
+   ============================================================ */
+
+:root {
+  --nv-bg: #04060c;
+  --nv-bg-2: #070b14;
+  --nv-surface: #0b1220;
+  --nv-surface-2: #0e1626;
+  --nv-border: rgba(0, 255, 157, 0.16);
+  --nv-border-strong: rgba(0, 255, 157, 0.35);
+  --nv-primary: #00ff9d;
+  --nv-primary-dim: #00c77a;
+  --nv-accent: #00d4ff;
+  --nv-danger: #ff3b6b;
+  --nv-text: #e7f2ff;
+  --nv-muted: #7d8ea8;
+  --nv-glow: 0 0 18px rgba(0, 255, 157, 0.35);
+  --nv-glow-strong: 0 0 32px rgba(0, 255, 157, 0.55);
+  --nv-font-mono: ui-monospace, "SF Mono", "JetBrains Mono", "Fira Code", Consolas, monospace;
+  --nv-font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --nv-radius: 10px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--nv-bg);
+  color: var(--nv-text);
+  font-family: var(--nv-font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Full-screen binary rain canvas */
+.nv-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* Content sits above the canvas */
+.nv-layer {
+  position: relative;
+  z-index: 1;
+}
+
+/* CRT scanline overlay */
+.nv-scanlines::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(0, 255, 157, 0.025) 0px,
+    rgba(0, 255, 157, 0.025) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  mix-blend-mode: overlay;
+}
+
+/* Subtle grid backdrop */
+.nv-grid {
+  background-image:
+    linear-gradient(rgba(0, 255, 157, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 255, 157, 0.04) 1px, transparent 1px);
+  background-size: 42px 42px;
+}
+
+/* ---------- Cards ---------- */
+.nv-card {
+  position: relative;
+  background: linear-gradient(160deg, var(--nv-surface) 0%, var(--nv-bg-2) 100%);
+  border: 1px solid var(--nv-border);
+  border-radius: var(--nv-radius);
+  padding: 1.5rem;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(6px);
+  overflow: hidden;
+}
+.nv-card::after {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--nv-primary), transparent);
+  opacity: 0.6;
+}
+.nv-card-hover { transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease; }
+.nv-card-hover:hover {
+  transform: translateY(-3px);
+  border-color: var(--nv-border-strong);
+  box-shadow: var(--nv-glow), 0 14px 44px rgba(0, 0, 0, 0.55);
+}
+
+/* ---------- Buttons ---------- */
+.nv-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-family: var(--nv-font-mono);
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #04140c;
+  background: linear-gradient(180deg, var(--nv-primary) 0%, var(--nv-primary-dim) 100%);
+  border: 1px solid rgba(0, 255, 157, 0.6);
+  border-radius: 8px;
+  padding: 0.8rem 1.4rem;
+  cursor: pointer;
+  overflow: hidden;
+  transition: box-shadow .2s ease, transform .15s ease, filter .2s ease;
+  box-shadow: var(--nv-glow);
+}
+.nv-btn:hover { box-shadow: var(--nv-glow-strong); transform: translateY(-1px); filter: brightness(1.08); }
+.nv-btn:active { transform: translateY(0); }
+/* sweeping sheen */
+.nv-btn::after {
+  content: "";
+  position: absolute;
+  top: 0; left: -80%;
+  width: 60%; height: 100%;
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,0.5), transparent);
+  transform: skewX(-20deg);
+  transition: left .5s ease;
+}
+.nv-btn:hover::after { left: 130%; }
+
+.nv-btn-ghost {
+  color: var(--nv-primary);
+  background: rgba(0, 255, 157, 0.06);
+  border: 1px solid var(--nv-border);
+  box-shadow: none;
+}
+.nv-btn-ghost:hover { background: rgba(0, 255, 157, 0.12); border-color: var(--nv-border-strong); }
+
+.nv-btn-cyan {
+  color: #031820;
+  background: linear-gradient(180deg, var(--nv-accent), #0099c4);
+  border-color: rgba(0, 212, 255, 0.6);
+  box-shadow: 0 0 18px rgba(0, 212, 255, 0.35);
+}
+
+/* ---------- Inputs ---------- */
+.nv-input, .nv-textarea {
+  width: 100%;
+  background: rgba(4, 6, 12, 0.7);
+  border: 1px solid var(--nv-border);
+  border-radius: 8px;
+  color: var(--nv-text);
+  font-family: var(--nv-font-mono);
+  font-size: 0.9rem;
+  padding: 0.75rem 0.9rem;
+  outline: none;
+  transition: border-color .2s ease, box-shadow .2s ease;
+}
+.nv-input:focus, .nv-textarea:focus {
+  border-color: var(--nv-primary);
+  box-shadow: 0 0 0 3px rgba(0, 255, 157, 0.12), var(--nv-glow);
+}
+.nv-input::placeholder, .nv-textarea::placeholder { color: var(--nv-muted); opacity: 0.6; }
+.nv-textarea { resize: vertical; min-height: 96px; line-height: 1.5; }
+
+/* ---------- Badges / chips ---------- */
+.nv-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--nv-font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--nv-primary);
+  background: rgba(0, 255, 157, 0.08);
+  border: 1px solid var(--nv-border);
+  border-radius: 999px;
+  padding: 0.3rem 0.75rem;
+}
+.nv-badge .dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--nv-primary);
+  box-shadow: 0 0 8px var(--nv-primary);
+  animation: nv-pulse 1.6s ease-in-out infinite;
+}
+
+/* ---------- Terminal / status ---------- */
+.nv-terminal {
+  font-family: var(--nv-font-mono);
+  font-size: 0.82rem;
+  line-height: 1.6;
+  background: rgba(2, 4, 8, 0.85);
+  border: 1px solid var(--nv-border);
+  border-radius: 8px;
+  padding: 1rem 1.2rem;
+  color: var(--nv-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  box-shadow: inset 0 0 30px rgba(0, 255, 157, 0.04);
+}
+.nv-terminal .nv-dim { color: var(--nv-muted); }
+
+/* ---------- Titles ---------- */
+.nv-title {
+  font-family: var(--nv-font-mono);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #fff;
+  text-shadow: 0 0 24px rgba(0, 255, 157, 0.35);
+}
+.nv-gradient-text {
+  background: linear-gradient(92deg, var(--nv-primary) 0%, var(--nv-accent) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ---------- Shield logo (pure CSS) ---------- */
+.nv-shield {
+  position: relative;
+  width: 64px; height: 74px;
+  display: inline-block;
+}
+.nv-shield svg { width: 100%; height: 100%; filter: drop-shadow(0 0 12px rgba(0,255,157,0.5)); }
+
+/* ---------- Animations ---------- */
+@keyframes nv-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.82); }
+}
+@keyframes nv-flicker {
+  0%, 100% { opacity: 1; }
+  92% { opacity: 1; }
+  93% { opacity: 0.4; }
+  94% { opacity: 1; }
+  96% { opacity: 0.6; }
+  97% { opacity: 1; }
+}
+@keyframes nv-scan {
+  0% { top: -10%; }
+  100% { top: 110%; }
+}
+.nv-flicker { animation: nv-flicker 4s linear infinite; }
+
+/* scanning beam across a card */
+.nv-scanbeam {
+  position: absolute;
+  left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--nv-primary), transparent);
+  opacity: 0.5;
+  animation: nv-scan 3.5s linear infinite;
+  pointer-events: none;
+}
+
+/* divider */
+.nv-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--nv-border-strong), transparent);
+  border: 0;
+  margin: 1.5rem 0;
+}
+
+/* utility */
+.nv-mono { font-family: var(--nv-font-mono); }
+.nv-muted { color: var(--nv-muted); }
+.nv-text-primary { color: var(--nv-primary); }
+.nv-text-accent { color: var(--nv-accent); }

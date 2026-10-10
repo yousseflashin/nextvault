@@ -1,63 +1,417 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NexVault - Secure Local-First Vault</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #0f1117;
-            color: #e0e0e0;
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .container {
-            text-align: center;
-            max-width: 500px;
-            padding: 40px;
-        }
-        h1 { font-size: 2.5rem; margin-bottom: 1rem; color: #fff; }
-        p { color: #888; margin-bottom: 2rem; line-height: 1.6; }
-        .btn {
-            background: #3b82f6;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-size: 1rem;
-            cursor: pointer;
-            margin: 0 8px;
-            transition: background 0.2s;
-        }
-        .btn:hover { background: #2563eb; }
-        .btn-secondary {
-            background: #374151;
-        }
-        .btn-secondary:hover { background: #4b5563; }
-        #status { margin-top: 20px; padding: 12px; background: #1f2937; border-radius: 8px; font-family: monospace; font-size: 0.85rem; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NexVault Desktop</title>
+  <link rel="stylesheet" href="cyber/cyber.css">
+  <style>
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; background: var(--nv-bg); color: var(--nv-text); font-family: var(--nv-font-sans); }
+    .nv-root {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+    .nv-header {
+      position: relative;
+      z-index: 1;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--nv-border);
+      background: linear-gradient(180deg, var(--nv-bg-2), transparent);
+    }
+    .nv-brand { display: flex; align-items: center; gap: 0.75rem; text-decoration: none; color: white; }
+    .nv-brand .nv-shield { width: 42px; height: 48px; }
+    .nv-brand span { font-family: var(--nv-font-mono); font-weight: 800; font-size: 1.1rem; }
+    .nv-brand .nv-gradient-text { font-size: 1.1rem; }
+    .nv-status {
+      display: flex; align-items: center; gap: 0.75rem;
+      font-family: var(--nv-font-mono); font-size: 0.75rem; text-transform: uppercase;
+      color: var(--nv-primary); letter-spacing: 0.08em;
+    }
+    .nv-status .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--nv-primary); box-shadow: 0 0 10px var(--nv-primary); animation: nv-pulse 1.6s ease-in-out infinite; }
+    .nv-main { flex: 1; display: flex; flex-direction: column; padding: 2rem 1.5rem 3rem; max-width: 1100px; margin: 0 auto; width: 100%; z-index: 1; position: relative; }
+    .nv-section { width: 100%; margin-bottom: 1.5rem; }
+    .nv-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; }
+    .nv-panel { display: flex; flex-direction: column; gap: 1rem; }
+    .nv-panel-header { display: flex; align-items: center; justify-content: space-between; }
+    .nv-panel-title { font-family: var(--nv-font-mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.15em; color: var(--nv-primary); font-weight: 700; }
+    .nv-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+    @media (max-width: 520px) { .nv-form-row { grid-template-columns: 1fr; } }
+    .nv-input-group { display: flex; flex-direction: column; gap: 0.35rem; }
+    .nv-label { font-family: var(--nv-font-mono); font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--nv-muted); }
+    .nv-terminal { font-family: var(--nv-font-mono); font-size: 0.75rem; line-height: 1.5; background: rgba(2,4,8,0.85); border: 1px solid var(--nv-border); border-radius: 8px; padding: 0.75rem 1rem; color: var(--nv-primary); white-space: pre-wrap; word-break: break-word; min-height: 120px; max-height: 240px; overflow-y: auto; box-shadow: inset 0 0 30px rgba(0,255,157,0.04); }
+    .nv-terminal .nv-dim { color: var(--nv-muted); }
+    .nv-btn-row { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    .nv-card.nv-scroll { max-height: 360px; overflow-y: auto; padding: 1rem; }
+    .nv-vault-item { display: flex; align-items: center; justify-content: space-between; padding: 0.75rem; background: rgba(0,255,157,0.03); border: 1px solid var(--nv-border); border-radius: 8px; margin-bottom: 0.5rem; transition: border-color .2s, background .2s; }
+    .nv-vault-item:hover { border-color: var(--nv-border-strong); background: rgba(0,255,157,0.06); }
+    .nv-vault-info { display: flex; flex-direction: column; gap: 0.2rem; }
+    .nv-vault-service { font-family: var(--nv-font-mono); font-size: 0.85rem; font-weight: 600; color: var(--nv-text); }
+    .nv-vault-meta { font-family: var(--nv-font-mono); font-size: 0.65rem; color: var(--nv-muted); }
+    .nv-vault-actions { display: flex; gap: 0.35rem; }
+    .nv-vault-btn { padding: 0.35rem 0.65rem; font-family: var(--nv-font-mono); font-size: 0.65rem; border-radius: 6px; border: 1px solid var(--nv-border); background: var(--nv-surface); color: var(--nv-primary); cursor: pointer; transition: all .15s; }
+    .nv-vault-btn:hover { border-color: var(--nv-primary); background: rgba(0,255,157,0.1); }
+    .nv-vault-btn.delete { color: var(--nv-danger); border-color: rgba(255,59,107,0.3); }
+    .nv-vault-btn.delete:hover { border-color: var(--nv-danger); background: rgba(255,59,107,0.1); }
+    .nv-empty { text-align: center; padding: 2rem; color: var(--nv-muted); font-size: 0.85rem; }
+    .nv-tabs { display: flex; gap: 0.25rem; margin-bottom: 1rem; border-bottom: 1px solid var(--nv-border); padding-bottom: 0.5rem; }
+    .nv-tab { font-family: var(--nv-font-mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--nv-muted); background: none; border: none; padding: 0.5rem 1rem; cursor: pointer; border-radius: 6px; transition: all .15s; }
+    .nv-tab.active { color: var(--nv-primary); background: rgba(0,255,157,0.08); border: 1px solid var(--nv-border); }
+    .nv-tab:hover:not(.active) { color: var(--nv-text); background: rgba(0,255,157,0.04); }
+    .nv-tab-content { display: none; }
+    .nv-tab-content.active { display: block; animation: nv-fade-in 0.2s ease; }
+    @keyframes nv-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+    .nv-grid.nv-compact { grid-template-columns: 1fr; }
+  </style>
 </head>
-<body>
-    <div class="container">
-        <h1>NexVault</h1>
-        <p>Secure local-first password, OTP, and device network system</p>
-        <button class="btn" onclick="handleNewUser()">New User - Generate Token</button>
-        <button class="btn btn-secondary" onclick="handleExistingUser()">Existing User - Enter Token</button>
-        <button class="btn btn-secondary" onclick="startGrid()">Start NexGrid</button>
-        <hr>
-        <input id="service" placeholder="Service name">
-        <input id="vault-password" type="password" placeholder="Password">
-        <button class="btn" onclick="savePassword()">Save Password</button>
-        <button class="btn btn-secondary" onclick="readPassword()">Read Password</button>
-        <input id="otp-secret" placeholder="Base32 TOTP secret">
-        <button class="btn" onclick="saveOtp()">Save OTP</button>
-        <button class="btn btn-secondary" onclick="readOtp()">Read OTP</button>
-        <div id="status">Status: Initializing...</div>
-    </div>
-    <script src="renderer.js"></script>
+<body class="nv-scanlines nv-grid">
+
+  <canvas class="nv-canvas" data-nv-binary-shield></canvas>
+
+  <div class="nv-root nv-layer">
+    <header class="nv-header">
+      <a href="#" class="nv-brand">
+        <span class="nv-shield" aria-hidden="true">
+          <svg viewBox="0 0 64 74" fill="none">
+            <path d="M32 2 60 14v22c0 18-12.6 30.4-28 36C16.6 66.4 4 54 4 36V14L32 2z" stroke="#00ff9d" stroke-width="2" fill="rgba(0,255,157,0.06)"/>
+            <path d="M22 36l7 7 14-15" stroke="#00d4ff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <span>NEX<span class="nv-gradient-text">VAULT</span></span>
+      </a>
+      <div class="nv-status" id="header-status">
+        <span class="dot"></span>
+        <span id="status-text">Initializing...</span>
+      </div>
+    </header>
+
+    <main class="nv-main">
+      <!-- Auth section -->
+      <section class="nv-section nv-panel nv-card" id="auth-section">
+        <div class="nv-panel-header">
+          <span class="nv-panel-title">bootstrap</span>
+          <span class="nv-badge"><span class="dot"></span>offline</span>
+        </div>
+
+        <div class="nv-tabs" id="auth-tabs">
+          <button class="nv-tab active" data-tab="new-user">New User</button>
+          <button class="nv-tab" data-tab="existing-user">Existing User</button>
+        </div>
+
+        <div class="nv-tab-content active" id="tab-new-user">
+          <div class="nv-form-row">
+            <div class="nv-input-group">
+              <label class="nv-label">Username</label>
+              <input type="text" class="nv-input" id="new-username" placeholder="choose a username" autocomplete="username">
+            </div>
+            <div class="nv-input-group">
+              <label class="nv-label">Master Password</label>
+              <input type="password" class="nv-input" id="new-password" placeholder="master password" autocomplete="new-password">
+            </div>
+          </div>
+          <div class="nv-btn-row">
+            <button class="nv-btn" onclick="handleNewUser()">Generate Bootstrap Token</button>
+            <button class="nv-btn nv-btn-ghost" onclick="copyToken()">Copy Token JSON</button>
+          </div>
+        </div>
+
+        <div class="nv-tab-content" id="tab-existing-user">
+          <div class="nv-input-group">
+            <label class="nv-label">Paste Bootstrap Token (JSON)</label>
+            <textarea class="nv-textarea" id="existing-token" placeholder='{"tokenId":"...","publicKey":"...","signature":"...","expiresAt":...}' rows="5"></textarea>
+          </div>
+          <div class="nv-form-row">
+            <div class="nv-input-group">
+              <label class="nv-label">Master Password</label>
+              <input type="password" class="nv-input" id="existing-password" placeholder="master password" autocomplete="current-password">
+            </div>
+          </div>
+          <div class="nv-btn-row">
+            <button class="nv-btn" onclick="handleExistingUser()">Validate & Unlock</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Grid section -->
+      <section class="nv-section nv-panel nv-card" id="grid-section" style="display:none">
+        <div class="nv-panel-header">
+          <span class="nv-panel-title">nexgrid</span>
+          <span class="nv-badge" id="grid-badge"><span class="dot"></span>stopped</span>
+        </div>
+        <div class="nv-btn-row">
+          <button class="nv-btn" onclick="startGrid()">Start NexGrid</button>
+          <button class="nv-btn nv-btn-ghost" onclick="stopGrid()">Stop</button>
+          <button class="nv-btn nv-btn-cyan" onclick="requestPair()">Pair New Device</button>
+        </div>
+        <div class="nv-terminal nv-dim" id="grid-log">
+>> Awaiting NexGrid start...
+        </div>
+      </section>
+
+      <!-- Vault section -->
+      <section class="nv-section nv-panel nv-card" id="vault-section" style="display:none">
+        <div class="nv-panel-header">
+          <span class="nv-panel-title">vault</span>
+          <span class="nv-badge"><span class="dot"></span>unlocked</span>
+        </div>
+        <div class="nv-form-row">
+          <div class="nv-input-group">
+            <label class="nv-label">Service / Website</label>
+            <input type="text" class="nv-input" id="service" placeholder="github.com">
+          </div>
+          <div class="nv-input-group">
+            <label class="nv-label">Credential / Password</label>
+            <input type="text" class="nv-input" id="vault-password" placeholder="your password">
+          </div>
+        </div>
+        <div class="nv-btn-row">
+          <button class="nv-btn" onclick="savePassword()">Save Credential</button>
+          <button class="nv-btn nv-btn-ghost" onclick="listPasswords()">List All</button>
+        </div>
+        <div class="nv-card nv-scroll" id="vault-list">
+          <div class="nv-empty">No credentials stored yet.</div>
+        </div>
+      </section>
+
+      <!-- OTP section -->
+      <section class="nv-section nv-panel nv-card" id="otp-section" style="display:none">
+        <div class="nv-panel-header">
+          <span class="nv-panel-title">otp / totp</span>
+        </div>
+        <div class="nv-form-row">
+          <div class="nv-input-group">
+            <label class="nv-label">Service</label>
+            <input type="text" class="nv-input" id="otp-service" placeholder="github.com">
+          </div>
+          <div class="nv-input-group">
+            <label class="nv-label">Secret (base32)</label>
+            <input type="text" class="nv-input" id="otp-secret" placeholder="JBSWY3DPEHPK3PXP">
+          </div>
+        </div>
+        <div class="nv-btn-row">
+          <button class="nv-btn" onclick="saveOTP()">Add TOTP</button>
+          <button class="nv-btn nv-btn-ghost" onclick="listOTPs()">List All</button>
+        </div>
+        <div class="nv-card nv-scroll" id="otp-list">
+          <div class="nv-empty">No TOTP entries yet.</div>
+        </div>
+      </section>
+
+      <!-- Security section -->
+      <section class="nv-section nv-panel nv-card nv-grid nv-compact" id="security-section" style="display:none">
+        <div class="nv-panel-header">
+          <span class="nv-panel-title">security</span>
+        </div>
+        <div class="nv-btn-row">
+          <button class="nv-btn nv-btn-ghost" onclick="runIntegrityCheck()">Integrity Check</button>
+          <button class="nv-btn nv-btn-ghost" onclick="runTamperMonitor()">Tamper Monitor</button>
+          <button class="nv-btn nv-btn-ghost" onclick="triggerNuke()">Emergency Nuke</button>
+        </div>
+        <div class="nv-terminal nv-dim" id="security-log">
+>> Security tools ready.
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="cyber/binary-shield.js"></script>
+  <script>
+    const { nexVault } = window;
+    let currentTab = 'new-user';
+
+    function $(id) { return document.getElementById(id); }
+    function log(msg, el = $('security-log')) { 
+      el.textContent += '\n>> ' + msg; 
+      el.scrollTop = el.scrollHeight; 
+    }
+    function gridLog(msg) { log(msg, $('grid-log')); }
+    function setStatus(txt) { $('status-text').textContent = txt; }
+
+    // Tab switching
+    document.querySelectorAll('.nv-tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.nv-tab').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.nv-tab-content').forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+        $(`tab-${btn.dataset.tab}`).classList.add('active');
+      });
+    });
+
+    async function handleNewUser() {
+      const u = $('new-username').value.trim();
+      const p = $('new-password').value;
+      if (!u || !p) return setStatus('Enter username and password');
+      setStatus('Generating keys...');
+      try {
+        const r = await nexVault.initializeNewUser(u, p);
+        if (!r.success) throw new Error(r.error);
+        setStatus('Bootstrap token generated: ' + r.tokenId);
+        $('existing-token').value = JSON.stringify(r.bootstrapToken, null, 2);
+        gridLog('New identity created: ' + r.tokenId);
+        switchTab('existing-user');
+      } catch (e) { setStatus('Error: ' + e.message); }
+    }
+
+    function copyToken() {
+      const t = $('existing-token').value;
+      if (!t) return;
+      navigator.clipboard.writeText(t);
+      setStatus('Token copied to clipboard');
+    }
+
+    function switchTab(tab) {
+      document.querySelectorAll('.nv-tab').forEach(b => { 
+        b.classList.toggle('active', b.dataset.tab === tab); 
+      });
+      document.querySelectorAll('.nv-tab-content').forEach(c => c.classList.remove('active'));
+      $(`tab-${tab}`).classList.add('active');
+    }
+
+    async function handleExistingUser() {
+      const raw = $('existing-token').value.trim();
+      const p = $('existing-password').value;
+      if (!raw || !p) return setStatus('Enter token and password');
+      setStatus('Validating token...');
+      try {
+        const t = JSON.parse(raw);
+        const r = await nexVault.initializeExistingUser(t.tokenId, t.publicKey, t.signature, p, t.expiresAt);
+        if (!r.success) throw new Error(r.error);
+        setStatus('Unlocked: ' + r.tokenId);
+        gridLog('Identity restored: ' + r.tokenId);
+        showPostAuth();
+      } catch (e) { setStatus('Error: ' + e.message); }
+    }
+
+    function showPostAuth() {
+      $('auth-section').style.display = 'none';
+      $('grid-section').style.display = 'block';
+      $('vault-section').style.display = 'block';
+      $('otp-section').style.display = 'block';
+      $('security-section').style.display = 'block';
+    }
+
+    async function startGrid() {
+      gridLog('Starting NexGrid...');
+      try {
+        const r = await nexVault.startNexGrid();
+        gridLog(r.success ? 'NexGrid started — waiting for peers...' : 'Error: ' + r.error);
+        if (r.success) {
+          $('grid-badge').innerHTML = '<span class="dot"></span>running';
+        }
+      } catch (e) { gridLog('Exception: ' + e.message); }
+    }
+
+    async function stopGrid() {
+      gridLog('Stopping...');
+      try { await nexVault.stopNexGrid(); gridLog('Stopped.'); $('grid-badge').innerHTML = '<span class="dot"></span>stopped'; }
+      catch (e) { gridLog('Error: ' + e.message); }
+    }
+
+    async function requestPair() {
+      gridLog('Generating pairing code...');
+      try { const r = await nexVault.requestPairingCode(); if (r.success) { gridLog('Pairing code: ' + r.code + ' (expires in 5 min)'); } else gridLog('Error: ' + r.error); } catch (e) { gridLog('Error: ' + e.message); }
+    }
+
+    async function savePassword() {
+      const s = $('service').value.trim();
+      const p = $('vault-password').value;
+      if (!s || !p) return setStatus('Enter service and password');
+      try { const r = await nexVault.addPassword(s, p); if (r.success) { setStatus('Saved'); $('service').value = ''; $('vault-password').value = ''; listPasswords(); } else throw new Error(r.error); } catch (e) { setStatus('Error: ' + e.message); }
+    }
+
+    async function listPasswords() {
+      try { const r = await nexVault.listPasswords(); renderVaultList(r.entries || []); } catch (e) { setStatus('Error: ' + e.message); }
+    }
+
+    function renderVaultList(entries) {
+      const el = $('vault-list');
+      if (!entries.length) { el.innerHTML = '<div class="nv-empty">No credentials stored yet.</div>'; return; }
+      el.innerHTML = entries.map(e => `
+        <div class="nv-vault-item">
+          <div class="nv-vault-info">
+            <span class="nv-vault-service">${escapeHtml(e.service)}</span>
+            <span class="nv-vault-meta">Created: ${new Date(e.createdAt).toLocaleString()}</span>
+          </div>
+          <div class="nv-vault-actions">
+            <button class="nv-vault-btn" onclick="copyPassword('${escapeHtml(e.service)}')">Copy</button>
+            <button class="nv-vault-btn delete" onclick="deletePassword('${escapeHtml(e.service)}')">Delete</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function copyPassword(service) {
+      try { const r = await nexVault.getPassword(service); if (r.success) { await navigator.clipboard.writeText(r.password); setStatus('Copied!'); } else throw new Error(r.error); } catch (e) { setStatus('Error: ' + e.message); }
+    }
+
+    async function deletePassword(service) {
+      if (!confirm('Delete credential for ' + service + '?')) return;
+      try { const r = await nexVault.deletePassword(service); if (r.success) { setStatus('Deleted'); listPasswords(); } else throw new Error(r.error); } catch (e) { setStatus('Error: ' + e.message); }
+    }
+
+    async function saveOTP() {
+      const s = $('otp-service').value.trim();
+      const sec = $('otp-secret').value.trim().toUpperCase().replace(/\s/g, '');
+      if (!s || !sec) return setStatus('Enter service and secret');
+      try { const r = await nexVault.addOTP(s, sec); if (r.success) { setStatus('TOTP added'); $('otp-service').value = ''; $('otp-secret').value = ''; listOTPs(); } else throw new Error(r.error); } catch (e) { setStatus('Error: ' + e.message); }
+    }
+
+    async function listOTPs() {
+      try { const r = await nexVault.listOTPs(); renderOTPList(r.entries || []); } catch (e) { setStatus('Error: ' + e.message); }
+    }
+
+    function renderOTPList(entries) {
+      const el = $('otp-list');
+      if (!entries.length) { el.innerHTML = '<div class="nv-empty">No TOTP entries yet.</div>'; return; }
+      const now = Date.now();
+      el.innerHTML = entries.map(e => {
+        const remaining = 30 - (Math.floor(now / 1000) % 30);
+        return `
+        <div class="nv-vault-item">
+          <div class="nv-vault-info">
+            <span class="nv-vault-service">${escapeHtml(e.service)}</span>
+            <span class="nv-vault-meta">Code refreshes in ${remaining}s</span>
+          </div>
+          <div class="nv-vault-actions">
+            <button class="nv-vault-btn" onclick="copyOTP('${escapeHtml(e.service)}')">Copy Code</button>
+            <button class="nv-vault-btn delete" onclick="deleteOTP('${escapeHtml(e.service)}')">Delete</button>
+          </div>
+        </div>
+      `; }).join('');
+      // Refresh countdown
+      setTimeout(listOTPs, 1000);
+    }
+
+    async function copyOTP(service) {
+      try { const r = await nexVault.getOTP(service); if (r.success) { await navigator.clipboard.writeText(r.code); setStatus('OTP copied: ' + r.code); } else throw new Error(r.error); } catch (e) { setStatus('Error: ' + e.message); }
+    }
+
+    async function deleteOTP(service) {
+      if (!confirm('Delete TOTP for ' + service + '?')) return;
+      try { const r = await nexVault.deleteOTP(service); if (r.success) { setStatus('Deleted'); listOTPs(); } else throw new Error(r.error); } catch (e) { setStatus('Error: ' + e.message); }
+    }
+
+    async function runIntegrityCheck() { log('Running integrity check...'); try { const r = await nexVault.runIntegrityCheck(); log(r.success ? 'OK: ' + JSON.stringify(r.result) : 'Error: ' + r.error); } catch (e) { log('Exception: ' + e.message); } }
+    async function runTamperMonitor() { log('Starting tamper monitor...'); try { const r = await nexVault.startTamperMonitor(); log(r.success ? 'Monitor active' : 'Error: ' + r.error); } catch (e) { log('Exception: ' + e.message); } }
+    async function triggerNuke() { if (!confirm('EMERGENCY: This wipes all local keys. Proceed?')) return; log('NUKING...'); try { const r = await nexVault.triggerEmergencyNuke(); log(r.success ? 'Wiped.' : 'Error: ' + r.error); } catch (e) { log('Exception: ' + e.message); } }
+
+    function escapeHtml(s) { return s.replace(/[&<>"']/g, c => ({'&':'&','<':'<','>':'>','"':'"',"'":'''}[c])); }
+
+    // Expose for preload
+    window.handleNewUser = handleNewUser;
+    window.handleExistingUser = handleExistingUser;
+    window.startGrid = startGrid;
+    window.stopGrid = stopGrid;
+    window.requestPair = requestPair;
+    window.savePassword = savePassword;
+    window.listPasswords = listPasswords;
+    window.saveOTP = saveOTP;
+    window.listOTPs = listOTPs;
+    window.runIntegrityCheck = runIntegrityCheck;
+    window.runTamperMonitor = runTamperMonitor;
+    window.triggerNuke = triggerNuke;
+  </script>
 </body>
 </html>

@@ -4,16 +4,192 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NexVault Password Manager</title>
+  <link rel="stylesheet" href="cyber/cyber.css">
   <style>
-    body { min-width: 240px; margin: 16px; font: 14px sans-serif; }
-    button { width: 100%; padding: 8px; }
-    #status { margin-top: 12px; }
-    .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); padding: 8px 16px; background: #3b82f6; color: white; border-radius: 6px; display: none; }
+    body {
+      min-width: 300px;
+      max-width: 340px;
+      margin: 0;
+      padding: 0;
+      background: var(--nv-bg);
+      color: var(--nv-text);
+      font-family: var(--nv-font-sans);
+    }
+    .nv-popup {
+      position: relative;
+      z-index: 1;
+      padding: 0.75rem;
+    }
+    .nv-popup-header {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding-bottom: 0.6rem;
+      border-bottom: 1px solid var(--nv-border);
+      margin-bottom: 0.75rem;
+    }
+    .nv-popup-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: white;
+    }
+    .nv-popup-brand .nv-shield { width: 28px; height: 32px; }
+    .nv-popup-title {
+      font-family: var(--nv-font-mono);
+      font-weight: 800;
+      font-size: 0.9rem;
+      letter-spacing: -0.02em;
+    }
+    .nv-popup-status {
+      font-family: var(--nv-font-mono);
+      font-size: 0.6rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--nv-muted);
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .nv-popup-status .dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--nv-muted);
+    }
+    .nv-popup-status.connected {
+      color: var(--nv-primary);
+    }
+    .nv-popup-status.connected .dot {
+      background: var(--nv-primary);
+      box-shadow: 0 0 8px var(--nv-primary);
+      animation: nv-pulse 1.6s ease-in-out infinite;
+    }
+    .nv-popup-input {
+      width: 100%;
+      background: rgba(4, 6, 12, 0.7);
+      border: 1px solid var(--nv-border);
+      border-radius: 6px;
+      color: var(--nv-text);
+      font-family: var(--nv-font-mono);
+      font-size: 0.75rem;
+      padding: 0.5rem 0.65rem;
+      outline: none;
+      margin-bottom: 0.6rem;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .nv-popup-input:focus {
+      border-color: var(--nv-primary);
+      box-shadow: 0 0 0 2px rgba(0, 255, 157, 0.12);
+    }
+    .nv-popup-input::placeholder {
+      color: var(--nv-muted);
+      opacity: 0.6;
+    }
+    .nv-popup-btn {
+      width: 100%;
+      font-family: var(--nv-font-mono);
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #04140c;
+      background: linear-gradient(180deg, var(--nv-primary) 0%, var(--nv-primary-dim) 100%);
+      border: 1px solid rgba(0, 255, 157, 0.6);
+      border-radius: 6px;
+      padding: 0.6rem 1rem;
+      cursor: pointer;
+      transition: box-shadow 0.2s, transform 0.15s, filter 0.2s;
+      box-shadow: var(--nv-glow);
+      margin-bottom: 0.5rem;
+    }
+    .nv-popup-btn:hover {
+      box-shadow: var(--nv-glow-strong);
+      transform: translateY(-1px);
+    }
+    .nv-popup-btn.ghost {
+      color: var(--nv-primary);
+      background: rgba(0, 255, 157, 0.06);
+      border: 1px solid var(--nv-border);
+      box-shadow: none;
+    }
+    .nv-popup-btn.ghost:hover {
+      background: rgba(0, 255, 157, 0.12);
+    }
+    .nv-popup-divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--nv-border-strong), transparent);
+      margin: 0.6rem 0;
+    }
+    .nv-popup-result {
+      font-family: var(--nv-font-mono);
+      font-size: 0.65rem;
+      line-height: 1.4;
+      color: var(--nv-primary);
+      background: rgba(2, 4, 8, 0.85);
+      border: 1px solid var(--nv-border);
+      border-radius: 6px;
+      padding: 0.5rem 0.65rem;
+      min-height: 2.5rem;
+      max-height: 5rem;
+      overflow-y: auto;
+      word-break: break-all;
+      white-space: pre-wrap;
+    }
+    .nv-popup-result .nv-dim {
+      color: var(--nv-muted);
+    }
+    .nv-popup-hint {
+      font-family: var(--nv-font-mono);
+      font-size: 0.55rem;
+      color: var(--nv-muted);
+      text-align: center;
+      margin-top: 0.5rem;
+      opacity: 0.7;
+    }
+    @keyframes nv-pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.45; transform: scale(0.82); }
+    }
   </style>
 </head>
 <body>
-  <button id="connect" type="button">Connect to NexVault</button>
-  <p id="status" role="status">Disconnected</p>
+  <div class="nv-popup">
+    <div class="nv-popup-header">
+      <div class="nv-popup-brand">
+        <span class="nv-shield" aria-hidden="true">
+          <svg viewBox="0 0 64 74" fill="none">
+            <path d="M32 2 60 14v22c0 18-12.6 30.4-28 36C16.6 66.4 4 54 4 36V14L32 2z" stroke="#00ff9d" stroke-width="2.5" fill="rgba(0,255,157,0.06)"/>
+            <path d="M22 36l7 7 14-15" stroke="#00d4ff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <span class="nv-popup-title">NEX<span class="nv-gradient-text">VAULT</span></span>
+      </div>
+    </div>
+
+    <div class="nv-popup-status" id="status">
+      <span class="dot"></span>
+      <span id="status-text">Disconnected</span>
+    </div>
+
+    <button class="nv-popup-btn" id="connect" type="button">Connect to NexVault</button>
+
+    <div class="nv-popup-divider"></div>
+
+    <input class="nv-popup-input" id="search" type="text" placeholder="search vault..." disabled>
+    <div class="nv-popup-result" id="result">
+      <span class="nv-dim">>> Connect to the desktop vault to search</span>
+    </div>
+
+    <div class="nv-popup-divider"></div>
+
+    <button class="nv-popup-btn ghost" id="fill-current" type="button" disabled>Autofill Current Page</button>
+
+    <div class="nv-popup-hint">local-first · no cloud · encrypted</div>
+  </div>
+
+  <script src="cyber/binary-shield.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

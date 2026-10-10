@@ -49,7 +49,7 @@ npm install
 npm run build
 npx cap sync android
 ```
-*Build a debug APK from the repository root:* `npm run build:mobile:android` (requires JDK 21 and the Android SDK).
+*Build a debug APK from the repository root:* `npm run build:mobile:android` (requires Node.js 26+, JDK 21, and the Android SDK).
 
 ### 4. Website
 ```bash

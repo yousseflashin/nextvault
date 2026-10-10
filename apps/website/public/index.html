@@ -2,81 +2,124 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NexVault | Local-First Password & Trusted Device Network</title>
+  <meta name="description" content="NexVault is a local-first password manager, OTP authenticator, and trusted device network. Your data stays on your devices, fully encrypted. No cloud, no middlemen.">
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="cyber/cyber.css">
 </head>
-<body class="antialiased min-h-screen flex flex-col font-sans">
-  
-  <header class="w-full max-w-6xl mx-auto px-6 py-8 flex justify-between items-center text-white">
-    <div class="text-2xl font-bold tracking-tight">NexVault</div>
-    <nav class="hidden md:flex gap-6 text-sm font-medium text-gray-300">
+<body class="nv-scanlines">
+
+  <canvas class="nv-canvas" data-nv-binary-shield></canvas>
+
+  <header class="nv-layer w-full max-w-6xl mx-auto px-6 py-8 flex justify-between items-center">
+    <a href="index.html" class="flex items-center gap-3 text-white">
+      <span class="nv-shield" aria-hidden="true">
+        <svg viewBox="0 0 64 74" fill="none">
+          <path d="M32 2 60 14v22c0 18-12.6 30.4-28 36C16.6 66.4 4 54 4 36V14L32 2z" stroke="#00ff9d" stroke-width="2.5" fill="rgba(0,255,157,0.06)"/>
+          <path d="M22 36l7 7 14-15" stroke="#00d4ff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </span>
+      <span class="nv-mono text-xl font-bold tracking-tight">NEX<span class="nv-gradient-text">VAULT</span></span>
+    </a>
+    <nav class="hidden md:flex gap-6 nv-mono text-xs tracking-widest uppercase" style="color: var(--nv-muted)">
       <a href="#features" class="hover:text-white transition">Features</a>
       <a href="#security" class="hover:text-white transition">Security</a>
-      <a href="#downloads" class="hover:text-white transition">Download</a>
+      <a href="downloads.html" class="hover:text-white transition">Download</a>
     </nav>
   </header>
 
-  <main class="flex-grow flex flex-col items-center justify-center text-center px-6 mt-16 max-w-4xl mx-auto">
-    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gray-800/50 border border-gray-700 text-xs font-medium text-gray-300 mb-8">
-      <span class="w-2 h-2 rounded-full bg-green-500"></span>
-      100% Local-First & Offline Capable
-    </div>
-    
-    <h1 class="text-5xl md:text-7xl font-extrabold tracking-tight text-white mb-6 leading-tight">
-      Your Data, Your Network, <span class="text-brand-blue">Nothing In Between.</span>
+  <main class="nv-layer flex-grow flex flex-col items-center justify-center text-center px-6 mt-10 max-w-4xl mx-auto">
+
+    <span class="nv-badge mb-8"><span class="dot"></span>100% local-first &amp; offline capable</span>
+
+    <h1 class="nv-title text-5xl md:text-7xl mb-6 leading-tight nv-flicker">
+      Your Data. Your Network.<br>
+      <span class="nv-gradient-text">Nothing In Between.</span>
     </h1>
-    
-    <p class="text-lg md:text-xl text-gray-400 mb-10 max-w-2xl">
-      A secure local-first password manager, OTP authenticator, and trusted device network. Data stays on your devices, fully encrypted, bypassing the cloud entirely.
+
+    <p class="text-lg md:text-xl nv-muted mb-10 max-w-2xl">
+      A secure local-first password manager, OTP authenticator, and trusted device network.
+      Data stays on your devices, fully encrypted, bypassing the cloud entirely.
     </p>
-    
-    <div class="flex flex-col sm:flex-row gap-4 w-full sm:w-auto" id="downloads">
-      <a href="downloads.html" class="px-8 py-3 rounded-lg bg-brand-blue hover:bg-brand-hover text-white font-medium transition text-lg flex items-center justify-center gap-2">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17l6-6-6-6"></path></svg>
-        Download Desktop App
-      </a>
-      <a href="downloads.html" class="px-8 py-3 rounded-lg bg-gray-800 hover:bg-gray-700 text-white border border-gray-700 font-medium transition text-lg flex items-center justify-center gap-2">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
-        Get the Mobile App
-      </a>
+
+    <div class="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+      <a href="downloads.html" class="nv-btn">Download Desktop</a>
+      <a href="downloads.html" class="nv-btn nv-btn-cyan">Get Mobile App</a>
     </div>
 
     <!-- Section: Features -->
     <section class="mt-32 w-full text-left" id="features">
       <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-        
-        <div class="p-6 bg-gray-900 rounded-xl border border-gray-800">
-          <div class="w-10 h-10 rounded-lg bg-brand-blue/20 flex items-center justify-center text-brand-blue mb-4">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+
+        <div class="nv-card nv-card-hover">
+          <div class="nv-scanbeam"></div>
+          <div class="w-10 h-10 rounded-lg flex items-center justify-center mb-4" style="background: rgba(0,255,157,0.12); color: var(--nv-primary)">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
           </div>
-          <h3 class="text-xl font-bold text-white mb-2">Cryptographic Safety</h3>
-          <p class="text-gray-400 text-sm">Protected by SQLCipher, AES-256-GCM, and Ed25519 tokens. Data is encrypted before leaving your app, with emergency auto-nuke for rogue devices.</p>
+          <h3 class="nv-mono text-lg font-bold text-white mb-2">Cryptographic Safety</h3>
+          <p class="text-sm" style="color: var(--nv-muted)">Protected by SQLCipher, AES-256-GCM, and Ed25519 tokens. Data is encrypted before leaving your app, with emergency auto-nuke for rogue devices.</p>
         </div>
-        
-        <div class="p-6 bg-gray-900 rounded-xl border border-gray-800">
-          <div class="w-10 h-10 rounded-lg bg-brand-blue/20 flex items-center justify-center text-brand-blue mb-4">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+
+        <div class="nv-card nv-card-hover">
+          <div class="nv-scanbeam" style="animation-delay: 1.2s"></div>
+          <div class="w-10 h-10 rounded-lg flex items-center justify-center mb-4" style="background: rgba(0,212,255,0.12); color: var(--nv-accent)">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"></path></svg>
           </div>
-          <h3 class="text-xl font-bold text-white mb-2">WebRTC Discovery</h3>
-          <p class="text-gray-400 text-sm">Devices connect directly. The proxy handles NAT traversal and signaling but never touches your data or holds your passwords.</p>
+          <h3 class="nv-mono text-lg font-bold text-white mb-2">Peer-to-Peer Sync</h3>
+          <p class="text-sm" style="color: var(--nv-muted)">The NexVault Grid discovers trusted devices over an authenticated signaling relay, then upgrades to encrypted WebRTC channels. No cloud storage.</p>
         </div>
-        
-        <div class="p-6 bg-gray-900 rounded-xl border border-gray-800">
-          <div class="w-10 h-10 rounded-lg bg-brand-blue/20 flex items-center justify-center text-brand-blue mb-4">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path></svg>
+
+        <div class="nv-card nv-card-hover">
+          <div class="nv-scanbeam" style="animation-delay: 2.4s"></div>
+          <div class="w-10 h-10 rounded-lg flex items-center justify-center mb-4" style="background: rgba(0,255,157,0.12); color: var(--nv-primary)">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
           </div>
-          <h3 class="text-xl font-bold text-white mb-2">Browser Extension</h3>
-          <p class="text-gray-400 text-sm">Fill passwords seamlessly across your browser. The extension connects securely to your local desktop vault.</p>
+          <h3 class="nv-mono text-lg font-bold text-white mb-2">Tamper Monitor</h3>
+          <p class="text-sm" style="color: var(--nv-muted)">A cryptographic manifest watches your local database files. If the vault is modified outside the app, integrity checks catch it before damage spreads.</p>
         </div>
 
       </div>
     </section>
 
+    <!-- Section: Security model -->
+    <section class="mt-24 w-full text-left" id="security">
+      <h2 class="nv-mono text-2xl font-bold text-white mb-8">Security Model</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="nv-card">
+          <h3 class="nv-mono font-bold nv-text-primary mb-3">&gt; bootstrap</h3>
+          <p class="text-sm" style="color: var(--nv-muted)">Each app generates Ed25519 identity keys. A signed bootstrap token pairs devices — nothing touches a server.</p>
+        </div>
+        <div class="nv-card">
+          <h3 class="nv-mono font-bold nv-text-primary mb-3">&gt; offline_lockdown</h3>
+          <p class="text-sm" style="color: var(--nv-muted)">A 24-hour security heartbeat runs on every device. Lose connection past the deadline and the vault locks down; stay dark and the auto-nuke wipes keys.</p>
+        </div>
+        <div class="nv-card">
+          <h3 class="nv-mono font-bold nv-text-primary mb-3">&gt; encryption</h3>
+          <p class="text-sm" style="color: var(--nv-muted)">Vault payloads are AES-256-GCM encrypted locally with SQLCipher and PBKDF2-derived master keys. The relay only sees routing metadata.</p>
+        </div>
+        <div class="nv-card">
+          <h3 class="nv-mono font-bold nv-text-primary mb-3">&gt; autofill</h3>
+          <p class="text-sm" style="color: var(--nv-muted)">The browser extension talks to your local desktop vault over a local socket and autofills credentials — your passwords never transit the internet.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section: CTA -->
+    <section class="mt-24 w-full">
+      <div class="nv-card nv-card-hover text-center py-16">
+        <h2 class="nv-title text-3xl md:text-4xl mb-4">Take back your vault.</h2>
+        <p class="nv-muted mb-8 max-w-xl mx-auto">Free, local-first, auditable. Runs on Linux desktop and Android.</p>
+        <div class="flex flex-col sm:flex-row gap-4 justify-center">
+          <a href="downloads.html" class="nv-btn">Download NexVault</a>
+          <a href="https://github.com/yousseflashin/nextvault" class="nv-btn nv-btn-ghost">View Source</a>
+        </div>
+      </div>
+    </section>
   </main>
 
-  <footer class="mt-32 w-full border-t border-gray-800 p-8 text-center text-gray-500 text-sm">
-    &copy; 2026 NexVault. All rights reserved.
+  <footer class="nv-layer w-full max-w-6xl mx-auto px-6 py-8 text-center nv-mono text-xs" style="color: var(--nv-muted)">
+    NEXVAULT — local-first. nothing in between. <span class="nv-text-primary">&#9646;</span>
   </footer>
+
+  <script src="cyber/binary-shield.js"></script>
 </body>
 </html>
