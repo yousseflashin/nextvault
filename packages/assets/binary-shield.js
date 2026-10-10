@@ -1,7 +1,12 @@
 /*
  * NexVault binary-shield animation.
- * Binary digits rain down and converge into a glowing shield outline.
- * Self-contained: attach a <canvas class="nv-canvas" data-nv-binary-shield></canvas>.
+ *
+ * The shield is an EMPTY area punched through the binary rain:
+ *  1. binary digits rain down across the full canvas
+ *  2. a shield-shaped region is erased (destination-out) so no rain shows there
+ *  3. that empty region is filled with a pulsing cyan-blue glow
+ *
+ * Self-contained: attach <canvas class="nv-canvas" data-nv-binary-shield"></canvas>.
  */
 (function () {
   'use strict';
@@ -9,82 +14,67 @@
   const CHARS = '01';
   const FONT_SIZE = 14;
   const RAIN_DPR_CAP = 2;
+  const GLOW = '#00d4ff'; // --nv-accent cyan
 
-  function makeShieldTargets(width, height, count) {
-    // Parametric shield outline + inner diamond, sampled into target points.
-    const cx = width / 2, cy = height * 0.42;
-    const w = Math.min(width, height) * 0.30;
-    const h = w * 1.18;
-    const pts = [];
-
-    const outline = [];
+  // Closed shield-shaped polygon (filled region), centered upper-canvas.
+  function makeShieldPolygon(w, h) {
+    const cx = w / 2;
+    const cy = h * 0.42;
+    const sw = Math.min(w, h) * 0.30;
+    const sh = sw * 1.18;
     const seg = 60;
+    const poly = [];
+
+    // top edge, slightly arched
     for (let i = 0; i <= seg; i++) {
       const t = i / seg;
-      // top edge (slightly arched)
-      const x = cx - w / 2 + w * t;
-      const y = cy - h / 2 + Math.sin(t * Math.PI) * -h * 0.06;
-      outline.push([x, y]);
+      poly.push([cx - sw / 2 + sw * t,
+                 cy - sh / 2 + Math.sin(t * Math.PI) * -sh * 0.06]);
     }
     // right side curving to bottom point
     for (let i = 1; i <= seg; i++) {
       const t = i / seg;
-      const x = cx + w / 2 - (w / 2) * Math.pow(t, 2.2);
-      const y = cy - h / 2 + h * t;
-      outline.push([x, y]);
+      poly.push([cx + sw / 2 - (sw / 2) * Math.pow(t, 2.2),
+                 cy - sh / 2 + sh * t]);
     }
-    // left side back up
+    // left side back up to start (closes the shape)
     for (let i = 1; i <= seg; i++) {
       const t = i / seg;
-      const x = cx - (w / 2) * Math.pow(1 - t, 2.2);
-      const y = cy + h / 2 - h * t;
-      outline.push([x, y]);
+      poly.push([cx - (sw / 2) * Math.pow(1 - t, 2.2),
+                 cy + sh / 2 - sh * t]);
     }
+    return poly;
+  }
 
-    // inner diamond detail
-    const r = w * 0.16;
-    for (let i = 0; i <= 16; i++) {
-      const t = (i / 16) * Math.PI * 2;
-      outline.push([cx + Math.abs(Math.cos(t)) * Math.cos(t) * r * 1.4,
-                    cy + Math.abs(Math.sin(t)) * Math.sin(t) * r * 1.4 + h * 0.02]);
+  function drawPolygonPath(ctx, poly) {
+    ctx.beginPath();
+    for (let i = 0; i < poly.length; i++) {
+      if (i === 0) ctx.moveTo(poly[i][0], poly[i][1]);
+      else ctx.lineTo(poly[i][0], poly[i][1]);
     }
-
-    // sample to requested count
-    for (let i = 0; i < count; i++) {
-      const p = outline[Math.floor((i / count) * outline.length)];
-      pts.push({ x: p[0], y: p[1] });
-    }
-    return pts;
+    ctx.closePath();
   }
 
   function startShield(canvas) {
     const ctx = canvas.getContext('2d');
-    let width, height, dpr;
+    let w, h, dpr;
     let columns, drops, speeds;
-    let targets = null;
-    let phase = 'rain';        // 'rain' -> 'converge' -> 'hold'
+    let shield = null;
     let frame = 0;
-    const CONVERGE_AT = 220;   // frames of pure rain before pulling to shield
-    let particles = null;
-
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     function resize() {
       dpr = Math.min(window.devicePixelRatio || 1, RAIN_DPR_CAP);
-      width = canvas.clientWidth; height = canvas.clientHeight;
-      canvas.width = width * dpr; canvas.height = height * dpr;
+      w = canvas.clientWidth; h = canvas.clientHeight;
+      canvas.width = w * dpr; canvas.height = h * dpr;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      columns = Math.max(8, Math.floor(width / FONT_SIZE));
+      columns = Math.max(8, Math.floor(w / FONT_SIZE));
       drops = Array.from({ length: columns }, () => Math.random() * -50);
       speeds = Array.from({ length: columns }, () => 0.35 + Math.random() * 0.65);
-      targets = makeShieldTargets(width, height, columns * 2);
-      particles = [];
+      shield = makeShieldPolygon(w, h);
     }
 
     function drawRain() {
-      ctx.fillStyle = 'rgba(4, 6, 12, 0.16)';
-      ctx.fillRect(0, 0, width, height);
-      ctx.font = FONT_SIZE + 'px monospace';
       for (let i = 0; i < columns; i++) {
         const ch = CHARS[(Math.random() * CHARS.length) | 0];
         const x = i * FONT_SIZE;
@@ -92,97 +82,75 @@
         ctx.fillStyle = Math.random() < 0.06 ? '#b6ffe0' : 'rgba(0, 255, 157, 0.75)';
         ctx.fillText(ch, x, y);
         drops[i] += speeds[i];
-        if (y > height + FONT_SIZE * 4 && Math.random() > 0.96) drops[i] = Math.random() * -20;
+        if (y > h + FONT_SIZE * 4 && Math.random() > 0.96) drops[i] = Math.random() * -20;
       }
     }
 
-    function spawnParticles() {
-      for (let i = 0; i < columns; i++) {
-        const tx = targets[(Math.random() * targets.length) | 0];
-        particles.push({
-          x: i * FONT_SIZE,
-          y: Math.random() * height,
-          tx: tx.x, ty: tx.y,
-          vx: 0, vy: 0,
-          ch: CHARS[(Math.random() * CHARS.length) | 0],
-        });
-      }
-      // second wave for density
-      for (let i = 0; i < columns; i++) {
-        const tx = targets[(Math.random() * targets.length) | 0];
-        particles.push({
-          x: Math.random() * width,
-          y: -20 - Math.random() * height * 0.5,
-          tx: tx.x, ty: tx.y,
-          vx: 0, vy: 0,
-          ch: CHARS[(Math.random() * CHARS.length) | 0],
-        });
-      }
-    }
+    function drawFrame() {
+      // trailing dark fill for fade
+      ctx.fillStyle = 'rgba(4, 6, 12, 0.18)';
+      ctx.fillRect(0, 0, w, h);
 
-    function drawConverge() {
-      ctx.fillStyle = 'rgba(4, 6, 12, 0.22)';
-      ctx.fillRect(0, 0, width, height);
       ctx.font = FONT_SIZE + 'px monospace';
-      let settled = 0;
-      for (const p of particles) {
-        p.vx += (p.tx - p.x) * 0.02;
-        p.vy += (p.ty - p.y) * 0.02;
-        p.vx *= 0.86; p.vy *= 0.86;
-        p.x += p.vx; p.y += p.vy;
-        if (Math.abs(p.tx - p.x) + Math.abs(p.ty - p.y) < 3) settled++;
-        // head digit brighter
-        ctx.fillStyle = settled > particles.length * 0.7 ? '#8fffcf' : 'rgba(0,255,157,0.95)';
-        ctx.fillText(p.ch, p.x, p.y);
-      }
-      return settled / particles.length;
+      drawRain();
+
+      // erase the shield region -> rain disappears there (empty area)
+      ctx.save();
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.fillStyle = '#000';
+      drawPolygonPath(ctx, shield);
+      ctx.fill();
+      ctx.restore();
+
+      // fill the empty area with a pulsing cyan-blue glow
+      const pulse = Math.sin(frame * 0.05) * 0.5 + 0.5;   // 0..1, fast
+      const rim = Math.sin(frame * 0.02) * 0.5 + 0.5;     // 0..1, slow outer
+      ctx.save();
+      ctx.shadowColor = GLOW;
+      ctx.shadowBlur = 20 + pulse * 18 + rim * 12;
+      ctx.fillStyle = `rgba(0, 212, 255, ${0.18 + pulse * 0.22})`;
+      drawPolygonPath(ctx, shield);
+      ctx.fill();
+      ctx.restore();
     }
 
-    function drawHold() {
-      ctx.fillStyle = 'rgba(4, 6, 12, 0.1)';
-      ctx.fillRect(0, 0, width, height);
+    function drawStatic() {
+      ctx.fillStyle = '#04060c';
+      ctx.fillRect(0, 0, w, h);
       ctx.font = FONT_SIZE + 'px monospace';
-      const t = Date.now() / 700;
-      for (let i = 0; i < particles.length; i++) {
-        const p = particles[i];
-        // twinkle a few digits
-        const blink = ((i + ((t * 7) | 0)) % 17) === 0;
-        if (blink) p.ch = CHARS[(Math.random() * CHARS.length) | 0];
-        ctx.fillStyle = blink ? '#eafff5' : 'rgba(0,255,157,0.85)';
-        ctx.fillText(p.ch, p.x, p.y);
+      // sparse static rain
+      for (let i = 0; i < columns; i++) {
+        const ch = CHARS[(Math.random() * CHARS.length) | 0];
+        ctx.fillStyle = 'rgba(0, 255, 157, 0.45)';
+        ctx.fillText(ch, i * FONT_SIZE, (Math.random() * h) | 0);
       }
+      // erase shield, steady cyan glow (no pulse for reduced motion)
+      ctx.save();
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.fillStyle = '#000';
+      drawPolygonPath(ctx, shield);
+      ctx.fill();
+      ctx.restore();
+      ctx.save();
+      ctx.shadowColor = GLOW;
+      ctx.shadowBlur = 22;
+      ctx.fillStyle = 'rgba(0, 212, 255, 0.32)';
+      drawPolygonPath(ctx, shield);
+      ctx.fill();
+      ctx.restore();
     }
 
     let running = true;
     function tick() {
       if (!running) return;
       if (document.hidden) { requestAnimationFrame(tick); return; }
-
-      if (reduced) {
-        // Static shield, no motion
-        ctx.fillStyle = '#04060c'; ctx.fillRect(0, 0, width, height);
-        ctx.font = FONT_SIZE + 'px monospace';
-        for (const t of targets) {
-          ctx.fillStyle = 'rgba(0,255,157,0.55)';
-          ctx.fillText(CHARS[(Math.random() * 2) | 0], t.x, t.y);
-        }
-        return;
-      }
-
       frame++;
-      if (phase === 'rain') {
-        drawRain();
-        if (frame > CONVERGE_AT) { phase = 'converge'; spawnParticles(); ctx.clearRect(0, 0, width, height); }
-      } else if (phase === 'converge') {
-        const settled = drawConverge();
-        if (settled > 0.985) { phase = 'hold'; ctx.clearRect(0, 0, width, height); }
-      } else {
-        drawHold();
-      }
+      if (reduced) drawStatic();
+      else drawFrame();
       requestAnimationFrame(tick);
     }
 
-    const ro = new ResizeObserver(() => { const p = phase; resize(); phase = p; });
+    const ro = new ResizeObserver(() => resize());
     ro.observe(canvas);
     resize();
     requestAnimationFrame(tick);
