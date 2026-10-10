@@ -1,4 +1,4 @@
-const { generateTotp } = require('../src/core/otp');
+const { generateTotp } = require('@nexvault/core/otp');
 
 describe('OTP authenticator', () => {
   test('generates the RFC 6238-compatible TOTP vector', () => {

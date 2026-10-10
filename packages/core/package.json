@@ -1,0 +1,12 @@
+{
+  "name": "@nexvault/core",
+  "version": "0.1.0",
+  "main": "index.js",
+  "dependencies": {
+    "better-sqlite3-multiple-ciphers": "^13.0.3",
+    "electron-store": "^8.1.0",
+    "tweetnacl": "1.0.3",
+    "tweetnacl-util": "0.15.1",
+    "ws": "^8.18.0"
+  }
+}

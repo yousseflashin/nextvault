@@ -1,5 +1,5 @@
 const { WebSocketServer } = require('ws');
-const { NexVaultToken } = require('../core/crypto');
+const { NexVaultToken } = require('@nexvault/core/crypto');
 
 function createRelayServer({ host = process.env.HOST || '0.0.0.0', port = Number(process.env.PORT || 46123) } = {}) {
   const rooms = new Map();

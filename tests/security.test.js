@@ -9,7 +9,7 @@ jest.mock('electron-store', () => {
   }));
 });
 
-const NexVaultSecurity = require('../src/core/security');
+const NexVaultSecurity = require('@nexvault/core/security');
 
 describe('NexVault Security', () => {
   let security;

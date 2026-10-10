@@ -29,7 +29,7 @@ jest.mock('electron-store', () => {
   });
 });
 
-const NexVaultDatabase = require('../src/core/database');
+const NexVaultDatabase = require('@nexvault/core/database');
 
 describe('NexVault Database', () => {
   let db;

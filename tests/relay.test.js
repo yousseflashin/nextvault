@@ -1,6 +1,6 @@
 const WebSocket = require('ws');
-const { NexVaultToken } = require('../src/core/crypto');
-const { createRelayServer } = require('../src/relay/server');
+const { NexVaultToken } = require('@nexvault/core/crypto');
+const { createRelayServer } = require('@nexvault/relay');
 
 function waitForMessage(socket, type) {
   return new Promise((resolve) => {

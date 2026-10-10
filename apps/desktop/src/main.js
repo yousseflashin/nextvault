@@ -1,17 +1,13 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
-const { NexVaultToken, NexVaultCrypto } = require('../core/crypto');
-const NexVaultSecurity = require('../core/security');
-const NexGrid = require('../core/grid');
-const NexVaultDatabase = require('../core/database');
-const { generateTotp } = require('../core/otp');
+const { NexVaultToken, NexVaultCrypto, NexVaultSecurity, NexGrid, NexVaultDatabase, generateTotp } = require('@nexvault/core');
 const { WebSocketServer } = require('ws');
 const crypto = require('crypto');
 
 let mainWindow;
-let nexVaultSecurity = new NexVaultSecurity();
+let nexVaultSecurity = new NexVaultSecurity(app.getPath('userData'));
 let nexGrid = new NexGrid();
-let nexVaultDatabase = new NexVaultDatabase();
+let nexVaultDatabase = new NexVaultDatabase(app.getPath('userData'));
 let extensionServer;
 const relayClients = new Map();
 

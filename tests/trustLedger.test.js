@@ -1,4 +1,4 @@
-const TrustLedger = require('../src/core/trustLedger');
+const TrustLedger = require('@nexvault/core/trustLedger');
 
 function createStore() {
   const values = {};

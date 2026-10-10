@@ -1,4 +1,4 @@
-const { NexVaultToken, NexVaultCrypto, nacl, naclUtil } = require('../src/core/crypto');
+const { NexVaultToken, NexVaultCrypto, nacl, naclUtil } = require('@nexvault/core/crypto');
 
 describe('NexVault Token', () => {
   test('should generate a valid token keypair', () => {

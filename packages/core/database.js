@@ -6,10 +6,13 @@ const { nacl, naclUtil } = require('./crypto');
 const { getStoreKey } = require('./storeKey');
 
 class NexVaultDatabase {
-  constructor() {
-    this.path = path.join(__dirname, '..', '..', 'data', 'nexvault.db');
+  constructor(userDataPath) {
+    // If userDataPath is provided (e.g., from Electron), use it. 
+    // Otherwise fallback to local dir for testing.
+    this.path = path.join(userDataPath || __dirname, 'nexvault.db');
     this.store = new Store({
       name: 'nexvault-security',
+      cwd: userDataPath, // Store keys in the same location
       encryptionKey: getStoreKey()
     });
     this.databaseKey = this.getDatabaseKey();

@@ -11,9 +11,10 @@ const MAX_EXTENDED_SECONDS = 30 * DAY_SECONDS;
 const ABSOLUTE_OFFLINE_SECONDS = 90 * DAY_SECONDS;
 
 class NexVaultSecurity {
-  constructor() {
+  constructor(userDataPath) {
     this.store = new Store({
       name: 'nexvault-security',
+      cwd: userDataPath,
       encryptionKey: getStoreKey()
     });
     this.token = new NexVaultToken();

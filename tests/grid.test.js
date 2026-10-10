@@ -84,8 +84,8 @@ global.RTCIceCandidate = class MockRTCIceCandidate {
   }
 };
 
-const NexVaultCrypto = require('../src/core/crypto').NexVaultCrypto;
-const NexGrid = require('../src/core/grid');
+const NexVaultCrypto = require('@nexvault/core/crypto').NexVaultCrypto;
+const NexGrid = require('@nexvault/core/grid');
 
 describe('NexGrid', () => {
   let grid;
