@@ -50,7 +50,15 @@ const pkg = {
 };
 await writeFile(join(BUNDLE, 'package.json'), JSON.stringify(pkg, null, 2) + '\n');
 
-console.log('deploy-bundle rebuilt (self-contained, no workspace deps)');
+// Install production deps into the bundle so node_modules/ can be uploaded
+// (MonsterASP has no shell access; npm install must happen locally)
+import { execFileSync } from 'node:child_process';
+execFileSync('npm', ['install', '--omit=dev', '--no-audit', '--no-fund'], {
+  cwd: BUNDLE,
+  stdio: 'inherit',
+});
+
+console.log('deploy-bundle rebuilt (self-contained, node_modules included)');
 console.log('next: upload deploy-bundle/* to wwwroot on relay.runasp.net');
 console.log('next: enable HTTPS in MonsterASP control panel (WebSockets require it)');
 console.log('next: curl -I https://relay.runasp.net/  # expect HTTP 200');
