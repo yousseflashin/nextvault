@@ -1,64 +1,65 @@
 # NexVault
 
-NexVault is a local-first desktop vault for passwords, TOTP secrets, trusted-device discovery, and browser-extension communication.
+NexVault is a local-first, end-to-end encrypted password manager, OTP authenticator, and trusted-device network that runs on desktop (Electron), mobile (Capacitor), and as a browser extension. Your data never leaves your devices: it stays encrypted locally and syncs peer-to-peer via an authenticated signaling relay (no cloud storage).
 
-Sensitive vault data remains on the user's devices. The relay only authenticates devices and routes discovery/signaling messages; vault payloads are encrypted before they leave the application.
+## Core Principles
 
----
-
-## Documentation: System Architecture
-
-NexVault is built on the philosophy that **locality is the ultimate security boundary**.
-
-### Core Flow
-1.  **Bootstrap:** Applications generate Ed25519 identity keys. A token captures the public key and signature to facilitate discovery.
-2.  **Trusted Network:** Applications discover peers via a lightweight signaling relay (using WebSockets). Once peers discover each other, they establish encrypted, peer-to-peer WebRTC data channels.
-3.  **Encrypted Local Data:** Password manager and OTP databases reside in the local application storage. They use SQLCipher + AES-GCM and are protected by master passwords derived via PBKDF2.
-4.  **Integrity Monitor:** The system maintains a cryptographic manifest of protected local database files to prevent tampering.
-5.  **Offline Security:** The system enforces a 24-hour security heartbeat. If disconnected, it initiates a security countdown, eventually initiating a cryptographic "Nuke" if authorization is not restored.
+- **Local-first**: Vault data lives only on your devices, encrypted with SQLCipher + AES-256-GCM.
+- **Peer-to-peer**: Trusted devices discover each other over a lightweight signaling relay, then upgrade to encrypted WebRTC channels.
+- **Zero knowledge**: The relay only sees routing metadata; it cannot read your passwords, TOTP secrets, or vault metadata.
+- **Integrity protection**: A cryptographic manifest watches for unauthorized changes to local database files.
+- **Offline security**: A 24‑hour heartbeat locks the vault and can trigger a crypto‑nuke if authorization is not restored.
 
 ---
 
 ## Getting Started
 
-### Prerequisites
-- Node.js 22+
-- `npm`
+NexVault is a workspace monorepo. From the repository root you can:
 
-NexVault is structured as a workspace monorepo.
-
-### 1. Desktop App
-The desktop vault acts as the primary vault and extension bridge.
+### 1. Install dependencies (once)
 ```bash
-npm install # Run once from the repository root
-npm start   # launch the desktop app from the root
-```
-*To build the production desktop bundle:* `npm run build:desktop` (outputs to `apps/desktop/dist`).
-
-### 2. Browser Extension
-Connects to the local desktop app to provide autofill.
-1. In Chrome/Edge/Brave, go to `chrome://extensions/`.
-2. Toggle **Developer mode**.
-3. Load unpacked: `apps/extension/src`.
-
-### 3. Mobile App (Android/iOS)
-Uses Capacitor to wrap a React frontend.
-```bash
-cd apps/mobile
 npm install
-npm run build
-npx cap sync android
 ```
-*Build a debug APK from the repository root:* `npm run build:mobile:android` (requires Node.js 26+, JDK 21, and the Android SDK).
 
-### 4. Website
+### 2. Start any app
+Each app can be started independently; the desktop app acts as the primary vault and extension bridge, but you can also use mobile or extension alone after pairing.
+
+#### Desktop (Electron)
 ```bash
-npm run build:website # Run from the repository root
+npm run start:desktop   # or: npm start --workspace=@nexvault/desktop
 ```
+Build: `npm run build:desktop`
+
+#### Mobile (Capacitor + React)
+```bash
+npm run start:mobile    # or: npm start --workspace=@nexvault/mobile
+```
+Build Android: `npm run build:mobile:android`  
+Build iOS: `npm run build:mobile:ios` (requires Xcode)
+
+#### Browser Extension
+Load the unpacked extension from `apps/extension/src` in Chrome/Edge/Brave (developer mode).  
+It will prompt to connect to a running desktop vault.
+
+#### Website (landing page)
+```bash
+npm run build:website   # generates static files in apps/website/public
+```
+Then serve that folder with any static host (e.g., `npx serve apps/website/public`).
+
+### 3. Pairing Devices
+On each additional device (desktop, mobile, or extension):
+1. Choose **Existing Network** and paste the bootstrap token JSON from your first device.
+2. Enter the same master password.
+The devices will discover each other via the relay and sync your vault end‑to‑end encrypted.
+
+### 4. Signaling Relay (optional for testing)
+The apps include a built‑in dev relay (ws://localhost:3456). For production you can self‑host or use a third‑party service; see **Deployment** below.
 
 ---
 
 ## Project Structure
+
 ```
 nexvault/
 ├── apps/
@@ -66,20 +67,24 @@ nexvault/
 │   ├── mobile/       # Capacitor + React (Android/iOS)
 │   ├── website/      # Static landing + downloads page
 │   ├── extension/    # Browser extension (autofill)
-│   └── relay/        # P2P signaling relay
+│   └── relay/        # P2P signaling relay (Node/WS)
 ├── packages/
 │   └── core/         # Shared crypto, database, grid, OTP, security
 └── scripts/          # Build + publish tooling
 ```
 
+* `scripts/sync-assets.mjs` copies shared cyber‑theme assets (CSS + binary‑shield canvas) into each app on `prestart` and before website builds.
+
 ---
 
 ## Releases
 
-`npm run release` builds the desktop AppImage and Android APK, then copies both into
-`apps/website/public/downloads/` with a `manifest.json`. Deploy `apps/website/public`
-to a static host (GitHub Pages, Vercel, Netlify) and the download links on
-`/downloads.html` resolve automatically.
+`npm run release` builds:
+- Desktop AppImage (Linux) from `@nexvault/desktop`
+- Android APK (debug) from `@nexvault/mobile`
+
+Both are copied into `apps/website/public/downloads/` with a `manifest.json`.  
+Deploy `apps/website/public` to a static host (GitHub Pages, Vercel, Netlify) and the download links on `/downloads.html` resolve automatically.
 
 ---
 
@@ -87,28 +92,18 @@ to a static host (GitHub Pages, Vercel, Netlify) and the download links on
 
 ### Relay Server
 The relay server manages WebRTC signaling. **Requires persistent WebSocket support.**
-*   **Recommended Platforms:** Render, Railway, Fly.io, or an AWS/DigitalOcean VPS.
-*   **Deployment:** Use a platform that supports persistent Node.js processes.
-    ```bash
-    npm run start:relay # Run from the repository root
-    ```
 
-### Website
-Deploy `apps/website/public` to a static web host.
-*   **Vercel:** `vercel apps/website/public`
-*   **Netlify:** `netlify deploy --dir=apps/website/public`
+- **Recommended Platforms:** Render, Railway, Fly.io, or an AWS/DigitalOcean VPS.
+- **Deployment:** Use a platform that supports persistent Node.js processes.
+    ```bash
+    npm run start:relay   # or: npm start --workspace=@nexvault/relay
+    ```
+Set the relay URL in each app via `NEXVAULT_RELAY_URL` environment variable or the settings UI.
 
 ---
 
-## Development
+## Developer Notes
 
-- **Workspace Management:** Dependencies are managed via npm workspaces. Run `npm install` from the root.
-- **Shared Logic:** All business logic lives in `packages/core`. When modifying `packages/core`, you may need to link it:
-  ```bash
-  # Inside an app
-  npm install ../../packages/core
-  ```
-- **Tests:** Run all tests from the root: `npm test`.
-
-*(...original implementation/security details preserved below...)*
-[Original current status/requirements/security model details here...]
+- Run the full test suite: `npm test`
+- Lint: `npm run lint` (if configured)
+- The cyber theme (binary rain + scanlines) lives in `packages/assets/` and is synced by `scripts/sync-assets.mjs`.
