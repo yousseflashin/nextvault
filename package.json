@@ -17,7 +17,8 @@
     "build:website": "node scripts/sync-assets.mjs && npm run build --workspace=@nexvault/website",
     "publish:builds": "node scripts/publish-builds.mjs",
     "release": "npm run build:desktop && npm run build:mobile:android && npm run publish:builds && npm run build:website",
-    "start:relay": "npm run start --workspace=@nexvault/relay"
+    "start:relay": "npm run start --workspace=@nexvault/relay",
+    "build:relay": "npm run build --workspace=@nexvault/relay"
   },
   "devDependencies": {
     "jest": "^29.7.0"
