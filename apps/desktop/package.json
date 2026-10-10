@@ -1,0 +1,36 @@
+{
+  "name": "@nexvault/desktop",
+  "private": true,
+  "version": "0.1.0",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder"
+  },
+  "dependencies": {
+    "@nexvault/core": "*",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "electron": "38.8.6",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.nexvault.desktop",
+    "productName": "NexVault",
+    "executableName": "nexvault",
+    "directories": {
+      "output": "dist"
+    },
+    "linux": {
+      "target": [
+        "dir"
+      ]
+    },
+    "files": [
+      "src/**/*",
+      "../../packages/core/**/*",
+      "package.json"
+    ]
+  }
+}

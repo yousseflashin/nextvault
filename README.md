@@ -30,11 +30,10 @@ NexVault is structured as a workspace monorepo.
 ### 1. Desktop App
 The desktop vault acts as the primary vault and extension bridge.
 ```bash
-cd apps/desktop
-npm install
-npm run start
+npm install # Run once from the repository root
+npm run start:desktop
 ```
-*To build production installers:* `npm run build` (outputs to `apps/desktop/dist`).
+*To build the production desktop bundle:* `npm run build:desktop` (outputs to `apps/desktop/dist`).
 
 ### 2. Browser Extension
 Connects to the local desktop app to provide autofill.
@@ -53,9 +52,7 @@ npx cap sync android
 
 ### 4. Website Landing Page
 ```bash
-cd website
-npm install
-npm run build # Generates files in /public
+npm run build:website # Run from the repository root
 ```
 
 ---
@@ -67,9 +64,7 @@ The relay server manages WebRTC signaling. **Requires persistent WebSocket suppo
 *   **Recommended Platforms:** Render, Railway, Fly.io, or an AWS/DigitalOcean VPS.
 *   **Deployment:** Use a platform that supports persistent Node.js processes.
     ```bash
-    cd apps/relay
-    npm install
-    node index.js
+    npm run start:relay # Run from the repository root
     ```
 
 ### Website

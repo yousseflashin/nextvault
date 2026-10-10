@@ -1,1 +1,1 @@
-{"name": "@nexvault/relay", "version": "0.1.0", "main": "index.js"}
+{"name":"@nexvault/relay","version":"0.1.0","private":true,"main":"index.js","scripts":{"start":"node index.js"},"dependencies":{"@nexvault/core":"*","ws":"^8.18.0"}}

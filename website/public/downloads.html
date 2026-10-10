@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Download NexVault | Local-First Password & Trusted Device Network</title>
+  <meta name="description" content="Download NexVault for desktop (Linux AppImage) and Android. Local-first password manager, OTP authenticator, and trusted device network. No cloud, fully encrypted.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="antialiased min-h-screen flex flex-col font-sans">
+
+  <header class="w-full max-w-6xl mx-auto px-6 py-8 flex justify-between items-center text-white">
+    <a href="index.html" class="text-2xl font-bold tracking-tight">NexVault</a>
+    <nav class="hidden md:flex gap-6 text-sm font-medium text-gray-300">
+      <a href="index.html#features" class="hover:text-white transition">Features</a>
+      <a href="index.html#security" class="hover:text-white transition">Security</a>
+      <a href="downloads.html" class="text-white">Download</a>
+    </nav>
+  </header>
+
+  <main class="flex-grow w-full max-w-4xl mx-auto px-6 py-16">
+    <h1 class="text-4xl md:text-5xl font-extrabold tracking-tight text-white mb-4">Download NexVault</h1>
+    <p class="text-lg text-gray-400 mb-12">Free, local-first, and offline-capable. Your data never leaves your devices.</p>
+
+    <div id="artifacts" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+      <div class="p-6 bg-gray-900 rounded-xl border border-gray-800 flex flex-col">
+        <div class="w-10 h-10 rounded-lg bg-brand-blue/20 flex items-center justify-center text-brand-blue mb-4">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+        </div>
+        <h2 class="text-xl font-bold text-white mb-1">Desktop</h2>
+        <p class="text-sm text-gray-500 mb-4">Linux · AppImage · works offline</p>
+        <p class="text-gray-400 text-sm mb-6 flex-grow">The primary vault: password manager, OTP authenticator, and trusted-device bridge for the browser extension.</p>
+        <a id="desktop-link" href="downloads/" class="px-6 py-3 rounded-lg bg-brand-blue hover:bg-brand-hover text-white font-medium transition flex items-center justify-center gap-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+          Download Desktop
+        </a>
+      </div>
+
+      <div class="p-6 bg-gray-900 rounded-xl border border-gray-800 flex flex-col">
+        <div class="w-10 h-10 rounded-lg bg-brand-blue/20 flex items-center justify-center text-brand-blue mb-4">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+        </div>
+        <h2 class="text-xl font-bold text-white mb-1">Mobile</h2>
+        <p class="text-sm text-gray-500 mb-4">Android · APK · debug build</p>
+        <p class="text-gray-400 text-sm mb-6 flex-grow">Carry your vault on the go. Pairs with the desktop app over encrypted peer-to-peer channels.</p>
+        <a id="mobile-link" href="downloads/" class="px-6 py-3 rounded-lg bg-gray-800 hover:bg-gray-700 text-white border border-gray-700 font-medium transition flex items-center justify-center gap-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+          Download Android APK
+        </a>
+      </div>
+
+    </div>
+
+    <p id="no-artifacts" class="hidden text-center text-gray-500 text-sm mt-10">No builds published yet — run <code class="text-gray-300">npm run release</code> in the repository to build and publish.</p>
+
+    <section class="mt-16 p-6 bg-gray-900/50 rounded-xl border border-gray-800">
+      <h2 class="text-lg font-bold text-white mb-2">Verify a build</h2>
+      <p class="text-gray-400 text-sm">Published artifacts are listed in <a class="text-brand-blue hover:underline" href="downloads/manifest.json">manifest.json</a> with exact file sizes. Builds are produced by the open-source repository; audit the code before trusting a binary.</p>
+    </section>
+  </main>
+
+  <footer class="w-full max-w-6xl mx-auto px-6 py-8 text-center text-sm text-gray-600">
+    NexVault — local-first. Nothing in between.
+  </footer>
+
+  <script>
+    fetch('downloads/manifest.json')
+      .then(r => r.json())
+      .then(list => {
+        const desktop = list.find(a => a.kind === 'desktop');
+        const mobile = list.find(a => a.kind === 'mobile');
+        if (desktop) {
+          const el = document.getElementById('desktop-link');
+          el.href = desktop.file;
+          el.querySelector('svg').insertAdjacentText('afterend', ' ');
+          el.append(desktop.name + ' (' + (desktop.size / 1048576).toFixed(1) + ' MB)');
+        }
+        if (mobile) {
+          const el = document.getElementById('mobile-link');
+          el.href = mobile.file;
+          el.append(mobile.name + ' (' + (mobile.size / 1048576).toFixed(1) + ' MB)');
+        }
+        if (!desktop && !mobile) document.getElementById('no-artifacts').classList.remove('hidden');
+      })
+      .catch(() => document.getElementById('no-artifacts').classList.remove('hidden'));
+  </script>
+</body>
+</html>
