@@ -1,11 +1,14 @@
 // Consolidates desktop (AppImage) and mobile (APK) build artifacts into
 // the release/ directory for uploading to GitHub Releases.
-import { cp, mkdir, readdir, rm, stat } from 'node:fs/promises';
+import { cp, mkdir, readFile, readdir, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 const TARGET = join(ROOT, 'release');
+
+const rootPkg = JSON.parse(await readFile(join(ROOT, 'package.json'), 'utf8'));
+const currentVersion = rootPkg.version || '0.1.0';
 
 const SOURCES = [
   { glob: /^NexVault-.*\.AppImage$/, dir: join(ROOT, 'apps', 'desktop', 'dist'), kind: 'desktop' },
@@ -41,7 +44,7 @@ if (published.length) {
   console.log('Upload these files to your GitHub Release:');
   published.forEach(p => console.log(`  - release/${p.name}`));
   console.log('\nCreate release on GitHub:');
-  console.log('  https://github.com/yousseflashin/nextvault/releases/new?tag=v0.1.0\n');
+  console.log(`  https://github.com/yousseflashin/nextvault/releases/new?tag=v${currentVersion}\n`);
 } else {
   console.log('No build artifacts found. Run npm run build:desktop and npm run build:mobile:android first.\n');
 }

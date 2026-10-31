@@ -3,13 +3,25 @@
   "name": "NexVault Password Manager",
   "version": "0.1.0",
   "description": "Connects browser autofill workflows to the local NexVault desktop vault.",
-  "permissions": ["storage", "activeTab", "scripting"],
-  "host_permissions": ["<all_urls>", "http://localhost/*", "http://127.0.0.1/*", "ws://localhost/*", "ws://127.0.0.1/*"],
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>",
+    "http://localhost/*",
+    "http://127.0.0.1/*",
+    "ws://localhost/*",
+    "ws://127.0.0.1/*"
+  ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' ws://localhost:* ws://127.0.0.1:* http://localhost:* http://127.0.0.1:*;"
   },
   "background": {
-    "scripts": ["background.js"]
+    "scripts": [
+      "background.js"
+    ]
   },
   "action": {
     "default_popup": "popup.html"
@@ -22,14 +34,23 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["cyber/cyber.css", "cyber/binary-shield.js"],
-      "matches": ["<all_urls>"]
+      "resources": [
+        "cyber/cyber.css",
+        "cyber/binary-shield.js"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ],
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["content.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
   ]
