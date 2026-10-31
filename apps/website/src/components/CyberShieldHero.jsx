@@ -9,6 +9,7 @@ const STAGE_DESCRIPTIONS = [
 
 export default function CyberShieldHero() {
   const canvasRef = useRef(null);
+  const heroRef = useRef(null);
   const [stageIdx, setStageIdx] = useState(0);
   const [stageName, setStageName] = useState('MATRIX CONVERGENCE');
   const [replaying, setReplaying] = useState(false);
@@ -37,6 +38,32 @@ export default function CyberShieldHero() {
     }
   }, []);
 
+  // Replay animation automatically when user scrolls away and returns to top
+  useEffect(() => {
+    const heroEl = heroRef.current;
+    if (!heroEl) return;
+
+    let hasScrolledAway = false;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) {
+            hasScrolledAway = true;
+          } else if (hasScrolledAway && entry.isIntersecting) {
+            hasScrolledAway = false;
+            if (canvasRef.current?.__nv_replay) {
+              canvasRef.current.__nv_replay();
+            }
+          }
+        }
+      },
+      { threshold: 0.15 }
+    );
+
+    observer.observe(heroEl);
+    return () => observer.disconnect();
+  }, []);
+
   const handleReplay = () => {
     if (canvasRef.current?.__nv_replay) {
       setReplaying(true);
@@ -46,10 +73,11 @@ export default function CyberShieldHero() {
   };
 
   return (
-    <section className="relative min-h-[92vh] flex items-center justify-center overflow-hidden pt-8 pb-16">
-      {/* Background ambient radial glow */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[500px] bg-nv-primary/5 blur-[140px] pointer-events-none rounded-full" />
-      <div className="absolute bottom-1/4 right-1/4 w-[450px] h-[350px] bg-nv-accent/5 blur-[120px] pointer-events-none rounded-full" />
+    <section ref={heroRef} className="relative min-h-[92vh] flex items-center justify-center overflow-hidden pt-8 pb-16">
+      {/* Background ambient radial glow & cyber grid */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[500px] bg-nv-primary/15 blur-[120px] pointer-events-none rounded-full" />
+      <div className="absolute bottom-1/4 right-1/4 w-[450px] h-[350px] bg-nv-accent/15 blur-[100px] pointer-events-none rounded-full" />
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(0,255,157,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(0,255,157,0.03)_1px,transparent_1px)] bg-[size:48px_48px] pointer-events-none opacity-60" />
 
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-8 items-center">
@@ -114,7 +142,7 @@ export default function CyberShieldHero() {
 
           {/* Right Column: Prominent Dedicated Full Shield Showcase */}
           <div className="lg:col-span-6 xl:col-span-6 flex flex-col items-center">
-            <div className="w-full max-w-[560px] relative rounded-2xl bg-gradient-to-b from-[#0a1220]/90 to-[#040710]/95 border border-nv-primary/30 p-4 sm:p-5 shadow-[0_0_50px_rgba(0,255,157,0.12)] backdrop-blur-xl">
+            <div className="w-full max-w-[560px] relative rounded-2xl bg-gradient-to-b from-[#0a1220]/95 via-[#060b16]/95 to-[#040710]/98 border border-nv-primary/40 p-4 sm:p-5 shadow-[0_0_50px_rgba(0,255,157,0.18)]">
               
               {/* Corner Sci-Fi Accent Brackets */}
               <div className="absolute top-2 left-2 w-3 h-3 border-t-2 border-l-2 border-nv-primary pointer-events-none" />
@@ -149,7 +177,7 @@ export default function CyberShieldHero() {
               </div>
 
               {/* Full Shield Interactive Canvas */}
-              <div className="relative w-full h-[440px] sm:h-[480px] bg-black/60 rounded-xl overflow-hidden border border-white/5">
+              <div className="relative w-full h-[440px] sm:h-[480px] bg-[#04060c] rounded-xl overflow-hidden border border-white/10 shadow-inner">
                 <canvas
                   ref={canvasRef}
                   data-nv-binary-shield
@@ -157,7 +185,7 @@ export default function CyberShieldHero() {
                 />
 
                 {/* Subtitle Telemetry overlay at bottom inside canvas */}
-                <div className="absolute bottom-3 left-3 right-3 pointer-events-none flex items-center justify-between font-mono text-[11px] text-nv-muted/80 bg-black/40 backdrop-blur-sm px-3 py-1.5 rounded border border-white/5">
+                <div className="absolute bottom-3 left-3 right-3 pointer-events-none flex items-center justify-between font-mono text-[11px] text-nv-muted/80 bg-black/60 px-3 py-1.5 rounded border border-white/10">
                   <span className="truncate pr-2">{STAGE_DESCRIPTIONS[stageIdx]}</span>
                   <span className="text-nv-primary shrink-0 hidden sm:inline">Deflection: 100%</span>
                 </div>

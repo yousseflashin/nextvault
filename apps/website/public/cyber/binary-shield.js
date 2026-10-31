@@ -362,16 +362,16 @@
         if (isLeading) {
           ctx.fillStyle = '#bdfce0';
         } else if (stage >= 2 && Math.abs(x - cx) < sw * 0.7 && Math.abs(y - cy) < sh * 0.7) {
-          ctx.fillStyle = 'rgba(0, 212, 255, 0.32)';
+          ctx.fillStyle = 'rgba(0, 212, 255, 0.45)';
         } else {
-          ctx.fillStyle = 'rgba(0, 255, 157, 0.42)';
+          ctx.fillStyle = 'rgba(0, 255, 157, 0.55)';
         }
 
         ctx.fillText(ch, x, y);
 
         drops[i] += speeds[i];
-        if (y > h + FONT_SIZE * 4 && Math.random() > 0.95) {
-          drops[i] = Math.random() * -30;
+        if (y > h + FONT_SIZE * 2) {
+          drops[i] = Math.random() * -20;
         }
       }
     }
@@ -488,28 +488,28 @@
     function drawSolidifiedShield(pulse) {
       ctx.save();
 
-      // 1. Subtle Outer Neon Edge Glow
+      // 1. Outer Neon Edge Glow
       ctx.shadowColor = COLOR_PRIMARY;
-      ctx.shadowBlur = 20 + pulse * 10;
-      ctx.strokeStyle = 'rgba(0, 255, 157, 0.85)';
-      ctx.lineWidth = 2.5;
+      ctx.shadowBlur = 24 + pulse * 12;
+      ctx.strokeStyle = `rgba(0, 255, 157, ${0.85 + pulse * 0.15})`;
+      ctx.lineWidth = 2.6;
       getShieldPath(ctx, cx, cy, sw + 4, sh + 4);
       ctx.stroke();
 
       // 2. Realistic Chamfered Steel Bevel
       ctx.shadowColor = COLOR_ACCENT;
-      ctx.shadowBlur = 10 + pulse * 5;
-      ctx.strokeStyle = 'rgba(0, 212, 255, 0.75)';
+      ctx.shadowBlur = 12 + pulse * 6;
+      ctx.strokeStyle = 'rgba(0, 212, 255, 0.85)';
       ctx.lineWidth = 1.8;
       getShieldPath(ctx, cx, cy, sw, sh);
       ctx.stroke();
 
       // 3. Dark Titanium-Carbon Shield Surface
       const metalGrad = ctx.createLinearGradient(cx - sw / 2, cy - sh / 2, cx + sw / 2, cy + sh / 2);
-      metalGrad.addColorStop(0, '#0f1624');
-      metalGrad.addColorStop(0.25, '#070b13');
-      metalGrad.addColorStop(0.7, '#0a0f1b');
-      metalGrad.addColorStop(1, '#020408');
+      metalGrad.addColorStop(0, '#152238');
+      metalGrad.addColorStop(0.25, '#0c1524');
+      metalGrad.addColorStop(0.7, '#101a2e');
+      metalGrad.addColorStop(1, '#080e1a');
 
       ctx.fillStyle = metalGrad;
       getShieldPath(ctx, cx, cy, sw, sh);
@@ -520,7 +520,7 @@
       getShieldPath(ctx, cx, cy, sw - 8, sh - 8);
       ctx.clip();
 
-      ctx.strokeStyle = 'rgba(0, 255, 157, 0.05)';
+      ctx.strokeStyle = `rgba(0, 255, 157, ${0.14 + pulse * 0.08})`;
       ctx.lineWidth = 1;
       const hexR = 20;
       for (let y = cy - sh * 0.46; y < cy + sh * 0.48; y += hexR * 1.5) {
@@ -610,8 +610,8 @@
 
       // 1. Upward Conical Light Beaming from Behind Laptop Lid into Hacker's Face & Hood
       const spillGrad = ctx.createRadialGradient(cx, lidTopY + 4, 8, cx, cy - sh * 0.12, sw * 0.32);
-      spillGrad.addColorStop(0, `rgba(0, 212, 255, ${0.58 + pulse * 0.2})`);
-      spillGrad.addColorStop(0.35, `rgba(0, 255, 157, ${0.26 + pulse * 0.12})`);
+      spillGrad.addColorStop(0, `rgba(0, 212, 255, ${0.75 + pulse * 0.2})`);
+      spillGrad.addColorStop(0.35, `rgba(0, 255, 157, ${0.42 + pulse * 0.15})`);
       spillGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
 
       ctx.fillStyle = spillGrad;
@@ -624,7 +624,7 @@
       ctx.fill();
 
       // 2. Dark Hoodie Silhouette & Hunched Posture
-      ctx.fillStyle = '#03050a';
+      ctx.fillStyle = '#0a101d';
       ctx.beginPath();
       // Hood top peak
       ctx.moveTo(cx, hoodTopY - 10);
@@ -638,27 +638,27 @@
       ctx.fill();
 
       // Subtle fabric fold highlights along the hood edge
-      ctx.strokeStyle = `rgba(0, 255, 157, ${0.35 + pulse * 0.2})`;
+      ctx.strokeStyle = `rgba(0, 255, 157, ${0.5 + pulse * 0.25})`;
       ctx.lineWidth = 1.5;
       ctx.stroke();
 
       // 3. Deep Shadow / Pitch-Black Face Void (NO face, pure anonymity)
-      ctx.fillStyle = '#010204';
+      ctx.fillStyle = '#03050c';
       ctx.beginPath();
       ctx.ellipse(cx, cy - sh * 0.11, hoodW * 0.32, hoodH * 0.28, 0, 0, Math.PI * 2);
       ctx.fill();
 
       // Under-hood specular rim light catching the edge of the fabric from the screen
-      ctx.strokeStyle = `rgba(0, 212, 255, ${0.55 + pulse * 0.25})`;
-      ctx.lineWidth = 1.4;
+      ctx.strokeStyle = `rgba(0, 212, 255, ${0.7 + pulse * 0.25})`;
+      ctx.lineWidth = 1.6;
       ctx.beginPath();
       ctx.arc(cx, cy - sh * 0.06, hoodW * 0.25, Math.PI * 0.12, Math.PI * 0.88);
       ctx.stroke();
 
       // 4. Hacker's Hands Reaching Around the Laptop Lid (typing on the keyboard behind the screen)
-      ctx.fillStyle = '#020306';
-      ctx.strokeStyle = `rgba(0, 212, 255, ${0.4 + pulse * 0.2})`;
-      ctx.lineWidth = 1;
+      ctx.fillStyle = '#050a14';
+      ctx.strokeStyle = `rgba(0, 212, 255, ${0.5 + pulse * 0.2})`;
+      ctx.lineWidth = 1.2;
 
       // Left hand/wrist reaching around left edge of lid
       ctx.beginPath();
@@ -675,9 +675,9 @@
       // 5. Intense Screen Glow Spill Line Across the Top Edge of the Lid
       ctx.save();
       ctx.shadowColor = COLOR_ACCENT;
-      ctx.shadowBlur = 14 + pulse * 8;
+      ctx.shadowBlur = 18 + pulse * 8;
       ctx.strokeStyle = COLOR_ACCENT;
-      ctx.lineWidth = 2.5;
+      ctx.lineWidth = 2.8;
       ctx.beginPath();
       ctx.moveTo(cx - lidTopW * 0.48, lidTopY - 1);
       ctx.lineTo(cx + lidTopW * 0.48, lidTopY - 1);
@@ -686,10 +686,10 @@
 
       // 6. The Laptop Lid (Back of display facing viewer, tilted slightly forward in perspective)
       const lidGrad = ctx.createLinearGradient(cx - lidTopW / 2, lidTopY, cx + lidBotW / 2, lidHingeY);
-      lidGrad.addColorStop(0, '#121a29');
-      lidGrad.addColorStop(0.35, '#070b13');
-      lidGrad.addColorStop(0.7, '#0b111c');
-      lidGrad.addColorStop(1, '#030509');
+      lidGrad.addColorStop(0, '#1c283d');
+      lidGrad.addColorStop(0.35, '#0e1726');
+      lidGrad.addColorStop(0.7, '#131e33');
+      lidGrad.addColorStop(1, '#09101d');
 
       ctx.fillStyle = lidGrad;
       ctx.beginPath();
@@ -701,8 +701,8 @@
       ctx.fill();
 
       // Beveled metallic lid rim
-      ctx.strokeStyle = 'rgba(0, 212, 255, 0.55)';
-      ctx.lineWidth = 1.2;
+      ctx.strokeStyle = 'rgba(0, 212, 255, 0.75)';
+      ctx.lineWidth = 1.4;
       ctx.stroke();
 
       // Laptop Hinge Bar at bottom of lid
@@ -801,6 +801,8 @@
       setStage(0);
       flashIntensity = 0;
       shockwaveRadius = 0;
+      columns = Math.max(16, Math.floor(w / FONT_SIZE));
+      drops = Array.from({ length: columns }, () => Math.random() * -60);
     }
 
     canvas.__nv_replay = replay;
@@ -827,6 +829,11 @@
         // [2: SOLIDIFYING]: ~30 frames
         if (frame > 210) {
           setStage(3); // ACTIVE DEFENSE ORBIT
+        }
+      } else if (stage === 3) {
+        // Keep active defense looping after extended viewing (~20 seconds)
+        if (frame > 1200) {
+          replay();
         }
       }
 

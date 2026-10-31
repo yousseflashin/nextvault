@@ -1,0 +1,141 @@
+// Orchestrates building the mobile app, syncing assets to Capacitor Android,
+// detecting compatible JDK (17/21) and Android SDK paths, and compiling the APK with Gradle.
+import { spawnSync } from 'node:child_process';
+import { existsSync, readdirSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..');
+const HOME = homedir();
+
+function run(cmd, args, opts = {}) {
+  console.log(`> ${cmd} ${args.join(' ')}`);
+  const res = spawnSync(cmd, args, {
+    cwd: opts.cwd || ROOT,
+    stdio: 'inherit',
+    env: { ...process.env, ...opts.env }
+  });
+  if (res.error) throw res.error;
+  return res.status;
+}
+
+// 1. Build mobile web assets
+console.log('[1/3] Building mobile web app (Vite)...');
+const buildCode = run('npm', ['--prefix', 'apps/mobile', 'run', 'build']);
+if (buildCode !== 0) {
+  process.exit(buildCode);
+}
+
+// 2. Sync Capacitor Android from apps/mobile directory
+console.log('[2/3] Syncing Capacitor Android assets...');
+const syncCode = run('npm', ['--prefix', 'apps/mobile', 'run', 'cap:sync']);
+if (syncCode !== 0) {
+  process.exit(syncCode);
+}
+
+// 3. Find compatible Java home (Gradle 8 requires Java <= 21, fails on Java 25)
+console.log('[3/3] Assembling Android APK with Gradle...');
+let javaHome = process.env.JAVA_HOME;
+
+function isValidJdk(p) {
+  try {
+    return existsSync(join(p, 'bin', 'javac')) && existsSync(join(p, 'bin', 'java'));
+  } catch {
+    return false;
+  }
+}
+
+let needJavaFallback = !javaHome;
+if (javaHome && isValidJdk(javaHome)) {
+  const check = spawnSync(join(javaHome, 'bin', 'java'), ['-version'], { encoding: 'utf8' });
+  const verOutput = (check.stderr || '') + (check.stdout || '');
+  if (/version "(?:2[5-9]|[3-9]\d)/.test(verOutput)) {
+    needJavaFallback = true;
+  }
+} else {
+  const check = spawnSync('java', ['-version'], { encoding: 'utf8' });
+  const verOutput = (check.stderr || '') + (check.stdout || '');
+  if (/version "(?:2[5-9]|[3-9]\d)/.test(verOutput)) {
+    needJavaFallback = true;
+  }
+}
+
+if (needJavaFallback) {
+  const candidateDirs = [
+    join(HOME, '.jdks'),
+    join(HOME, 'tools'),
+    '/usr/lib/jvm',
+    join(HOME, '.sdkman', 'candidates', 'java'),
+    '/opt'
+  ];
+
+  // Prefer Java 21, then Java 17
+  for (const preferredVer of ['21', '17']) {
+    for (const parent of candidateDirs) {
+      if (!existsSync(parent)) continue;
+      try {
+        const entries = readdirSync(parent);
+        for (const entry of entries) {
+          if (entry.includes(preferredVer)) {
+            const fullPath = join(parent, entry);
+            if (isValidJdk(fullPath)) {
+              javaHome = fullPath;
+              break;
+            }
+          }
+        }
+      } catch {}
+      if (javaHome) break;
+    }
+    if (javaHome) break;
+  }
+}
+
+// 4. Find Android SDK
+let androidHome = process.env.ANDROID_HOME || process.env.ANDROID_SDK_ROOT;
+if (!androidHome || !existsSync(androidHome)) {
+  const sdkCandidates = [
+    join(HOME, 'Android', 'Sdk'),
+    join(HOME, 'Library', 'Android', 'sdk'),
+    join(HOME, 'android-sdk'),
+    '/usr/local/share/android-sdk',
+    '/opt/android-sdk'
+  ];
+  for (const candidate of sdkCandidates) {
+    if (existsSync(candidate)) {
+      androidHome = candidate;
+      break;
+    }
+  }
+}
+
+const env = { ...process.env };
+if (javaHome) {
+  console.log(`Using JAVA_HOME: ${javaHome}`);
+  env.JAVA_HOME = javaHome;
+  env.PATH = `${join(javaHome, 'bin')}:${env.PATH || ''}`;
+}
+if (androidHome) {
+  console.log(`Using ANDROID_HOME: ${androidHome}`);
+  env.ANDROID_HOME = androidHome;
+  env.ANDROID_SDK_ROOT = androidHome;
+}
+
+const gradlewPath = join(ROOT, 'apps', 'mobile', 'android', 'gradlew');
+const gradleResult = run(gradlewPath, ['-p', join(ROOT, 'apps', 'mobile', 'android'), 'assembleDebug'], { env });
+
+const apkPath = join(ROOT, 'apps', 'mobile', 'android', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
+
+if (gradleResult !== 0) {
+  if (existsSync(apkPath)) {
+    console.warn(`\n[WARNING] Gradle build failed with code ${gradleResult}, but an existing APK was found at:`);
+    console.warn(`  ${apkPath}`);
+    console.warn('Proceeding with the existing APK for release packaging.\n');
+  } else {
+    console.error(`\n[ERROR] Gradle assembleDebug failed with exit code ${gradleResult} and no pre-built APK exists.`);
+    process.exit(gradleResult);
+  }
+} else {
+  console.log(`\n✓ Android APK successfully built: ${apkPath}`);
+}

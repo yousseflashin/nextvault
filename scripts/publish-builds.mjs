@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 const TARGET = join(ROOT, 'apps', 'website', 'public', 'downloads');
+const DIST_TARGET = join(ROOT, 'apps', 'website', 'dist', 'downloads');
 
 const SOURCES = [
   { glob: /^NexVault-.*\.AppImage$/, dir: join(ROOT, 'apps', 'desktop', 'dist'), kind: 'desktop', platform: 'linux' },
@@ -35,5 +36,12 @@ for (const src of SOURCES) {
   }
 }
 
-await writeFile(join(TARGET, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
+const manifestJson = JSON.stringify(manifest, null, 2) + '\n';
+await writeFile(join(TARGET, 'manifest.json'), manifestJson);
+
+if (await exists(join(ROOT, 'apps', 'website', 'dist'))) {
+  await rm(DIST_TARGET, { recursive: true, force: true });
+  await cp(TARGET, DIST_TARGET, { recursive: true });
+}
+
 console.log(manifest.length ? `${manifest.length} artifact(s) -> apps/website/public/downloads/` : 'No build artifacts found. Run npm run build:desktop / build:mobile:android first.');
