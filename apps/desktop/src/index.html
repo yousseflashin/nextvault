@@ -96,13 +96,28 @@
         </span>
         <span>NEX<span class="nv-gradient-text">VAULT</span></span>
       </a>
-      <div class="nv-status" id="header-status">
-        <span class="dot"></span>
-        <span id="status-text">Initializing...</span>
+      <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <span class="nv-badge" style="cursor: pointer; border-color: rgba(0,255,157,0.3);" onclick="checkForUpdates(true)" title="NexVault Desktop v0.1.0">v0.1.0</span>
+        <button class="nv-btn nv-btn-ghost" style="padding: 0.25rem 0.6rem; font-size: 0.7rem;" onclick="checkForUpdates(true)">Check Updates</button>
+        <div class="nv-status" id="header-status">
+          <span class="dot"></span>
+          <span id="status-text">Initializing...</span>
+        </div>
       </div>
     </header>
 
     <main class="nv-main">
+      <!-- Update notification banner -->
+      <div id="update-banner" style="display: none; padding: 0.75rem 1rem; margin-bottom: 1rem; background: rgba(0, 212, 255, 0.12); border: 1px solid var(--nv-accent); border-radius: 8px; justify-content: space-between; align-items: center; animation: nv-fade-in 0.2s ease;">
+        <div>
+          <div style="font-weight: bold; color: #fff;" id="update-title">🚀 Update Available: <span id="update-version"></span></div>
+          <div style="font-size: 0.75rem; color: var(--nv-muted);" id="update-desc">A newer version is ready for download.</div>
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+          <button class="nv-btn nv-btn-cyan" style="padding: 0.35rem 0.75rem; font-size: 0.75rem;" id="update-action-btn" onclick="openUpdateLink()">Download AppImage</button>
+          <button class="nv-btn nv-btn-ghost" style="padding: 0.35rem 0.75rem; font-size: 0.75rem;" onclick="dismissUpdate()">Dismiss</button>
+        </div>
+      </div>
       <!-- Auth section -->
       <section class="nv-section nv-panel nv-card" id="auth-section">
         <div class="nv-panel-header">
@@ -188,6 +203,17 @@
           </div>
         </div>
 
+        <!-- Persistent Trusted Devices List -->
+        <div style="margin-top: 1rem; border-top: 1px solid var(--nv-border); padding-top: 0.75rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <span class="nv-label" style="margin: 0; color: var(--nv-primary); font-weight: bold;">Trusted Network Devices (Persistent)</span>
+            <button class="nv-btn nv-btn-ghost" style="padding: 0.2rem 0.5rem; font-size: 0.65rem;" onclick="loadTrustedDevicesUI()">Reload</button>
+          </div>
+          <div id="trusted-devices-list" style="display: flex; flex-direction: column; gap: 0.4rem;">
+            <div class="nv-empty" style="padding: 0.5rem; font-size: 0.75rem;">No paired devices yet. Mobile devices will appear here once paired.</div>
+          </div>
+        </div>
+
         <div class="nv-terminal nv-dim" id="grid-log" style="margin-top:0.75rem;">
 >> Awaiting NexGrid start...
         </div>
@@ -196,7 +222,7 @@
       <!-- Vault section -->
       <section class="nv-section nv-panel nv-card" id="vault-section" style="display:none">
         <div class="nv-panel-header">
-          <span class="nv-panel-title">vault</span>
+          <span class="nv-panel-title">vault credentials</span>
           <span class="nv-badge"><span class="dot"></span>unlocked</span>
         </div>
         <div class="nv-form-row">
@@ -217,6 +243,7 @@
         </div>
         <div class="nv-btn-row">
           <button class="nv-btn" onclick="savePassword()">Save Credential</button>
+          <button class="nv-btn nv-btn-cyan" onclick="syncAndRefreshVault()">Sync &amp; Refresh</button>
           <button class="nv-btn nv-btn-ghost" onclick="listPasswords()">List All</button>
         </div>
         <div class="nv-card nv-scroll" id="vault-list">
@@ -241,6 +268,7 @@
         </div>
         <div class="nv-btn-row">
           <button class="nv-btn" onclick="saveOTP()">Add TOTP</button>
+          <button class="nv-btn nv-btn-cyan" onclick="syncAndRefreshVault()">Sync &amp; Refresh</button>
           <button class="nv-btn nv-btn-ghost" onclick="listOTPs()">List All</button>
         </div>
         <div class="nv-card nv-scroll" id="otp-list">
@@ -548,9 +576,96 @@
       });
     }
 
+    let latestUpdateInfo = null;
+
+    async function checkForUpdates(manual = false) {
+      if (manual) setStatus('Checking for updates...');
+      try {
+        const info = await window.nexVault.checkForUpdates();
+        if (info && info.hasUpdate) {
+          latestUpdateInfo = info;
+          $('update-version').textContent = info.latestVersion;
+          $('update-desc').textContent = `${info.releaseName || 'Version ' + info.latestVersion} is available. Click below to download the latest Linux AppImage.`;
+          $('update-banner').style.display = 'flex';
+          setStatus(`Update available: ${info.latestVersion}`);
+        } else {
+          $('update-banner').style.display = 'none';
+          if (manual) {
+            setStatus(info?.message || `NexVault is up to date (${info?.currentVersion || 'v0.1.0'})`);
+          }
+        }
+      } catch (err) {
+        if (manual) setStatus('Update check failed: ' + err.message);
+      }
+    }
+
+    function openUpdateLink() {
+      if (latestUpdateInfo && latestUpdateInfo.downloadUrl) {
+        window.nexVault.openExternalUrl(latestUpdateInfo.downloadUrl);
+        setStatus('Opening download link...');
+      } else if (latestUpdateInfo && latestUpdateInfo.releaseUrl) {
+        window.nexVault.openExternalUrl(latestUpdateInfo.releaseUrl);
+      }
+    }
+
+    function dismissUpdate() {
+      $('update-banner').style.display = 'none';
+    }
+
+    async function syncAndRefreshVault() {
+      setStatus('Syncing vault with peers...');
+      try {
+        await window.nexVault.syncVaultToPeers();
+        await listPasswords();
+        await listOTPs();
+        await loadTrustedDevicesUI();
+        const timeStr = new Date().toLocaleTimeString();
+        setStatus(`Vault synchronized & refreshed at ${timeStr}`);
+      } catch (err) {
+        setStatus('Sync error: ' + err.message);
+      }
+    }
+
+    async function loadTrustedDevicesUI() {
+      const container = $('trusted-devices-list');
+      if (!container || !window.nexVault || !window.nexVault.getTrustedDevices) return;
+      try {
+        const res = await window.nexVault.getTrustedDevices();
+        const devices = res.devices || [];
+        if (!devices.length) {
+          container.innerHTML = '<div class="nv-empty" style="padding: 0.5rem; font-size: 0.75rem;">No paired devices yet. Mobile devices will appear here once paired.</div>';
+          return;
+        }
+        container.innerHTML = devices.map(d => `
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.4rem 0.6rem; background: rgba(255,255,255,0.03); border: 1px solid var(--nv-border); border-radius: 6px; font-size: 0.75rem;">
+            <div>
+              <div style="font-weight: bold; color: #fff;">${escapeHtml(d.deviceName || 'Device')} <span style="font-family: var(--nv-font-mono); font-size: 0.65rem; color: var(--nv-accent);">${escapeHtml(d.deviceId)}</span></div>
+              <div style="font-size: 0.65rem; color: var(--nv-muted);">Paired: ${new Date(d.pairedAt || Date.now()).toLocaleDateString()}</div>
+            </div>
+            <button class="nv-btn nv-btn-ghost" style="padding: 0.2rem 0.5rem; font-size: 0.65rem; color: var(--nv-danger); border-color: rgba(255,59,107,0.3);" onclick="removeTrustedDeviceUI('${escapeHtml(d.deviceId)}')">Revoke</button>
+          </div>
+        `).join('');
+      } catch (err) {
+        console.error('Failed to load trusted devices:', err);
+      }
+    }
+
+    async function removeTrustedDeviceUI(deviceId) {
+      if (!confirm('Revoke trust for this device?')) return;
+      try {
+        await window.nexVault.removeTrustedDevice(deviceId);
+        loadTrustedDevicesUI();
+        gridLog('Revoked trusted device: ' + deviceId);
+      } catch (err) {
+        gridLog('Revoke error: ' + err.message);
+      }
+    }
+
     // Auto-detect existing user profile on startup
     async function initStartup() {
       try {
+        loadTrustedDevicesUI();
+        checkForUpdates(false);
         if (!window.nexVault || !window.nexVault.getVaultProfile) return;
         const profile = await window.nexVault.getVaultProfile();
         if (profile && profile.hasUser && profile.bootstrapToken) {
@@ -595,6 +710,7 @@
       if (window.nexVault.onPeerPaired) {
         window.nexVault.onPeerPaired(({ peerId, deviceName }) => {
           gridLog(`✅ Device paired & verified: "${deviceName}" (${peerId})`);
+          loadTrustedDevicesUI();
         });
       }
 
@@ -603,6 +719,7 @@
           gridLog(`🔄 Vault updated from network sync!`);
           listPasswords();
           listOTPs();
+          loadTrustedDevicesUI();
         });
       }
     }
@@ -620,6 +737,12 @@
     window.listPasswords = listPasswords;
     window.saveOTP = saveOTP;
     window.listOTPs = listOTPs;
+    window.syncAndRefreshVault = syncAndRefreshVault;
+    window.checkForUpdates = checkForUpdates;
+    window.openUpdateLink = openUpdateLink;
+    window.dismissUpdate = dismissUpdate;
+    window.loadTrustedDevicesUI = loadTrustedDevicesUI;
+    window.removeTrustedDeviceUI = removeTrustedDeviceUI;
     window.runIntegrityCheck = runIntegrityCheck;
     window.runTamperMonitor = runTamperMonitor;
     window.triggerNuke = triggerNuke;

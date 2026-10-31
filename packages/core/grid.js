@@ -350,6 +350,8 @@ class NexGrid extends EventEmitter {
           const decrypted = JSON.parse(NexVaultCrypto.decrypt(payload.payload, localKeyPair.secretKey));
           if (decrypted && decrypted.type === 'vault-sync') {
             this.emit('vault-sync-received', fromPeerId, decrypted.vaultData);
+          } else if (decrypted && decrypted.type === 'vault-sync-request') {
+            this.emit('vault-sync-requested', fromPeerId, decrypted);
           }
           this.emit('secure-message', fromPeerId, decrypted);
           return;
@@ -364,7 +366,7 @@ class NexGrid extends EventEmitter {
       if (payload.publicKey) this.setPeerPublicKey(fromPeerId, payload.publicKey);
       this.emit('pair-request', {
         from: fromPeerId,
-        deviceName: payload.deviceName || 'NexVault Device',
+        deviceName: payload.deviceName || payload.fromDeviceName || 'NexVault Device',
         publicKey: payload.publicKey,
         code: payload.code,
         timestamp: payload.timestamp || Date.now()
@@ -373,7 +375,7 @@ class NexGrid extends EventEmitter {
       if (payload.publicKey) this.setPeerPublicKey(fromPeerId, payload.publicKey);
       this.emit('pair-approved', {
         from: fromPeerId,
-        deviceName: payload.deviceName || 'NexVault Device',
+        deviceName: payload.deviceName || payload.fromDeviceName || 'NexVault Device',
         publicKey: payload.publicKey
       });
     } else if (payload.type === 'pair-rejected') {
@@ -383,6 +385,8 @@ class NexGrid extends EventEmitter {
       });
     } else if (payload.type === 'vault-sync') {
       this.emit('vault-sync-received', fromPeerId, payload.vaultData);
+    } else if (payload.type === 'vault-sync-request') {
+      this.emit('vault-sync-requested', fromPeerId, payload);
     } else {
       this.emit('message', fromPeerId, payload);
     }

@@ -21,6 +21,13 @@ export interface StoredOTP {
   code?: string;
 }
 
+export interface TrustedPeerInfo {
+  deviceId: string;
+  publicKey?: string;
+  deviceName?: string;
+  pairedAt?: string;
+}
+
 export interface MobileVaultState {
   username: string;
   derivedKeyHash: string;
@@ -33,9 +40,61 @@ export interface MobileVaultState {
   x25519PublicKey: string; // Mobile's X25519 public key (base64)
   x25519SecretKey: string; // Mobile's X25519 secret key (base64)
   relayUrl: string;
-  trustedPeers: string[];
+  trustedPeers: (string | TrustedPeerInfo)[];
   passwords: StoredCredential[];
   otps: StoredOTP[];
+}
+
+export const CURRENT_VERSION = '0.1.0';
+export const GITHUB_REPO = 'yousseflashin/nextvault';
+
+export function isPeerTrusted(peerId: string, state: MobileVaultState): boolean {
+  if (!state.trustedPeers) return false;
+  return state.trustedPeers.some((p: any) => {
+    if (typeof p === 'string') return p === peerId;
+    return p && p.deviceId === peerId;
+  });
+}
+
+export function addTrustedPeer(peer: { deviceId: string; publicKey?: string; deviceName?: string }, state: MobileVaultState) {
+  if (!state.trustedPeers) state.trustedPeers = [];
+  const existingIdx = state.trustedPeers.findIndex((p: any) => {
+    if (typeof p === 'string') return p === peer.deviceId;
+    return p && p.deviceId === peer.deviceId;
+  });
+  const entry: TrustedPeerInfo = {
+    deviceId: peer.deviceId,
+    publicKey: peer.publicKey || '',
+    deviceName: peer.deviceName || 'Desktop Device',
+    pairedAt: new Date().toISOString()
+  };
+  if (existingIdx >= 0) {
+    state.trustedPeers[existingIdx] = entry;
+  } else {
+    state.trustedPeers.push(entry);
+  }
+  saveVault(state);
+}
+
+export function removeTrustedPeer(peerId: string, state: MobileVaultState) {
+  if (!state.trustedPeers) return;
+  state.trustedPeers = state.trustedPeers.filter((p: any) => {
+    if (typeof p === 'string') return p !== peerId;
+    return p && p.deviceId !== peerId;
+  });
+  saveVault(state);
+}
+
+function compareVersions(v1: string, v2: string): number {
+  const p1 = (v1 || '').replace(/^v/, '').split('.').map(Number);
+  const p2 = (v2 || '').replace(/^v/, '').split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    const a = p1[i] || 0;
+    const b = p2[i] || 0;
+    if (a > b) return 1;
+    if (a < b) return -1;
+  }
+  return 0;
 }
 
 export interface GridCallbacks {
@@ -195,23 +254,28 @@ function handleIncomingMobileSignal(from: string, payload: any, state: MobileVau
 
   // 2. Pairing approved by peer!
   if (payload.type === 'pair-approved') {
-    if (!state.trustedPeers.includes(from)) {
-      state.trustedPeers.push(from);
-      saveVault(state);
-    }
+    addTrustedPeer({
+      deviceId: from,
+      publicKey: payload.publicKey,
+      deviceName: payload.fromDeviceName || payload.deviceName || from
+    }, state);
     if (payload.publicKey) {
       remotePeerKeys.set(from, payload.publicKey);
     }
-    callbacks?.onLog?.(`✅ PAIRING APPROVED by "${payload.fromDeviceName || from}"!`);
+    callbacks?.onLog?.(`✅ PAIRING APPROVED by "${payload.fromDeviceName || payload.deviceName || from}"!`);
     callbacks?.onStatusChange?.('paired');
-    callbacks?.onPairApproved?.({ deviceId: from, deviceName: payload.fromDeviceName || from });
+    callbacks?.onPairApproved?.({ deviceId: from, deviceName: payload.fromDeviceName || payload.deviceName || from });
 
     // Request full vault synchronization from approved peer
     callbacks?.onLog?.('Requesting initial vault sync from desktop...');
     socket.send(JSON.stringify({
       type: 'signal',
       to: from,
-      payload: { type: 'vault-sync-request', fromDeviceId: state.devicePublicKey }
+      payload: {
+        type: 'vault-sync-request',
+        fromDeviceId: state.devicePublicKey,
+        publicKey: state.x25519PublicKey
+      }
     }));
     return;
   }
@@ -520,11 +584,60 @@ export function initMobileVault() {
                 const peers = message.peers || [];
                 callbacks?.onLog?.(`📡 Discovered ${peers.length} peer(s) in network.`);
 
-                // Automatically send pairing request to discovered peers on the same account
                 for (const peer of peers) {
                   if (peer.publicKey) remotePeerKeys.set(peer.deviceId, peer.publicKey);
                   callbacks?.onPeerDiscovered?.(peer);
-                  callbacks?.onLog?.(`Initiating automatic pairing with ${peer.deviceName || peer.deviceId}...`);
+
+                  if (isPeerTrusted(peer.deviceId, state)) {
+                    callbacks?.onLog?.(`✨ Reconnected with paired device: "${peer.deviceName || peer.deviceId}". Syncing...`);
+                    callbacks?.onStatusChange?.('paired');
+                    callbacks?.onPairApproved?.({ deviceId: peer.deviceId, deviceName: peer.deviceName || peer.deviceId });
+                    socket.send(JSON.stringify({
+                      type: 'signal',
+                      to: peer.deviceId,
+                      payload: {
+                        type: 'vault-sync-request',
+                        fromDeviceId: state.devicePublicKey,
+                        publicKey: state.x25519PublicKey
+                      }
+                    }));
+                  } else {
+                    callbacks?.onLog?.(`Initiating automatic pairing with ${peer.deviceName || peer.deviceId}...`);
+                    socket.send(JSON.stringify({
+                      type: 'signal',
+                      to: peer.deviceId,
+                      payload: {
+                        type: 'pair-request',
+                        fromDeviceId: state.devicePublicKey,
+                        fromDeviceName: 'NexVault Mobile',
+                        publicKey: state.x25519PublicKey,
+                        timestamp: Date.now()
+                      }
+                    }));
+                    callbacks?.onLog?.(`Pair request sent to ${peer.deviceName || peer.deviceId}. Awaiting approval...`);
+                  }
+                }
+              } else if (message.type === 'peer-joined') {
+                const peer = message.peer;
+                if (peer.publicKey) remotePeerKeys.set(peer.deviceId, peer.publicKey);
+                callbacks?.onPeerDiscovered?.(peer);
+
+                if (isPeerTrusted(peer.deviceId, state)) {
+                  callbacks?.onLog?.(`✨ Paired peer rejoined: "${peer.deviceName || peer.deviceId}". Syncing...`);
+                  callbacks?.onStatusChange?.('paired');
+                  callbacks?.onPairApproved?.({ deviceId: peer.deviceId, deviceName: peer.deviceName || peer.deviceId });
+                  socket.send(JSON.stringify({
+                    type: 'signal',
+                    to: peer.deviceId,
+                    payload: {
+                      type: 'vault-sync-request',
+                      fromDeviceId: state.devicePublicKey,
+                      publicKey: state.x25519PublicKey
+                    }
+                  }));
+                } else {
+                  callbacks?.onLog?.(`📡 New peer joined network: ${peer.deviceName || peer.deviceId}`);
+                  callbacks?.onLog?.(`Sending pairing request to ${peer.deviceName || peer.deviceId}...`);
                   socket.send(JSON.stringify({
                     type: 'signal',
                     to: peer.deviceId,
@@ -536,25 +649,7 @@ export function initMobileVault() {
                       timestamp: Date.now()
                     }
                   }));
-                  callbacks?.onLog?.(`Pair request sent to ${peer.deviceName || peer.deviceId}. Awaiting approval...`);
                 }
-              } else if (message.type === 'peer-joined') {
-                const peer = message.peer;
-                if (peer.publicKey) remotePeerKeys.set(peer.deviceId, peer.publicKey);
-                callbacks?.onPeerDiscovered?.(peer);
-                callbacks?.onLog?.(`📡 New peer joined network: ${peer.deviceName || peer.deviceId}`);
-                callbacks?.onLog?.(`Sending pairing request to ${peer.deviceName || peer.deviceId}...`);
-                socket.send(JSON.stringify({
-                  type: 'signal',
-                  to: peer.deviceId,
-                  payload: {
-                    type: 'pair-request',
-                    fromDeviceId: state.devicePublicKey,
-                    fromDeviceName: 'NexVault Mobile',
-                    publicKey: state.x25519PublicKey,
-                    timestamp: Date.now()
-                  }
-                }));
               } else if (message.type === 'signal') {
                 handleIncomingMobileSignal(message.from, message.payload, state, socket, callbacks);
               }
@@ -681,7 +776,8 @@ export function initMobileVault() {
 
       // Broadcast update to all trusted peers if connected
       if (activeSocket && activeSocket.readyState === WebSocket.OPEN) {
-        for (const peerId of state.trustedPeers) {
+        for (const p of state.trustedPeers) {
+          const peerId = typeof p === 'string' ? p : p.deviceId;
           broadcastVaultToPeer(peerId, state, activeSocket);
         }
       }
@@ -734,7 +830,8 @@ export function initMobileVault() {
       saveVault(state);
 
       if (activeSocket && activeSocket.readyState === WebSocket.OPEN) {
-        for (const peerId of state.trustedPeers) {
+        for (const p of state.trustedPeers) {
+          const peerId = typeof p === 'string' ? p : p.deviceId;
           broadcastVaultToPeer(peerId, state, activeSocket);
         }
       }
@@ -772,6 +869,91 @@ export function initMobileVault() {
       if (!state) throw new Error('Vault is locked');
       state.otps = state.otps.filter(o => o.service.toLowerCase() !== service.toLowerCase());
       saveVault(state);
+      return { success: true };
+    },
+
+    async syncWithPeers() {
+      const state = loadVault();
+      if (!state) return { success: false, error: 'Vault is locked' };
+      let sentCount = 0;
+      if (activeSocket && activeSocket.readyState === WebSocket.OPEN && state.trustedPeers && state.trustedPeers.length) {
+        for (const p of state.trustedPeers) {
+          const peerId = typeof p === 'string' ? p : p.deviceId;
+          activeSocket.send(JSON.stringify({
+            type: 'signal',
+            to: peerId,
+            payload: {
+              type: 'vault-sync-request',
+              fromDeviceId: state.devicePublicKey,
+              publicKey: state.x25519PublicKey
+            }
+          }));
+          sentCount++;
+        }
+      }
+      return {
+        success: true,
+        peersContacted: sentCount,
+        passwordsCount: state.passwords.length,
+        otpsCount: state.otps.length
+      };
+    },
+
+    async checkForUpdates() {
+      try {
+        const resp = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`, {
+          headers: { 'Accept': 'application/vnd.github.v3+json' }
+        });
+        if (resp.status === 404) {
+          return {
+            success: true,
+            currentVersion: CURRENT_VERSION,
+            latestVersion: CURRENT_VERSION,
+            hasUpdate: false,
+            message: `NexVault Mobile is running the latest version (${CURRENT_VERSION}).`
+          };
+        }
+        if (!resp.ok) {
+          throw new Error(`HTTP ${resp.status}`);
+        }
+        const data = await resp.json();
+        const latestTag = data.tag_name || CURRENT_VERSION;
+        const hasUpdate = compareVersions(latestTag, CURRENT_VERSION) > 0;
+        const assets = data.assets || [];
+        const apkAsset = assets.find((a: any) => /\.apk$/i.test(a.name));
+        const cleanTag = latestTag.replace(/^v/, '');
+        const downloadUrl = apkAsset ? apkAsset.browser_download_url : `https://github.com/${GITHUB_REPO}/releases/download/${latestTag}/NexVault-mobile-app-debug.apk`;
+        return {
+          success: true,
+          currentVersion: CURRENT_VERSION,
+          latestVersion: latestTag,
+          hasUpdate,
+          downloadUrl,
+          releaseUrl: data.html_url || `https://github.com/${GITHUB_REPO}/releases`,
+          releaseName: data.name || latestTag,
+          notes: data.body || '',
+          publishedAt: data.published_at
+        };
+      } catch (err: any) {
+        return {
+          success: false,
+          error: err.message,
+          currentVersion: CURRENT_VERSION,
+          hasUpdate: false
+        };
+      }
+    },
+
+    async getTrustedDevices() {
+      const state = loadVault();
+      if (!state) return { success: true, devices: [] };
+      return { success: true, devices: state.trustedPeers || [] };
+    },
+
+    async removeTrustedDevice(deviceId: string) {
+      const state = loadVault();
+      if (!state) return { success: false };
+      removeTrustedPeer(deviceId, state);
       return { success: true };
     }
   };

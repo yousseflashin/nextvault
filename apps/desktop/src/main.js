@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
+const https = require('https');
 const { NexVaultToken, NexVaultCrypto, NexVaultSecurity, NexGrid, NexVaultDatabase, generateTotp } = require('@nexvault/core');
 const { WebSocketServer } = require('ws');
 const crypto = require('crypto');
@@ -14,9 +15,77 @@ const pendingPairingRequests = new Map();
 let activePairingCode = null;
 const trustedPeers = new Set();
 
+const CURRENT_VERSION = '0.1.0';
+const GITHUB_REPO = 'yousseflashin/nextvault';
+
+// Persistent trusted devices management
+function getTrustedDevices() {
+  try {
+    return nexVaultSecurity.store.get('security.trustedDevices', []) || [];
+  } catch {
+    return [];
+  }
+}
+
+function isDeviceTrusted(deviceId, publicKey) {
+  const list = getTrustedDevices();
+  return list.some(d => (deviceId && d.deviceId === deviceId) || (publicKey && d.publicKey === publicKey));
+}
+
+function saveTrustedDevice({ deviceId, publicKey, deviceName }) {
+  try {
+    const list = getTrustedDevices();
+    const idx = list.findIndex(d => (deviceId && d.deviceId === deviceId) || (publicKey && d.publicKey === publicKey));
+    const entry = {
+      deviceId,
+      publicKey: publicKey || (idx >= 0 ? list[idx].publicKey : null),
+      deviceName: deviceName || (idx >= 0 ? list[idx].deviceName : 'NexVault Device'),
+      pairedAt: idx >= 0 ? list[idx].pairedAt : new Date().toISOString(),
+      lastSeenAt: new Date().toISOString()
+    };
+    if (idx >= 0) {
+      list[idx] = entry;
+    } else {
+      list.push(entry);
+    }
+    nexVaultSecurity.store.set('security.trustedDevices', list);
+    trustedPeers.add(deviceId);
+    if (publicKey) trustedPeers.add(publicKey);
+    return entry;
+  } catch (err) {
+    console.error('[Desktop] Failed to save trusted device:', err);
+  }
+}
+
+function removeTrustedDevice(deviceId) {
+  try {
+    let list = getTrustedDevices();
+    list = list.filter(d => d.deviceId !== deviceId);
+    nexVaultSecurity.store.set('security.trustedDevices', list);
+    trustedPeers.delete(deviceId);
+    return true;
+  } catch (err) {
+    console.error('[Desktop] Failed to remove trusted device:', err);
+    return false;
+  }
+}
+
+function loadStoredTrustedPeers() {
+  const stored = getTrustedDevices();
+  for (const dev of stored) {
+    if (dev.deviceId) trustedPeers.add(dev.deviceId);
+    if (dev.publicKey) {
+      trustedPeers.add(dev.publicKey);
+      nexGrid.setPeerPublicKey(dev.deviceId, dev.publicKey);
+    }
+  }
+  console.log(`[Desktop] Loaded ${stored.length} persistent trusted device(s).`);
+}
+
+loadStoredTrustedPeers();
+
 function approvePairing(peerId, publicKey, deviceName) {
-  trustedPeers.add(peerId);
-  if (publicKey) trustedPeers.add(publicKey);
+  saveTrustedDevice({ deviceId: peerId, publicKey, deviceName });
   nexGrid.setPeerPublicKey(peerId, publicKey);
 
   if (nexVaultSecurity.ledger) {
@@ -92,6 +161,24 @@ nexGrid.on('peer-connected', (peerId) => {
 });
 
 nexGrid.on('peer-joined', (peer) => {
+  if (isDeviceTrusted(peer.deviceId, peer.publicKey)) {
+    console.log(`[Desktop] Trusted device joined: ${peer.deviceName || peer.deviceId}. Auto-handshaking & syncing.`);
+    if (peer.publicKey) {
+      nexGrid.setPeerPublicKey(peer.deviceId, peer.publicKey);
+      trustedPeers.add(peer.publicKey);
+    }
+    trustedPeers.add(peer.deviceId);
+    nexGrid.sendRelaySignal(peer.deviceId, {
+      type: 'pair-approved',
+      fromDeviceId: nexGrid.deviceId,
+      fromDeviceName: 'NexVault Desktop',
+      publicKey: nexGrid.localKeyPairs.get(nexGrid.deviceId)?.publicKey
+    });
+    syncVaultToPeer(peer.deviceId);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('peer-paired', { peerId: peer.deviceId, deviceName: peer.deviceName || 'Mobile' });
+    }
+  }
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('peer-joined', peer);
   }
@@ -99,15 +186,35 @@ nexGrid.on('peer-joined', (peer) => {
 
 nexGrid.on('pair-request', ({ from, deviceName, publicKey, code }) => {
   console.log(`[Desktop] Received pair request from ${deviceName} (${from})`);
+  
+  // 1. Check if device is already trusted in persistent storage
+  if (isDeviceTrusted(from, publicKey)) {
+    console.log(`[Desktop] Device ${deviceName} (${from}) is ALREADY trusted. Auto-approving & syncing.`);
+    approvePairing(from, publicKey, deviceName);
+    return;
+  }
+
+  // 2. Check 6-digit pairing code
   if (activePairingCode && code && activePairingCode.code === String(code).trim() && Date.now() < activePairingCode.expiresAt) {
     console.log('[Desktop] Code match! Auto-approving pairing.');
     approvePairing(from, publicKey, deviceName);
     return;
   }
 
+  // 3. Otherwise show incoming request banner in UI
   pendingPairingRequests.set(from, { peerId: from, deviceName, publicKey, timestamp: Date.now() });
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('incoming-pair-request', { peerId: from, deviceName, publicKey });
+  }
+});
+
+nexGrid.on('vault-sync-requested', (fromPeerId, payload) => {
+  console.log(`[Desktop] Peer ${fromPeerId} requested vault sync.`);
+  if (isDeviceTrusted(fromPeerId, payload?.publicKey) || trustedPeers.has(fromPeerId)) {
+    if (payload?.publicKey) nexGrid.setPeerPublicKey(fromPeerId, payload.publicKey);
+    syncVaultToPeer(fromPeerId);
+  } else {
+    console.warn(`[Desktop] Ignored vault sync request from untrusted peer: ${fromPeerId}`);
   }
 });
 
@@ -753,6 +860,135 @@ ipcMain.handle('start-tamper-monitor', async () => {
 
 ipcMain.handle('get-integrity-status', async () => {
   return nexVaultSecurity.integrity.status();
+});
+
+function compareVersions(v1, v2) {
+  const p1 = (v1 || '').replace(/^v/, '').split('.').map(Number);
+  const p2 = (v2 || '').replace(/^v/, '').split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    const a = p1[i] || 0;
+    const b = p2[i] || 0;
+    if (a > b) return 1;
+    if (a < b) return -1;
+  }
+  return 0;
+}
+
+function fetchGithubRelease() {
+  return new Promise((resolve) => {
+    const url = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
+    const req = https.get(url, {
+      headers: {
+        'User-Agent': 'NexVault-Desktop/' + CURRENT_VERSION,
+        'Accept': 'application/vnd.github.v3+json'
+      },
+      timeout: 6000
+    }, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        https.get(res.headers.location, {
+          headers: {
+            'User-Agent': 'NexVault-Desktop/' + CURRENT_VERSION,
+            'Accept': 'application/vnd.github.v3+json'
+          },
+          timeout: 6000
+        }, (redirectRes) => {
+          let data = '';
+          redirectRes.on('data', chunk => { data += chunk; });
+          redirectRes.on('end', () => {
+            try {
+              if (redirectRes.statusCode === 200) {
+                resolve({ success: true, release: JSON.parse(data) });
+              } else {
+                resolve({ success: false, statusCode: redirectRes.statusCode });
+              }
+            } catch (e) {
+              resolve({ success: false, error: e.message });
+            }
+          });
+        }).on('error', err => resolve({ success: false, error: err.message }));
+        return;
+      }
+
+      let data = '';
+      res.on('data', chunk => { data += chunk; });
+      res.on('end', () => {
+        try {
+          if (res.statusCode === 200) {
+            resolve({ success: true, release: JSON.parse(data) });
+          } else {
+            resolve({ success: false, statusCode: res.statusCode, error: 'Status: ' + res.statusCode });
+          }
+        } catch (e) {
+          resolve({ success: false, error: e.message });
+        }
+      });
+    });
+    req.on('error', (err) => resolve({ success: false, error: err.message }));
+    req.on('timeout', () => { req.destroy(); resolve({ success: false, error: 'Connection timed out' }); });
+  });
+}
+
+ipcMain.handle('check-for-updates', async () => {
+  try {
+    const result = await fetchGithubRelease();
+    if (!result.success || !result.release) {
+      return {
+        success: true,
+        currentVersion: CURRENT_VERSION,
+        latestVersion: CURRENT_VERSION,
+        hasUpdate: false,
+        message: `NexVault Desktop is running the latest version (${CURRENT_VERSION}).`
+      };
+    }
+    const release = result.release;
+    const latestTag = release.tag_name || CURRENT_VERSION;
+    const hasUpdate = compareVersions(latestTag, CURRENT_VERSION) > 0;
+    const assets = release.assets || [];
+    const appImageAsset = assets.find(a => /\.AppImage$/i.test(a.name));
+    const cleanTag = latestTag.replace(/^v/, '');
+    const downloadUrl = appImageAsset ? appImageAsset.browser_download_url : `https://github.com/${GITHUB_REPO}/releases/download/${latestTag}/NexVault-${cleanTag}.AppImage`;
+
+    return {
+      success: true,
+      currentVersion: CURRENT_VERSION,
+      latestVersion: latestTag,
+      hasUpdate,
+      downloadUrl,
+      releaseUrl: release.html_url || `https://github.com/${GITHUB_REPO}/releases`,
+      releaseName: release.name || latestTag,
+      notes: release.body || '',
+      publishedAt: release.published_at
+    };
+  } catch (err) {
+    return {
+      success: false,
+      error: err.message,
+      currentVersion: CURRENT_VERSION,
+      hasUpdate: false
+    };
+  }
+});
+
+ipcMain.handle('open-external-url', async (event, url) => {
+  try {
+    const { shell } = require('electron');
+    if (url && (url.startsWith('https://') || url.startsWith('http://'))) {
+      await shell.openExternal(url);
+      return { success: true };
+    }
+    return { success: false, error: 'Invalid URL scheme' };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('get-trusted-devices', async () => {
+  return { success: true, devices: getTrustedDevices() };
+});
+
+ipcMain.handle('remove-trusted-device', async (event, deviceId) => {
+  const ok = removeTrustedDevice(deviceId);
+  return { success: ok };
 });
 
 // Window management
