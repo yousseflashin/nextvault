@@ -113,6 +113,13 @@ class NexVaultCrypto {
   }
 
   /**
+   * Generate a random symmetric key (32 bytes base64)
+   */
+  static generateSymmetricKey() {
+    return naclUtil.encodeBase64(nacl.randomBytes(32));
+  }
+
+  /**
    * Symmetric encryption (for local database encryption)
    */
   static encryptSymmetric(message, keyBase64) {
@@ -139,10 +146,16 @@ class NexVaultCrypto {
   }
 
   /**
-   * Generate a random symmetric key
+   * Generate a secure random password
    */
-  static generateSymmetricKey() {
-    return naclUtil.encodeBase64(nacl.randomBytes(32));
+  static generatePassword(length = 24) {
+    const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+~`|}{[]:;?><,./-=';
+    const randomBytes = nacl.randomBytes(length);
+    let password = '';
+    for (let i = 0; i < length; i++) {
+      password += charset[randomBytes[i] % charset.length];
+    }
+    return password;
   }
 }
 

@@ -7,6 +7,7 @@
 		".": "./server.js"
 	},
 	"scripts": {
+		"prestart": "node ../../scripts/sync-core.mjs",
 		"start": "node server.js",
 		"build": "node --check server.js",
 		"test": "jest --runInBand"

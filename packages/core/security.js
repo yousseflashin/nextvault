@@ -12,22 +12,42 @@ const ABSOLUTE_OFFLINE_SECONDS = 90 * DAY_SECONDS;
 
 class NexVaultSecurity {
   constructor(userDataPath) {
+    this.userDataPath = userDataPath || (process.env.NEXVAULT_DATA_DIR || path.join(__dirname, '..', '..', 'data'));
     this.store = new Store({
       name: 'nexvault-security',
       cwd: userDataPath,
-      encryptionKey: getStoreKey()
+      encryptionKey: getStoreKey(this.userDataPath)
     });
     this.token = new NexVaultToken();
     this.securityCountdown = null;
     this.isCountdownActive = false;
     this.remainingSeconds = 24 * 60 * 60;
     this.nukeWarningTimer = null;
-    this.integrity = new IntegrityMonitor(path.join(__dirname, '..', '..', 'data'));
+    this.integrity = new IntegrityMonitor(this.userDataPath);
     const publicKey = this.store.get('device.publicKey');
     this.ledger = publicKey ? new TrustLedger(this.store, publicKey) : null;
   }
 
   initializeNewUser(username, password) {
+    const existingUser = this.store.get('user.username');
+    const existingPub = this.store.get('device.publicKey');
+    const existingDerived = this.store.get('user.derivedKey');
+    const existingBootstrap = this.store.get('user.bootstrapToken');
+
+    // If this identity already exists on device with matching password, preserve keys to avoid breaking existing data
+    if (existingUser === username && existingPub && existingDerived && existingBootstrap) {
+      const checkKey = this.deriveKeyFromPassword(password, existingPub);
+      if (checkKey === existingDerived) {
+        this.store.set('security.lastActive', new Date().toISOString());
+        this.store.set('security.lastVerifiedAt', new Date().toISOString());
+        return {
+          publicKey: existingPub,
+          bootstrapToken: existingBootstrap,
+          tokenId: existingBootstrap.tokenId
+        };
+      }
+    }
+
     // Generate device identity
     const identity = this.token.generate();
     
@@ -308,7 +328,7 @@ class NexVaultSecurity {
       const fs = require('fs');
       const path = require('path');
       
-      const dataDir = path.join(__dirname, '..', '..', 'data');
+      const dataDir = this.userDataPath || path.join(__dirname, '..', '..', 'data');
       if (fs.existsSync(dataDir)) {
         const files = fs.readdirSync(dataDir);
         files.forEach(file => {

@@ -39,7 +39,19 @@ nexGrid.on('secure-message', (peerId, message) => {
 });
 
 function startExtensionServer() {
-  extensionServer = new WebSocketServer({ host: '127.0.0.1', port: 46123 });
+  const extensionPort = Number(process.env.NEXVAULT_EXTENSION_PORT || 46124);
+  try {
+    extensionServer = new WebSocketServer({ port: extensionPort });
+    extensionServer.on('error', (err) => {
+      console.error('[Desktop] Extension server error:', err.message);
+    });
+    extensionServer.on('listening', () => {
+      console.log(`[Desktop] Extension server listening on port ${extensionPort}`);
+    });
+  } catch (err) {
+    console.error('[Desktop] Failed to start extension server:', err.message);
+    return;
+  }
   extensionServer.on('connection', (socket) => {
     let sessionKey = null;
     let deviceSession = null;
@@ -88,7 +100,7 @@ function startExtensionServer() {
         }
         if (sessionKey) { // Handle extension encrypted messages
           try {
-            const decipher = crypto.createDecipheriv('aes-256-gcm', Buffer.from(envelope.iv, 'base64'), sessionKey);
+            const decipher = crypto.createDecipheriv('aes-256-gcm', sessionKey, Buffer.from(envelope.iv, 'base64'));
             decipher.setAuthTag(Buffer.from(envelope.tag, 'base64'));
             let decrypted = decipher.update(Buffer.from(envelope.data, 'base64'), null, 'utf8');
             decrypted += decipher.final('utf8');
@@ -96,19 +108,81 @@ function startExtensionServer() {
 
             if (message.type === 'get-password') {
               const context = nexVaultSecurity.getUserContext();
-              if (!context) throw new Error('User not authenticated locally');
+              if (!context) {
+                socket.send(JSON.stringify({
+                  type: 'vault-response',
+                  success: false,
+                  error: 'Desktop vault is locked. Please unlock NexVault Desktop app.'
+                }));
+                return;
+              }
               const user = nexVaultDatabase.getUser(context.username);
-              if (!user) throw new Error('User not found');
+              if (!user) {
+                socket.send(JSON.stringify({
+                  type: 'vault-response',
+                  success: false,
+                  error: 'User not found in desktop vault'
+                }));
+                return;
+              }
               const result = nexVaultDatabase.getPassword(user.id, message.serviceName);
               if (result) {
-                const password = nexVaultDatabase.decryptData(result.encrypted_data, context.encryptionKey, result.iv);
-                socket.send(JSON.stringify({ type: 'vault-response', password }));
+                try {
+                  const password = nexVaultDatabase.decryptData(result.encrypted_data, context.encryptionKey, result.iv);
+                  socket.send(JSON.stringify({
+                    type: 'vault-response',
+                    success: true,
+                    password,
+                    username: result.username || ''
+                  }));
+                } catch (decErr) {
+                  socket.send(JSON.stringify({
+                    type: 'vault-response',
+                    success: false,
+                    error: 'Decryption error for ' + message.serviceName
+                  }));
+                }
               } else {
-                socket.send(JSON.stringify({ type: 'vault-response', error: 'Not found' }));
+                socket.send(JSON.stringify({ type: 'vault-response', success: false, error: 'No credentials found for ' + message.serviceName }));
               }
+              return;
+            }
+
+            if (message.type === 'search-vault') {
+              const context = nexVaultSecurity.getUserContext();
+              if (!context) {
+                socket.send(JSON.stringify({
+                  type: 'vault-search-response',
+                  success: false,
+                  entries: [],
+                  error: 'Desktop vault is locked. Please unlock NexVault Desktop app.'
+                }));
+                return;
+              }
+              const user = nexVaultDatabase.getUser(context.username);
+              if (!user) {
+                socket.send(JSON.stringify({
+                  type: 'vault-search-response',
+                  success: false,
+                  entries: [],
+                  error: 'User not found in desktop vault'
+                }));
+                return;
+              }
+              const q = (message.query || '').toLowerCase();
+              const all = nexVaultDatabase.listPasswords(user.id);
+              const entries = all.filter(e => e.service.toLowerCase().includes(q));
+              socket.send(JSON.stringify({ type: 'vault-search-response', success: true, entries }));
+              return;
             }
           } catch (e) {
             console.error('Extension message error', e);
+            socket.send(JSON.stringify({
+              type: 'vault-response',
+              success: false,
+              error: e.message || 'Error processing vault request'
+            }));
+            return;
           }
         }
         if (deviceSession) {
@@ -144,7 +218,7 @@ function startExtensionServer() {
           mainWindow.webContents.send('extension-message', message);
         }
       } catch (error) {
-        socket.send(JSON.stringify({ type: 'error', error: 'Invalid message' }));
+        socket.send(JSON.stringify({ type: 'error', error: error.message || 'Invalid message' }));
       }
     });
     socket.on('close', () => {
@@ -188,6 +262,21 @@ ipcMain.handle('authenticate-user', async (event, username, password) => {
     return result;
   } catch (error) {
     return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('get-vault-profile', async () => {
+  try {
+    const username = nexVaultSecurity.store.get('user.username');
+    const bootstrapToken = nexVaultSecurity.store.get('user.bootstrapToken');
+    return {
+      success: true,
+      hasUser: Boolean(username && bootstrapToken),
+      username: username || '',
+      bootstrapToken: bootstrapToken || null
+    };
+  } catch (error) {
+    return { success: false, hasUser: false, error: error.message };
   }
 });
 
@@ -244,13 +333,39 @@ ipcMain.handle('set-peer-public-key', async (event, peerId, publicKey) => {
   }
 });
 
-ipcMain.handle('add-password', async (event, serviceName, password) => {
+ipcMain.handle('add-password', async (event, serviceName, password, username = '') => {
   try {
     const context = nexVaultSecurity.getUserContext();
     if (!context) throw new Error('User is not authenticated');
     const user = nexVaultDatabase.getUser(context.username);
     if (!user) throw new Error('User not found');
-    nexVaultDatabase.addPassword(user.id, serviceName, password, context.encryptionKey);
+    nexVaultDatabase.addPassword(user.id, serviceName, password, context.encryptionKey, username);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('list-passwords', async () => {
+  try {
+    const context = nexVaultSecurity.getUserContext();
+    if (!context) return { success: true, entries: [] };
+    const user = nexVaultDatabase.getUser(context.username);
+    if (!user) return { success: true, entries: [] };
+    const entries = nexVaultDatabase.listPasswords(user.id);
+    return { success: true, entries };
+  } catch (error) {
+    return { success: false, error: error.message, entries: [] };
+  }
+});
+
+ipcMain.handle('delete-password', async (event, serviceName) => {
+  try {
+    const context = nexVaultSecurity.getUserContext();
+    if (!context) throw new Error('User is not authenticated');
+    const user = nexVaultDatabase.getUser(context.username);
+    if (!user) throw new Error('User not found');
+    nexVaultDatabase.deletePassword(user.id, serviceName);
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
@@ -272,7 +387,61 @@ ipcMain.handle('get-password', async (event, serviceName) => {
       context.encryptionKey,
       result.iv
     );
-    return { success: true, password: decrypted };
+    return { success: true, password: decrypted, username: result.username || '' };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('add-otp', async (event, serviceName, secret) => {
+  try {
+    const context = nexVaultSecurity.getUserContext();
+    if (!context) throw new Error('User is not authenticated');
+    const user = nexVaultDatabase.getUser(context.username);
+    if (!user) throw new Error('User not found');
+    nexVaultDatabase.addOtpSecret(user.id, serviceName, 'TOTP', secret, context.encryptionKey);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('list-otps', async () => {
+  try {
+    const context = nexVaultSecurity.getUserContext();
+    if (!context) return { success: true, entries: [] };
+    const user = nexVaultDatabase.getUser(context.username);
+    if (!user) return { success: true, entries: [] };
+    const entries = nexVaultDatabase.listOtpSecrets(user.id);
+    return { success: true, entries };
+  } catch (error) {
+    return { success: false, error: error.message, entries: [] };
+  }
+});
+
+ipcMain.handle('get-otp', async (event, serviceName) => {
+  try {
+    const context = nexVaultSecurity.getUserContext();
+    if (!context) throw new Error('User is not authenticated');
+    const user = nexVaultDatabase.getUser(context.username);
+    if (!user) throw new Error('User not found');
+    const result = nexVaultDatabase.getOtpSecretByService(user.id, serviceName);
+    if (!result) return { success: false, error: 'OTP secret not found' };
+    const secret = nexVaultDatabase.decryptData(result.encrypted_data, context.encryptionKey, result.iv);
+    return { success: true, code: generateTotp(secret), period: 30 };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('delete-otp', async (event, serviceName) => {
+  try {
+    const context = nexVaultSecurity.getUserContext();
+    if (!context) throw new Error('User is not authenticated');
+    const user = nexVaultDatabase.getUser(context.username);
+    if (!user) throw new Error('User not found');
+    nexVaultDatabase.deleteOtpSecret(user.id, serviceName);
+    return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -382,6 +551,48 @@ ipcMain.handle('check-integrity', async () => {
   return nexVaultSecurity.checkIntegrity();
 });
 
+ipcMain.handle('run-integrity-check', async () => {
+  return nexVaultSecurity.checkIntegrity();
+});
+
+ipcMain.handle('trigger-emergency-nuke', async () => {
+  try {
+    nexVaultSecurity.triggerNuke();
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('stop-nex-grid', async () => {
+  try {
+    nexGrid.closeAll();
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('request-pairing-code', async () => {
+  try {
+    const token = nexVaultSecurity.getToken();
+    if (!token) throw new Error('No identity token found');
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    return { success: true, code, tokenId: token.tokenId };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('start-tamper-monitor', async () => {
+  try {
+    const result = nexVaultSecurity.checkIntegrity();
+    return { success: true, result };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
 ipcMain.handle('get-integrity-status', async () => {
   return nexVaultSecurity.integrity.status();
 });
@@ -408,8 +619,12 @@ function createWindow() {
 
 app.whenReady().then(() => {
   createWindow();
-  // Run startup integrity check
-  nexVaultSecurity.checkIntegrity();
+  // Run startup integrity check safely
+  try {
+    nexVaultSecurity.checkIntegrity();
+  } catch (err) {
+    console.error('Integrity check startup warning:', err);
+  }
   startExtensionServer();
 
   app.on('activate', () => {

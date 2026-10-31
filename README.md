@@ -2,6 +2,8 @@
 
 NexVault is a local-first, end-to-end encrypted password manager, OTP authenticator, and trusted-device network that runs on desktop (Electron), mobile (Capacitor), and as a browser extension. Your data never leaves your devices: it stays encrypted locally and syncs peer-to-peer via an authenticated signaling relay (no cloud storage).
 
+> 📖 **Full Installation & Architecture Guide**: See [DOCUMENTATION.md](DOCUMENTATION.md) for complete setup, end-to-end workflows, security architecture, and troubleshooting.
+
 ## Core Principles
 
 - **Local-first**: Vault data lives only on your devices, encrypted with SQLCipher + AES-256-GCM.
@@ -73,7 +75,7 @@ On each additional device (desktop, mobile, or extension):
 
 ### 4. Signaling Relay (optional for testing)
 
-The apps include a built‑in dev relay (ws://localhost:3456). For production you can self‑host or use a third‑party service; see **Deployment** below.
+The apps include a built‑in dev relay (`ws://localhost:46123`). For production you can self‑host or use a third‑party service; see **Deployment** below. The desktop extension bridge runs locally on `ws://localhost:46124`.
 
 ---
 

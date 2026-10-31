@@ -8,14 +8,29 @@
   <style>
     * { box-sizing: border-box; }
     html, body { height: 100%; margin: 0; background: var(--nv-bg); color: var(--nv-text); font-family: var(--nv-font-sans); }
+    .nv-canvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      pointer-events: none !important;
+    }
+    .nv-scanlines::before {
+      pointer-events: none !important;
+    }
     .nv-root {
+      position: relative;
+      z-index: 10;
+      pointer-events: auto;
       display: flex;
       flex-direction: column;
       min-height: 100vh;
     }
     .nv-header {
       position: relative;
-      z-index: 1;
+      z-index: 10;
+      pointer-events: auto;
       display: flex; align-items: center; justify-content: space-between;
       padding: 1rem 1.5rem;
       border-bottom: 1px solid var(--nv-border);
@@ -31,7 +46,7 @@
       color: var(--nv-primary); letter-spacing: 0.08em;
     }
     .nv-status .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--nv-primary); box-shadow: 0 0 10px var(--nv-primary); animation: nv-pulse 1.6s ease-in-out infinite; }
-    .nv-main { flex: 1; display: flex; flex-direction: column; padding: 2rem 1.5rem 3rem; max-width: 1100px; margin: 0 auto; width: 100%; z-index: 1; position: relative; }
+    .nv-main { flex: 1; display: flex; flex-direction: column; padding: 2rem 1.5rem 3rem; max-width: 1100px; margin: 0 auto; width: 100%; z-index: 10; position: relative; pointer-events: auto; }
     .nv-section { width: 100%; margin-bottom: 1.5rem; }
     .nv-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; }
     .nv-panel { display: flex; flex-direction: column; gap: 1rem; }
@@ -118,18 +133,20 @@
         </div>
 
         <div class="nv-tab-content" id="tab-existing-user">
-          <div class="nv-input-group">
-            <label class="nv-label">Paste Bootstrap Token (JSON)</label>
-            <textarea class="nv-textarea" id="existing-token" placeholder='{"tokenId":"...","publicKey":"...","signature":"...","expiresAt":...}' rows="5"></textarea>
-          </div>
           <div class="nv-form-row">
             <div class="nv-input-group">
               <label class="nv-label">Master Password</label>
-              <input type="password" class="nv-input" id="existing-password" placeholder="master password" autocomplete="current-password">
+              <input type="password" class="nv-input" id="existing-password" placeholder="Enter master password to unlock" autocomplete="current-password">
             </div>
           </div>
-          <div class="nv-btn-row">
-            <button class="nv-btn" onclick="handleExistingUser()">Validate & Unlock</button>
+          <div class="nv-btn-row" style="margin-top: 0.5rem; margin-bottom: 0.75rem;">
+            <button class="nv-btn" onclick="handleExistingUser()">Unlock Vault</button>
+            <button class="nv-btn nv-btn-ghost" type="button" onclick="toggleTokenView()" id="toggle-token-btn">Show Token JSON</button>
+            <button class="nv-btn nv-btn-ghost" type="button" onclick="copyToken()">Copy Token</button>
+          </div>
+          <div class="nv-input-group" id="token-container" style="display: none; margin-top: 0.5rem;">
+            <label class="nv-label">Bootstrap Token (JSON)</label>
+            <textarea class="nv-textarea" id="existing-token" placeholder='{"tokenId":"...","publicKey":"...","signature":"...","expiresAt":...}' rows="4"></textarea>
           </div>
         </div>
       </section>
@@ -162,6 +179,12 @@
             <input type="text" class="nv-input" id="service" placeholder="github.com">
           </div>
           <div class="nv-input-group">
+            <label class="nv-label">Username / Email / Phone</label>
+            <input type="text" class="nv-input" id="vault-username" placeholder="user@example.com">
+          </div>
+        </div>
+        <div class="nv-form-row" style="margin-top: 0.5rem;">
+          <div class="nv-input-group" style="grid-column: 1 / -1;">
             <label class="nv-label">Credential / Password</label>
             <input type="text" class="nv-input" id="vault-password" placeholder="your password">
           </div>
@@ -218,7 +241,7 @@
 
   <script src="cyber/binary-shield.js"></script>
   <script>
-    const { nexVault } = window;
+    // window.nexVault is exposed via contextBridge in preload.js
     let currentTab = 'new-user';
 
     function $(id) { return document.getElementById(id); }
@@ -245,7 +268,7 @@
       if (!u || !p) return setStatus('Enter username and password');
       setStatus('Generating keys...');
       try {
-        const r = await nexVault.initializeNewUser(u, p);
+        const r = await window.nexVault.initializeNewUser(u, p);
         if (!r.success) throw new Error(r.error);
         setStatus('Bootstrap token generated: ' + r.tokenId);
         $('existing-token').value = JSON.stringify(r.bootstrapToken, null, 2);
@@ -276,12 +299,21 @@
       setStatus('Validating token...');
       try {
         const t = JSON.parse(raw);
-        const r = await nexVault.initializeExistingUser(t.tokenId, t.publicKey, t.signature, p, t.expiresAt);
+        const r = await window.nexVault.initializeExistingUser(t.tokenId, t.publicKey, t.signature, p, t.expiresAt);
         if (!r.success) throw new Error(r.error);
         setStatus('Unlocked: ' + r.tokenId);
         gridLog('Identity restored: ' + r.tokenId);
         showPostAuth();
       } catch (e) { setStatus('Error: ' + e.message); }
+    }
+
+    function toggleTokenView() {
+      const container = $('token-container');
+      const btn = $('toggle-token-btn');
+      if (!container) return;
+      const isHidden = container.style.display === 'none';
+      container.style.display = isHidden ? 'block' : 'none';
+      if (btn) btn.textContent = isHidden ? 'Hide Token JSON' : 'Show Token JSON';
     }
 
     function showPostAuth() {
@@ -290,12 +322,14 @@
       $('vault-section').style.display = 'block';
       $('otp-section').style.display = 'block';
       $('security-section').style.display = 'block';
+      listPasswords();
+      listOTPs();
     }
 
     async function startGrid() {
       gridLog('Starting NexGrid...');
       try {
-        const r = await nexVault.startNexGrid();
+        const r = await window.nexVault.startNexGrid();
         gridLog(r.success ? 'NexGrid started — waiting for peers...' : 'Error: ' + r.error);
         if (r.success) {
           $('grid-badge').innerHTML = '<span class="dot"></span>running';
@@ -305,24 +339,34 @@
 
     async function stopGrid() {
       gridLog('Stopping...');
-      try { await nexVault.stopNexGrid(); gridLog('Stopped.'); $('grid-badge').innerHTML = '<span class="dot"></span>stopped'; }
+      try { await window.nexVault.stopNexGrid(); gridLog('Stopped.'); $('grid-badge').innerHTML = '<span class="dot"></span>stopped'; }
       catch (e) { gridLog('Error: ' + e.message); }
     }
 
     async function requestPair() {
       gridLog('Generating pairing code...');
-      try { const r = await nexVault.requestPairingCode(); if (r.success) { gridLog('Pairing code: ' + r.code + ' (expires in 5 min)'); } else gridLog('Error: ' + r.error); } catch (e) { gridLog('Error: ' + e.message); }
+      try { const r = await window.nexVault.requestPairingCode(); if (r.success) { gridLog('Pairing code: ' + r.code + ' (expires in 5 min)'); } else gridLog('Error: ' + r.error); } catch (e) { gridLog('Error: ' + e.message); }
     }
 
     async function savePassword() {
       const s = $('service').value.trim();
+      const u = $('vault-username').value.trim();
       const p = $('vault-password').value;
       if (!s || !p) return setStatus('Enter service and password');
-      try { const r = await nexVault.addPassword(s, p); if (r.success) { setStatus('Saved'); $('service').value = ''; $('vault-password').value = ''; listPasswords(); } else throw new Error(r.error); } catch (e) { setStatus('Error: ' + e.message); }
+      try {
+        const r = await window.nexVault.addPassword(s, p, u);
+        if (r.success) {
+          setStatus('Saved');
+          $('service').value = '';
+          $('vault-username').value = '';
+          $('vault-password').value = '';
+          listPasswords();
+        } else throw new Error(r.error);
+      } catch (e) { setStatus('Error: ' + e.message); }
     }
 
     async function listPasswords() {
-      try { const r = await nexVault.listPasswords(); renderVaultList(r.entries || []); } catch (e) { setStatus('Error: ' + e.message); }
+      try { const r = await window.nexVault.listPasswords(); renderVaultList(r.entries || []); } catch (e) { setStatus('Error: ' + e.message); }
     }
 
     function renderVaultList(entries) {
@@ -331,75 +375,139 @@
       el.innerHTML = entries.map(e => `
         <div class="nv-vault-item">
           <div class="nv-vault-info">
-            <span class="nv-vault-service">${escapeHtml(e.service)}</span>
+            <span class="nv-vault-service">${escapeHtml(e.service)}${e.username ? ' <span style="color:var(--nv-accent);font-size:0.75rem;">(' + escapeHtml(e.username) + ')</span>' : ''}</span>
             <span class="nv-vault-meta">Created: ${new Date(e.createdAt).toLocaleString()}</span>
           </div>
           <div class="nv-vault-actions">
-            <button class="nv-vault-btn" onclick="copyPassword('${escapeHtml(e.service)}')">Copy</button>
+            <button class="nv-vault-btn" onclick="copyPassword('${escapeHtml(e.service)}')">Copy Pass</button>
+            ${e.username ? `<button class="nv-vault-btn" onclick="copyUsername('${escapeHtml(e.username)}')">Copy User</button>` : ''}
             <button class="nv-vault-btn delete" onclick="deletePassword('${escapeHtml(e.service)}')">Delete</button>
           </div>
         </div>
       `).join('');
     }
 
+    async function copyUsername(user) {
+      try { await navigator.clipboard.writeText(user); setStatus('Username copied: ' + user); } catch (e) { setStatus('Error: ' + e.message); }
+    }
+
     async function copyPassword(service) {
-      try { const r = await nexVault.getPassword(service); if (r.success) { await navigator.clipboard.writeText(r.password); setStatus('Copied!'); } else throw new Error(r.error); } catch (e) { setStatus('Error: ' + e.message); }
+      try { const r = await window.nexVault.getPassword(service); if (r.success) { await navigator.clipboard.writeText(r.password); setStatus('Copied!'); } else throw new Error(r.error); } catch (e) { setStatus('Error: ' + e.message); }
     }
 
     async function deletePassword(service) {
       if (!confirm('Delete credential for ' + service + '?')) return;
-      try { const r = await nexVault.deletePassword(service); if (r.success) { setStatus('Deleted'); listPasswords(); } else throw new Error(r.error); } catch (e) { setStatus('Error: ' + e.message); }
+      try { const r = await window.nexVault.deletePassword(service); if (r.success) { setStatus('Deleted'); listPasswords(); } else throw new Error(r.error); } catch (e) { setStatus('Error: ' + e.message); }
     }
 
     async function saveOTP() {
       const s = $('otp-service').value.trim();
       const sec = $('otp-secret').value.trim().toUpperCase().replace(/\s/g, '');
       if (!s || !sec) return setStatus('Enter service and secret');
-      try { const r = await nexVault.addOTP(s, sec); if (r.success) { setStatus('TOTP added'); $('otp-service').value = ''; $('otp-secret').value = ''; listOTPs(); } else throw new Error(r.error); } catch (e) { setStatus('Error: ' + e.message); }
+      try { const r = await window.nexVault.addOTP(s, sec); if (r.success) { setStatus('TOTP added'); $('otp-service').value = ''; $('otp-secret').value = ''; listOTPs(); } else throw new Error(r.error); } catch (e) { setStatus('Error: ' + e.message); }
     }
+
+    let cachedOTPEntries = [];
+    let otpTimer = null;
 
     async function listOTPs() {
-      try { const r = await nexVault.listOTPs(); renderOTPList(r.entries || []); } catch (e) { setStatus('Error: ' + e.message); }
+      try {
+        const r = await window.nexVault.listOTPs();
+        cachedOTPEntries = r.entries || [];
+        renderOTPList();
+        if (!otpTimer) {
+          otpTimer = setInterval(updateOTPCountdowns, 1000);
+        }
+      } catch (e) {
+        setStatus('Error: ' + e.message);
+      }
     }
 
-    function renderOTPList(entries) {
+    function renderOTPList() {
       const el = $('otp-list');
-      if (!entries.length) { el.innerHTML = '<div class="nv-empty">No TOTP entries yet.</div>'; return; }
+      if (!cachedOTPEntries.length) {
+        el.innerHTML = '<div class="nv-empty">No TOTP entries yet.</div>';
+        return;
+      }
       const now = Date.now();
-      el.innerHTML = entries.map(e => {
-        const remaining = 30 - (Math.floor(now / 1000) % 30);
-        return `
+      const remaining = 30 - (Math.floor(now / 1000) % 30);
+      el.innerHTML = cachedOTPEntries.map(e => `
         <div class="nv-vault-item">
           <div class="nv-vault-info">
             <span class="nv-vault-service">${escapeHtml(e.service)}</span>
-            <span class="nv-vault-meta">Code refreshes in ${remaining}s</span>
+            <span class="nv-vault-meta otp-countdown">Code refreshes in ${remaining}s</span>
           </div>
           <div class="nv-vault-actions">
             <button class="nv-vault-btn" onclick="copyOTP('${escapeHtml(e.service)}')">Copy Code</button>
             <button class="nv-vault-btn delete" onclick="deleteOTP('${escapeHtml(e.service)}')">Delete</button>
           </div>
         </div>
-      `; }).join('');
-      // Refresh countdown
-      setTimeout(listOTPs, 1000);
+      `).join('');
+    }
+
+    function updateOTPCountdowns() {
+      const remaining = 30 - (Math.floor(Date.now() / 1000) % 30);
+      document.querySelectorAll('.otp-countdown').forEach(el => {
+        el.textContent = `Code refreshes in ${remaining}s`;
+      });
     }
 
     async function copyOTP(service) {
-      try { const r = await nexVault.getOTP(service); if (r.success) { await navigator.clipboard.writeText(r.code); setStatus('OTP copied: ' + r.code); } else throw new Error(r.error); } catch (e) { setStatus('Error: ' + e.message); }
+      try { const r = await window.nexVault.getOTP(service); if (r.success) { await navigator.clipboard.writeText(r.code); setStatus('OTP copied: ' + r.code); } else throw new Error(r.error); } catch (e) { setStatus('Error: ' + e.message); }
     }
 
     async function deleteOTP(service) {
       if (!confirm('Delete TOTP for ' + service + '?')) return;
-      try { const r = await nexVault.deleteOTP(service); if (r.success) { setStatus('Deleted'); listOTPs(); } else throw new Error(r.error); } catch (e) { setStatus('Error: ' + e.message); }
+      try { const r = await window.nexVault.deleteOTP(service); if (r.success) { setStatus('Deleted'); listOTPs(); } else throw new Error(r.error); } catch (e) { setStatus('Error: ' + e.message); }
     }
 
-    async function runIntegrityCheck() { log('Running integrity check...'); try { const r = await nexVault.runIntegrityCheck(); log(r.success ? 'OK: ' + JSON.stringify(r.result) : 'Error: ' + r.error); } catch (e) { log('Exception: ' + e.message); } }
-    async function runTamperMonitor() { log('Starting tamper monitor...'); try { const r = await nexVault.startTamperMonitor(); log(r.success ? 'Monitor active' : 'Error: ' + r.error); } catch (e) { log('Exception: ' + e.message); } }
-    async function triggerNuke() { if (!confirm('EMERGENCY: This wipes all local keys. Proceed?')) return; log('NUKING...'); try { const r = await nexVault.triggerEmergencyNuke(); log(r.success ? 'Wiped.' : 'Error: ' + r.error); } catch (e) { log('Exception: ' + e.message); } }
+    async function runIntegrityCheck() { log('Running integrity check...'); try { const r = await window.nexVault.runIntegrityCheck(); log(r.success ? 'OK: ' + JSON.stringify(r.result) : 'Error: ' + r.error); } catch (e) { log('Exception: ' + e.message); } }
+    async function runTamperMonitor() { log('Starting tamper monitor...'); try { const r = await window.nexVault.startTamperMonitor(); log(r.success ? 'Monitor active' : 'Error: ' + r.error); } catch (e) { log('Exception: ' + e.message); } }
+    async function triggerNuke() { if (!confirm('EMERGENCY: This wipes all local keys. Proceed?')) return; log('NUKING...'); try { const r = await window.nexVault.triggerEmergencyNuke(); log(r.success ? 'Wiped.' : 'Error: ' + r.error); } catch (e) { log('Exception: ' + e.message); } }
 
-    function escapeHtml(s) { return s.replace(/[&<>"']/g, c => ({'&':'&','<':'<','>':'>','"':'"',"'":'''}[c])); }
+    function escapeHtml(s) {
+      if (!s) return '';
+      return String(s).replace(/[&<>"']/g, c => {
+        switch (c) {
+          case '&': return '&amp;';
+          case '<': return '&lt;';
+          case '>': return '&gt;';
+          case '"': return '&quot;';
+          case "'": return '&#39;';
+          default: return c;
+        }
+      });
+    }
+
+    // Auto-detect existing user profile on startup
+    async function initStartup() {
+      try {
+        if (!window.nexVault || !window.nexVault.getVaultProfile) return;
+        const profile = await window.nexVault.getVaultProfile();
+        if (profile && profile.hasUser && profile.bootstrapToken) {
+          $('existing-token').value = JSON.stringify(profile.bootstrapToken, null, 2);
+          switchTab('existing-user');
+          setStatus(`Vault found for ${profile.username || 'user'}. Enter password to unlock.`);
+          setTimeout(() => {
+            const passInput = $('existing-password');
+            if (passInput) passInput.focus();
+          }, 80);
+        }
+      } catch (err) {
+        console.error('Startup profile check error:', err);
+      }
+    }
+
+    // Keyboard shortcuts
+    $('new-password')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleNewUser(); });
+    $('existing-password')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleExistingUser(); });
+    $('vault-password')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') savePassword(); });
+
+    document.addEventListener('DOMContentLoaded', initStartup);
+    setTimeout(initStartup, 100);
 
     // Expose for preload
+    window.toggleTokenView = toggleTokenView;
     window.handleNewUser = handleNewUser;
     window.handleExistingUser = handleExistingUser;
     window.startGrid = startGrid;

@@ -3,21 +3,23 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
-    "start": "npm run start:desktop",
-    "prestart": "node scripts/sync-assets.mjs",
-    "test": "npm run test:core && npm run test:relay",
-    "test:core": "npm --prefix packages/core test",
+    "start:relay": "npm --prefix apps/relay run start",
+    "build:relay": "npm --prefix apps/relay run build",
     "test:relay": "npm --prefix apps/relay test",
     "start:desktop": "npm --prefix apps/desktop run start",
     "build:desktop": "npm --prefix apps/desktop run build",
     "start:mobile": "npm --prefix apps/mobile run start",
     "build:mobile": "npm --prefix apps/mobile run build",
     "build:mobile:android": "npm --prefix apps/mobile run build && npm --prefix apps/mobile exec -- cap sync android && ./apps/mobile/android/gradlew -p apps/mobile/android assembleDebug",
+    "start:website": "npm --prefix apps/website run dev",
     "build:website": "node scripts/sync-assets.mjs && npm --prefix apps/website run build",
+    "test": "npm run test:core && npm run test:relay",
+    "test:core": "npm --prefix packages/core test",
+    "prestart": "node scripts/sync-assets.mjs && node scripts/sync-core.mjs",
     "publish:builds": "node scripts/publish-builds.mjs",
     "release": "npm run build:desktop && npm run build:mobile:android && npm run publish:builds && npm run build:website",
-    "start:relay": "npm --prefix apps/relay run start",
-    "build:relay": "npm --prefix apps/relay run build"
+    "ext:firefox": "cp apps/extension/src/manifest.firefox.json apps/extension/src/manifest.json",
+    "ext:chrome": "cp apps/extension/src/manifest.chrome.json apps/extension/src/manifest.json"
   },
   "devDependencies": {
     "jest": "^29.7.0"

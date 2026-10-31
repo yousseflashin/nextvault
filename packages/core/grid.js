@@ -8,7 +8,7 @@
  * NAT traversal - it never sees decrypted data.
  */
 
-const { NexVaultCrypto, nacl, naclUtil } = require('../core/crypto');
+const { NexVaultCrypto, nacl, naclUtil } = require('./crypto');
 const EventEmitter = require('events');
 const WebSocket = require('ws');
 
@@ -34,6 +34,9 @@ class NexGrid extends EventEmitter {
    * Create a new peer connection
    */
   createPeerConnection(peerId, isInitiator = true) {
+    if (typeof RTCPeerConnection === 'undefined') {
+      throw new Error('WebRTC (RTCPeerConnection) is not available in this environment');
+    }
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     
     // Generate key pair for this connection
@@ -114,6 +117,9 @@ class NexGrid extends EventEmitter {
       // Decrypt message if it's encrypted
       if (message.type === 'encrypted') {
         const decrypted = this.decryptMessage(message.payload, peerId);
+        if (decrypted && decrypted.type === 'vault-sync') {
+          this.emit('vault-sync-received', peerId, decrypted.vaultData);
+        }
         this.emit('secure-message', peerId, decrypted);
       } else {
         this.emit('message', peerId, message);
@@ -137,6 +143,17 @@ class NexGrid extends EventEmitter {
       type: 'encrypted',
       payload: encrypted
     }));
+  }
+
+  /**
+   * Synchronize vault data securely with a peer
+   */
+  syncVault(peerId, vaultData) {
+    this.sendSecureMessage(peerId, {
+      type: 'vault-sync',
+      vaultData,
+      timestamp: Date.now()
+    });
   }
 
   setPeerPublicKey(peerId, publicKey) {

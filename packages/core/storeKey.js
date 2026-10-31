@@ -2,18 +2,25 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
-const keyPath = path.join(__dirname, '..', '..', 'data', '.nexvault-store-key');
+function resolveKeyPath(baseDir) {
+  if (baseDir) return path.join(baseDir, '.nexvault-store-key');
+  if (process.env.NEXVAULT_DATA_DIR) return path.join(process.env.NEXVAULT_DATA_DIR, '.nexvault-store-key');
+  return path.join(__dirname, '..', '..', 'data', '.nexvault-store-key');
+}
 
-function getStoreKey() {
+const keyPath = resolveKeyPath();
+
+function getStoreKey(baseDir) {
+  const targetKeyPath = resolveKeyPath(baseDir);
   try {
     const { safeStorage } = require('electron');
-    if (safeStorage.isEncryptionAvailable()) {
-      if (fs.existsSync(keyPath)) {
-        return safeStorage.decryptString(fs.readFileSync(keyPath));
+    if (safeStorage && safeStorage.isEncryptionAvailable()) {
+      if (fs.existsSync(targetKeyPath)) {
+        return safeStorage.decryptString(fs.readFileSync(targetKeyPath));
       }
-      fs.mkdirSync(path.dirname(keyPath), { recursive: true });
+      fs.mkdirSync(path.dirname(targetKeyPath), { recursive: true });
       const key = crypto.randomBytes(32).toString('base64');
-      fs.writeFileSync(keyPath, safeStorage.encryptString(key), { mode: 0o600 });
+      fs.writeFileSync(targetKeyPath, safeStorage.encryptString(key), { mode: 0o600 });
       return key;
     }
   } catch {
@@ -21,4 +28,4 @@ function getStoreKey() {
   return 'nexvault-security-store-test-key';
 }
 
-module.exports = { getStoreKey, keyPath };
+module.exports = { getStoreKey, keyPath, resolveKeyPath };

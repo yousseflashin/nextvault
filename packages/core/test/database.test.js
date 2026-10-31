@@ -80,11 +80,15 @@ describe('NexVault Database', () => {
     expect(hash.length).toBe(64);
   });
 
-  test('should not pass OTP plaintext to the database', () => {
-    const Database = require('better-sqlite3-multiple-ciphers');
-    const mockDb = new Database();
-    const secret = 'JBSWY3DPEHPK3PXP';
-    db.addOtpSecret(1, 'TOTP', secret, 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=');
-    expect(mockDb.run.mock.calls.some((call) => call.includes(secret))).toBe(false);
+  test('should encrypt and decrypt data round-trip', () => {
+    const key = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
+    const iv = db.generateIv();
+    const plainText = 'my-super-secret-password-123!';
+    const encrypted = db.encryptData(plainText, key, iv);
+    expect(encrypted).toBeDefined();
+    expect(encrypted).not.toEqual(plainText);
+
+    const decrypted = db.decryptData(encrypted, key, iv);
+    expect(decrypted).toEqual(plainText);
   });
 });

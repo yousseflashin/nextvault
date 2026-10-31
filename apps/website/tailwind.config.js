@@ -1,16 +1,14 @@
 /** @type {import('tailwindcss').Config} */
-module.exports = {
-  content: ["./public/**/*.{html,js}", "./src/**/*.{html,js,ts,tsx}"],
+export default {
+  content: ["./index.html", "./src/**/*.{html,js,ts,jsx,tsx}"],
   theme: {
     extend: {
       colors: {
-        // keep legacy brand tokens
         brand: {
           dark: '#0f1117',
           blue: '#3b82f6',
           hover: '#2563eb'
         },
-        // NexVault cyber palette
         nv: {
           bg: '#04060c',
           bg2: '#070b14',
@@ -34,4 +32,4 @@ module.exports = {
     }
   },
   plugins: [],
-}
+};

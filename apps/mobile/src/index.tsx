@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
+import { createRoot } from 'react-dom/client';
+import './cyber/cyber.css';
 import './main.css';
+import './mobileVault';
+import './cyber/binary-shield.js';
 
 function Shield({ size = 56 }) {
   return (
@@ -32,8 +36,9 @@ function App() {
   const [status, setStatus] = useState('Ready');
   const [tab, setTab] = useState<'new' | 'existing'>('new');
   const [gridLog, setGridLog] = useState<string[]>([]);
-  const [vaultItems, setVaultItems] = useState<{ service: string; createdAt: string }[]>([]);
+  const [vaultItems, setVaultItems] = useState<{ service: string; username?: string; createdAt: string }[]>([]);
   const [service, setService] = useState('');
+  const [vaultUsername, setVaultUsername] = useState('');
   const [credential, setCredential] = useState('');
   const [otpService, setOtpService] = useState('');
   const [otpSecret, setOtpSecret] = useState('');
@@ -41,15 +46,10 @@ function App() {
   const [unlocked, setUnlocked] = useState(false);
 
   useEffect(() => {
-    // Binary shield background
-    const canvas = document.createElement('canvas');
-    canvas.className = 'nv-canvas';
-    canvas.setAttribute('data-nv-binary-shield', 'true');
-    document.body.prepend(canvas);
-    const script = document.createElement('script');
-    script.src = 'cyber/binary-shield.js';
-    script.onload = () => (window as any).NexVaultFX?.mountAll?.();
-    document.body.appendChild(script);
+    // Mount binary shield on the background canvas
+    if ((window as any).NexVaultFX?.mountAll) {
+      (window as any).NexVaultFX.mountAll();
+    }
   }, []);
 
   const log = (msg: string) => setGridLog(prev => [...prev, `>> ${msg}`]);
@@ -89,8 +89,14 @@ function App() {
   async function onSavePassword() {
     if (!service || !credential) return setStatus('Enter service and credential');
     try {
-      const r = await (window as any).nexVault.addPassword(service, credential);
-      if (r.success) { setStatus('Saved'); setService(''); setCredential(''); refreshVault(); }
+      const r = await (window as any).nexVault.addPassword(service, credential, vaultUsername);
+      if (r.success) {
+        setStatus('Saved');
+        setService('');
+        setVaultUsername('');
+        setCredential('');
+        refreshVault();
+      }
       else throw new Error(r.error);
     } catch (e: any) { setStatus('Error: ' + e.message); }
   }
@@ -188,6 +194,9 @@ function App() {
                 </div>
                 <div className="nv-form-row">
                   <input className="nv-input" placeholder="Service / Website" value={service} onChange={e => setService(e.target.value)} />
+                  <input className="nv-input" placeholder="Username / Email / Phone" value={vaultUsername} onChange={e => setVaultUsername(e.target.value)} />
+                </div>
+                <div style={{ marginTop: '0.5rem', marginBottom: '0.5rem' }}>
                   <input className="nv-input" placeholder="Credential / Password" value={credential} onChange={e => setCredential(e.target.value)} />
                 </div>
                 <div className="nv-btn-row">
@@ -200,7 +209,9 @@ function App() {
                   ) : vaultItems.map(v => (
                     <div className="nv-vault-item" key={v.service}>
                       <div className="nv-vault-info">
-                        <span className="nv-vault-service">{v.service}</span>
+                        <span className="nv-vault-service">
+                          {v.service} {v.username ? <span style={{ color: 'var(--nv-accent)', fontSize: '0.75rem' }}>({v.username})</span> : null}
+                        </span>
                         <span className="nv-vault-meta">Created: {new Date(v.createdAt).toLocaleString()}</span>
                       </div>
                     </div>
@@ -240,6 +251,11 @@ function App() {
       </div>
     </div>
   );
+}
+
+const rootEl = document.getElementById('root');
+if (rootEl) {
+  createRoot(rootEl).render(<App />);
 }
 
 export default App;

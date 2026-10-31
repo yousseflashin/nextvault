@@ -1,6 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('nexVault', {
+  getVaultProfile: () => ipcRenderer.invoke('get-vault-profile'),
   initializeNewUser: (username, password) => ipcRenderer.invoke('initialize-new-user', username, password),
   initializeExistingUser: (tokenId, publicKey, signature, password, expiresAt) => ipcRenderer.invoke(
     'initialize-existing-user', tokenId, publicKey, signature, password, expiresAt
@@ -14,14 +15,26 @@ contextBridge.exposeInMainWorld('nexVault', {
   acceptConnection: (peerId) => ipcRenderer.invoke('accept-connection', peerId),
   sendSecureMessage: (peerId, message) => ipcRenderer.invoke('send-secure-message', peerId, message),
   setPeerPublicKey: (peerId, publicKey) => ipcRenderer.invoke('set-peer-public-key', peerId, publicKey),
-  addPassword: (serviceName, password) => ipcRenderer.invoke('add-password', serviceName, password),
+  stopNexGrid: () => ipcRenderer.invoke('stop-nex-grid'),
+  requestPairingCode: () => ipcRenderer.invoke('request-pairing-code'),
+  addPassword: (serviceName, password, username) => ipcRenderer.invoke('add-password', serviceName, password, username),
   getPassword: (serviceName) => ipcRenderer.invoke('get-password', serviceName),
+  listPasswords: () => ipcRenderer.invoke('list-passwords'),
+  deletePassword: (serviceName) => ipcRenderer.invoke('delete-password', serviceName),
+  addOTP: (serviceName, secret) => ipcRenderer.invoke('add-otp', serviceName, secret),
+  listOTPs: () => ipcRenderer.invoke('list-otps'),
+  getOTP: (serviceName) => ipcRenderer.invoke('get-otp', serviceName),
+  deleteOTP: (serviceName) => ipcRenderer.invoke('delete-otp', serviceName),
   addOtpSecret: (otpType, secret) => ipcRenderer.invoke('add-otp-secret', otpType, secret),
   getOtpSecret: (otpType) => ipcRenderer.invoke('get-otp-secret', otpType),
   getOtpCode: (otpType) => ipcRenderer.invoke('get-otp-code', otpType),
   getSecurityStatus: () => ipcRenderer.invoke('get-security-status'),
   startSecurityCountdown: () => ipcRenderer.invoke('start-security-countdown'),
   stopSecurityCountdown: () => ipcRenderer.invoke('stop-security-countdown'),
+  startTamperMonitor: () => ipcRenderer.invoke('start-tamper-monitor'),
+  runIntegrityCheck: () => ipcRenderer.invoke('run-integrity-check'),
+  checkIntegrity: () => ipcRenderer.invoke('check-integrity'),
+  triggerEmergencyNuke: () => ipcRenderer.invoke('trigger-emergency-nuke'),
   approveExtension: (peerId) => ipcRenderer.invoke('approve-extension', peerId),
   onSecurityCountdownStarted: (callback) => ipcRenderer.on(
     'security-countdown-started', (event, status) => callback(status)

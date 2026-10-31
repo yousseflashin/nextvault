@@ -4,7 +4,8 @@
   "version": "0.1.0",
   "main": "src/main.js",
   "scripts": {
-    "start": "electron .",
+    "prestart": "node ../../scripts/sync-core.mjs",
+    "start": "electron . --no-sandbox",
     "build": "electron-builder"
   },
   "dependencies": {
