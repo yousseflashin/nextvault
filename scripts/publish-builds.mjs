@@ -31,7 +31,14 @@ for (const src of SOURCES) {
     const name = src.kind === 'desktop' ? file : `NexVault-${src.kind}-${file}`;
     await cp(from, join(TARGET, name));
     const { size } = await stat(from);
-    manifest.push({ name, kind: src.kind, platform: src.platform, size, file: `downloads/${name}` });
+    manifest.push({
+      name,
+      kind: src.kind,
+      platform: src.platform,
+      size,
+      file: `/downloads/${name}`,
+      url: `/downloads/${name}`
+    });
     console.log(`published: ${name} (${(size / 1024 / 1024).toFixed(1)} MB)`);
   }
 }

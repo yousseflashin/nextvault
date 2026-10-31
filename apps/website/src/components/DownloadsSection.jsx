@@ -1,24 +1,42 @@
 import React, { useEffect, useState } from 'react';
 
+const FALLBACK_DESKTOP = {
+  name: 'NexVault-0.1.0.AppImage',
+  file: '/downloads/NexVault-0.1.0.AppImage',
+  size: 130525356
+};
+
+const FALLBACK_MOBILE = {
+  name: 'NexVault-mobile-app-debug.apk',
+  file: '/downloads/NexVault-mobile-app-debug.apk',
+  size: 4210193
+};
+
+const GITHUB_RELEASES_URL = 'https://github.com/yousseflashin/nextvault/releases';
+
 export default function DownloadsSection() {
   const [artifacts, setArtifacts] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('downloads/manifest.json')
+    fetch('/downloads/manifest.json')
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
-        setArtifacts(Array.isArray(data) ? data : []);
+        if (Array.isArray(data) && data.length > 0) {
+          setArtifacts(data);
+        }
         setLoading(false);
       })
       .catch(() => {
-        setArtifacts([]);
         setLoading(false);
       });
   }, []);
 
-  const desktop = artifacts.find((a) => a.kind === 'desktop');
-  const mobile = artifacts.find((a) => a.kind === 'mobile');
+  const desktop = artifacts.find((a) => a.kind === 'desktop') || FALLBACK_DESKTOP;
+  const mobile = artifacts.find((a) => a.kind === 'mobile') || FALLBACK_MOBILE;
+
+  const desktopUrl = desktop.file.startsWith('/') ? desktop.file : `/${desktop.file}`;
+  const mobileUrl = mobile.file.startsWith('/') ? mobile.file : `/${mobile.file}`;
 
   return (
     <section id="downloads" className="py-24 bg-nv-bg2/80 border-t border-white/5 relative z-10">
@@ -48,15 +66,26 @@ export default function DownloadsSection() {
 
             <div>
               <a
-                href={desktop ? desktop.file : 'downloads/'}
+                href={desktopUrl}
+                download={desktop.name}
                 className="w-full py-3.5 px-6 rounded-lg text-sm font-mono font-bold uppercase tracking-wider text-black bg-gradient-to-r from-nv-primary to-nv-accent hover:opacity-90 transition shadow-glow flex items-center justify-center gap-2"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                 </svg>
-                {desktop ? `Download Desktop (${(desktop.size / 1048576).toFixed(1)} MB)` : 'Download Desktop (Linux)'}
+                Download Desktop ({(desktop.size / 1048576).toFixed(1)} MB)
               </a>
-              <span className="text-[11px] text-nv-muted font-mono block text-center mt-3">Requires glibc 2.31+ · No root required</span>
+              <div className="flex items-center justify-between text-[11px] text-nv-muted font-mono mt-3 px-1">
+                <span>Requires glibc 2.31+</span>
+                <a
+                  href={GITHUB_RELEASES_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-nv-primary hover:underline flex items-center gap-1"
+                >
+                  GitHub Mirror ↗
+                </a>
+              </div>
             </div>
           </div>
 
@@ -78,15 +107,26 @@ export default function DownloadsSection() {
 
             <div>
               <a
-                href={mobile ? mobile.file : 'downloads/'}
+                href={mobileUrl}
+                download={mobile.name}
                 className="w-full py-3.5 px-6 rounded-lg text-sm font-mono font-bold uppercase tracking-wider text-white bg-nv-surface border border-white/20 hover:border-nv-accent hover:bg-nv-surface2 transition flex items-center justify-center gap-2"
               >
                 <svg className="w-5 h-5 text-nv-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
                 </svg>
-                {mobile ? `Download Android APK (${(mobile.size / 1048576).toFixed(1)} MB)` : 'Download Android APK'}
+                Download Android APK ({(mobile.size / 1048576).toFixed(1)} MB)
               </a>
-              <span className="text-[11px] text-nv-muted font-mono block text-center mt-3">Android 8.0+ · Debug build</span>
+              <div className="flex items-center justify-between text-[11px] text-nv-muted font-mono mt-3 px-1">
+                <span>Android 8.0+ · Debug build</span>
+                <a
+                  href={GITHUB_RELEASES_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-nv-accent hover:underline flex items-center gap-1"
+                >
+                  GitHub Mirror ↗
+                </a>
+              </div>
             </div>
           </div>
         </div>
@@ -102,4 +142,3 @@ export default function DownloadsSection() {
     </section>
   );
 }
-

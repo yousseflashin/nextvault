@@ -1,4 +1,6 @@
 data/
 dist/
 node_modules/
-apps/website/public/downloads/
+apps/website/public/downloads/*.AppImage
+!apps/website/public/downloads/manifest.json
+!apps/website/public/downloads/*.apk
