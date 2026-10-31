@@ -157,12 +157,38 @@
           <span class="nv-panel-title">nexgrid</span>
           <span class="nv-badge" id="grid-badge"><span class="dot"></span>stopped</span>
         </div>
+        <div style="margin-bottom: 0.75rem;">
+          <label class="nv-label">Relay Server URL</label>
+          <input type="text" class="nv-input" id="grid-relay-url" value="ws://127.0.0.1:46123" placeholder="ws://127.0.0.1:46123" style="font-size: 0.8rem;">
+        </div>
         <div class="nv-btn-row">
           <button class="nv-btn" onclick="startGrid()">Start NexGrid</button>
           <button class="nv-btn nv-btn-ghost" onclick="stopGrid()">Stop</button>
           <button class="nv-btn nv-btn-cyan" onclick="requestPair()">Pair New Device</button>
         </div>
-        <div class="nv-terminal nv-dim" id="grid-log">
+
+        <!-- Dynamic Pairing Code Banner -->
+        <div id="pair-code-box" style="display:none;margin-top:0.75rem;padding:0.75rem;border-radius:8px;background:rgba(0,255,157,0.08);border:1px solid rgba(0,255,157,0.3);">
+          <div style="font-size:0.75rem;color:var(--nv-muted);text-transform:uppercase;letter-spacing:1px;">Active Pairing Code (Enter on Mobile):</div>
+          <div style="font-size:1.8rem;font-weight:bold;color:var(--nv-primary);letter-spacing:6px;margin:0.25rem 0;" id="pair-code-val">------</div>
+          <div style="font-size:0.7rem;color:var(--nv-muted);">Valid for 5 minutes. Mobile devices on this token can pair instantly.</div>
+        </div>
+
+        <!-- Dynamic Incoming Pairing Request Banner -->
+        <div id="pair-approval-box" style="display:none;margin-top:0.75rem;padding:0.85rem;border-radius:8px;background:rgba(0,212,255,0.12);border:1px solid var(--nv-accent);">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.75rem;">
+            <div>
+              <div style="font-size:0.75rem;color:var(--nv-accent);text-transform:uppercase;font-weight:bold;letter-spacing:1px;">🔔 Incoming Pairing Request</div>
+              <div style="font-size:0.85rem;color:#fff;margin-top:0.15rem;" id="pair-req-desc">A device wants to join your network.</div>
+            </div>
+            <div style="display:flex;gap:0.5rem;">
+              <button class="nv-btn" style="padding:0.4rem 0.85rem;font-size:0.75rem;" onclick="approvePair()">Approve &amp; Sync</button>
+              <button class="nv-btn nv-btn-ghost" style="padding:0.4rem 0.85rem;font-size:0.75rem;" onclick="rejectPair()">Reject</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="nv-terminal nv-dim" id="grid-log" style="margin-top:0.75rem;">
 >> Awaiting NexGrid start...
         </div>
       </section>
@@ -326,26 +352,69 @@
       listOTPs();
     }
 
+    let currentPendingPairPeerId = null;
+
     async function startGrid() {
       gridLog('Starting NexGrid...');
       try {
-        const r = await window.nexVault.startNexGrid();
+        const relayUrl = $('grid-relay-url').value.trim();
+        const r = await window.nexVault.startNexGrid(relayUrl);
         gridLog(r.success ? 'NexGrid started — waiting for peers...' : 'Error: ' + r.error);
         if (r.success) {
           $('grid-badge').innerHTML = '<span class="dot"></span>running';
+          if (r.peers && r.peers.length) {
+            gridLog('Discovered ' + r.peers.length + ' peer(s): ' + r.peers.map(p => p.deviceName || p.deviceId).join(', '));
+          }
         }
       } catch (e) { gridLog('Exception: ' + e.message); }
     }
 
     async function stopGrid() {
       gridLog('Stopping...');
-      try { await window.nexVault.stopNexGrid(); gridLog('Stopped.'); $('grid-badge').innerHTML = '<span class="dot"></span>stopped'; }
-      catch (e) { gridLog('Error: ' + e.message); }
+      try {
+        await window.nexVault.stopNexGrid();
+        gridLog('Stopped.');
+        $('grid-badge').innerHTML = '<span class="dot"></span>stopped';
+        $('pair-code-box').style.display = 'none';
+        $('pair-approval-box').style.display = 'none';
+      } catch (e) { gridLog('Error: ' + e.message); }
     }
 
     async function requestPair() {
       gridLog('Generating pairing code...');
-      try { const r = await window.nexVault.requestPairingCode(); if (r.success) { gridLog('Pairing code: ' + r.code + ' (expires in 5 min)'); } else gridLog('Error: ' + r.error); } catch (e) { gridLog('Error: ' + e.message); }
+      try {
+        const r = await window.nexVault.requestPairingCode();
+        if (r.success) {
+          gridLog('Pairing code generated: ' + r.code + ' (valid for 5 minutes)');
+          $('pair-code-val').innerText = r.code;
+          $('pair-code-box').style.display = 'block';
+        } else gridLog('Error: ' + r.error);
+      } catch (e) { gridLog('Error: ' + e.message); }
+    }
+
+    async function approvePair() {
+      if (!currentPendingPairPeerId) return;
+      gridLog('Approving pair request from ' + currentPendingPairPeerId + '...');
+      try {
+        const r = await window.nexVault.approvePairRequest(currentPendingPairPeerId);
+        if (r.success) {
+          gridLog('✅ Approved! Synchronizing vault to peer...');
+          $('pair-approval-box').style.display = 'none';
+          currentPendingPairPeerId = null;
+        } else {
+          gridLog('Error: ' + r.error);
+        }
+      } catch (e) { gridLog('Error: ' + e.message); }
+    }
+
+    async function rejectPair() {
+      if (!currentPendingPairPeerId) return;
+      gridLog('Declining pair request from ' + currentPendingPairPeerId);
+      try {
+        await window.nexVault.rejectPairRequest(currentPendingPairPeerId);
+        $('pair-approval-box').style.display = 'none';
+        currentPendingPairPeerId = null;
+      } catch (e) { gridLog('Error: ' + e.message); }
     }
 
     async function savePassword() {
@@ -506,6 +575,38 @@
     document.addEventListener('DOMContentLoaded', initStartup);
     setTimeout(initStartup, 100);
 
+    // Setup incoming network event listeners
+    if (window.nexVault) {
+      if (window.nexVault.onIncomingPairRequest) {
+        window.nexVault.onIncomingPairRequest(({ peerId, deviceName }) => {
+          currentPendingPairPeerId = peerId;
+          gridLog(`🔔 INCOMING PAIR REQUEST from "${deviceName}" (${peerId})`);
+          $('pair-req-desc').innerText = `Device "${deviceName}" wants to join your network.`;
+          $('pair-approval-box').style.display = 'block';
+        });
+      }
+
+      if (window.nexVault.onPeerJoined) {
+        window.nexVault.onPeerJoined((peer) => {
+          gridLog(`📡 Peer detected on network: ${peer.deviceName || 'Peer'} (${peer.deviceId})`);
+        });
+      }
+
+      if (window.nexVault.onPeerPaired) {
+        window.nexVault.onPeerPaired(({ peerId, deviceName }) => {
+          gridLog(`✅ Device paired & verified: "${deviceName}" (${peerId})`);
+        });
+      }
+
+      if (window.nexVault.onVaultUpdated) {
+        window.nexVault.onVaultUpdated(() => {
+          gridLog(`🔄 Vault updated from network sync!`);
+          listPasswords();
+          listOTPs();
+        });
+      }
+    }
+
     // Expose for preload
     window.toggleTokenView = toggleTokenView;
     window.handleNewUser = handleNewUser;
@@ -513,6 +614,8 @@
     window.startGrid = startGrid;
     window.stopGrid = stopGrid;
     window.requestPair = requestPair;
+    window.approvePair = approvePair;
+    window.rejectPair = rejectPair;
     window.savePassword = savePassword;
     window.listPasswords = listPasswords;
     window.saveOTP = saveOTP;

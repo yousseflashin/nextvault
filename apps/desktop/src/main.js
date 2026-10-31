@@ -10,11 +10,76 @@ let nexGrid = new NexGrid();
 let nexVaultDatabase = new NexVaultDatabase(app.getPath('userData'));
 let extensionServer;
 const relayClients = new Map();
+const pendingPairingRequests = new Map();
+let activePairingCode = null;
+const trustedPeers = new Set();
 
-nexGrid.on('peer-disconnected', () => {
+function approvePairing(peerId, publicKey, deviceName) {
+  trustedPeers.add(peerId);
+  if (publicKey) trustedPeers.add(publicKey);
+  nexGrid.setPeerPublicKey(peerId, publicKey);
+
+  if (nexVaultSecurity.ledger) {
+    nexVaultSecurity.ledger.append('device-paired', { peerId, deviceName: deviceName || 'Mobile' });
+  }
+
+  nexGrid.sendRelaySignal(peerId, {
+    type: 'pair-approved',
+    fromDeviceId: nexGrid.deviceId,
+    fromDeviceName: 'NexVault Desktop',
+    publicKey: nexGrid.localKeyPairs.get(nexGrid.deviceId)?.publicKey
+  });
+
+  // Automatically sync vault to the newly paired peer
+  syncVaultToPeer(peerId);
+
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('peer-paired', { peerId, deviceName: deviceName || 'Mobile' });
+  }
+}
+
+function syncVaultToPeer(peerId) {
+  try {
+    const context = nexVaultSecurity.getUserContext();
+    if (!context) return;
+    const user = nexVaultDatabase.getUser(context.username);
+    if (!user) return;
+    const passwords = nexVaultDatabase.listPasswords(user.id);
+    const otps = nexVaultDatabase.listOTPs(user.id);
+
+    const decryptedPasswords = passwords.map(p => {
+      const full = nexVaultDatabase.getPassword(user.id, p.service);
+      if (!full) return p;
+      const decrypted = nexVaultDatabase.decrypt(full.credential_blob, context.encryptionKey, full.nonce);
+      return { service: p.service, username: p.username || '', credential: decrypted, createdAt: p.created_at };
+    });
+
+    const decryptedOtps = otps.map(o => {
+      const full = nexVaultDatabase.getOTP(user.id, o.service);
+      if (!full) return o;
+      const decrypted = nexVaultDatabase.decrypt(full.secret_blob, context.encryptionKey, full.nonce);
+      return { service: o.service, secret: decrypted, createdAt: o.created_at };
+    });
+
+    nexGrid.sendSecureMessage(peerId, {
+      type: 'vault-sync',
+      vaultData: {
+        passwords: decryptedPasswords,
+        otps: decryptedOtps,
+        timestamp: Date.now()
+      }
+    });
+    console.log(`[Desktop] Vault synchronized to paired peer: ${peerId}`);
+  } catch (err) {
+    console.error('[Desktop] Error syncing vault to peer:', err);
+  }
+}
+
+nexGrid.on('peer-disconnected', (peerId) => {
   nexVaultSecurity.startSecurityCountdown();
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('security-countdown-started', nexVaultSecurity.getSecurityStatus());
+    mainWindow.webContents.send('peer-disconnected', peerId);
   }
 });
 
@@ -26,6 +91,56 @@ nexGrid.on('peer-connected', (peerId) => {
   }
 });
 
+nexGrid.on('peer-joined', (peer) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('peer-joined', peer);
+  }
+});
+
+nexGrid.on('pair-request', ({ from, deviceName, publicKey, code }) => {
+  console.log(`[Desktop] Received pair request from ${deviceName} (${from})`);
+  if (activePairingCode && code && activePairingCode.code === String(code).trim() && Date.now() < activePairingCode.expiresAt) {
+    console.log('[Desktop] Code match! Auto-approving pairing.');
+    approvePairing(from, publicKey, deviceName);
+    return;
+  }
+
+  pendingPairingRequests.set(from, { peerId: from, deviceName, publicKey, timestamp: Date.now() });
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('incoming-pair-request', { peerId: from, deviceName, publicKey });
+  }
+});
+
+nexGrid.on('vault-sync-received', (fromPeerId, vaultData) => {
+  console.log(`[Desktop] Received vault-sync from ${fromPeerId}`);
+  try {
+    const context = nexVaultSecurity.getUserContext();
+    if (!context || !vaultData) return;
+    const user = nexVaultDatabase.getUser(context.username);
+    if (!user) return;
+
+    if (Array.isArray(vaultData.passwords)) {
+      for (const p of vaultData.passwords) {
+        if (p.service && p.credential) {
+          nexVaultDatabase.addPassword(user.id, p.service, p.credential, context.encryptionKey, p.username || '');
+        }
+      }
+    }
+    if (Array.isArray(vaultData.otps)) {
+      for (const o of vaultData.otps) {
+        if (o.service && o.secret) {
+          nexVaultDatabase.addOTP(user.id, o.service, o.secret, context.encryptionKey);
+        }
+      }
+    }
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('vault-updated');
+    }
+  } catch (err) {
+    console.error('[Desktop] Failed to apply vault-sync:', err);
+  }
+});
+
 nexGrid.on('secure-message', (peerId, message) => {
   if (message.type === 'extension-approval-request') {
     if (mainWindow && !mainWindow.isDestroyed()) {
@@ -33,6 +148,8 @@ nexGrid.on('secure-message', (peerId, message) => {
     }
   } else if (message.type === 'extension-approval') {
     nexVaultSecurity.handlePeerApproval(message.publicKey);
+  } else if (message.type === 'vault-sync') {
+    // Handled by vault-sync-received
   } else if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('secure-message-received', { peerId, message });
   }
@@ -284,12 +401,16 @@ ipcMain.handle('get-token', async () => {
   return nexVaultSecurity.getToken();
 });
 
-ipcMain.handle('start-nex-grid', async () => {
+ipcMain.handle('start-nex-grid', async (event, customRelayUrl) => {
   try {
     const token = nexVaultSecurity.getToken();
     if (token && token.publicKey) {
+      if (customRelayUrl && typeof customRelayUrl === 'string' && customRelayUrl.trim()) {
+        nexGrid.relayUrl = customRelayUrl.trim();
+      }
+      nexGrid.deviceName = 'NexVault Desktop';
       const peers = await nexGrid.discoverPeers(token);
-      return { success: true, peers };
+      return { success: true, peers, deviceId: nexGrid.deviceId };
     }
     return { success: false, error: 'No token available' };
   } catch (error) {
@@ -578,7 +699,44 @@ ipcMain.handle('request-pairing-code', async () => {
     const token = nexVaultSecurity.getToken();
     if (!token) throw new Error('No identity token found');
     const code = Math.floor(100000 + Math.random() * 900000).toString();
-    return { success: true, code, tokenId: token.tokenId };
+    activePairingCode = {
+      code,
+      expiresAt: Date.now() + 5 * 60 * 1000 // 5 minutes
+    };
+    return { success: true, code, tokenId: token.tokenId, expiresAt: activePairingCode.expiresAt };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('approve-pair-request', async (event, peerId) => {
+  try {
+    const pending = pendingPairingRequests.get(peerId);
+    if (!pending) return { success: false, error: 'No pending pairing request found for peer ' + peerId };
+    approvePairing(peerId, pending.publicKey, pending.deviceName);
+    pendingPairingRequests.delete(peerId);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('reject-pair-request', async (event, peerId) => {
+  try {
+    pendingPairingRequests.delete(peerId);
+    nexGrid.sendRelaySignal(peerId, { type: 'pair-rejected', reason: 'Declined by desktop user' });
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('sync-vault-to-peers', async () => {
+  try {
+    for (const peerId of trustedPeers) {
+      syncVaultToPeer(peerId);
+    }
+    return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
   }

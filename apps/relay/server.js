@@ -62,6 +62,7 @@ function createRelayServer({
             tokenId: token.tokenId,
             deviceId: message.deviceId,
             publicKey: message.publicKey,
+            ...(message.deviceName ? { deviceName: message.deviceName } : {}),
             socket,
           };
 
@@ -110,6 +111,19 @@ function createRelayServer({
             Array.isArray(message.payload)
           ) {
             socket.close(1003, 'Invalid signal');
+            return;
+          }
+
+          if (message.to === '*') {
+            for (const peer of room.values()) {
+              if (peer.deviceId !== session.deviceId && peer.socket.readyState === peer.socket.OPEN) {
+                sendJson(peer.socket, {
+                  type: 'signal',
+                  from: session.deviceId,
+                  payload: message.payload,
+                });
+              }
+            }
             return;
           }
 
@@ -169,10 +183,14 @@ function sendJson(socket, data) {
 }
 
 function publicPeer(peer) {
-  return {
+  const result = {
     deviceId: peer.deviceId,
     publicKey: peer.publicKey,
   };
+  if (peer.deviceName) {
+    result.deviceName = peer.deviceName;
+  }
+  return result;
 }
 
 function sendPeerList(socket, room, deviceId) {

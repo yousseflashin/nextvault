@@ -134,15 +134,33 @@ class NexGrid extends EventEmitter {
    */
   sendSecureMessage(peerId, message) {
     const peer = this.peers.get(peerId);
-    if (!peer || !peer.dataChannel) {
-      throw new Error(`Peer ${peerId} not connected`);
-    }
     
-    const encrypted = this.encryptMessage(message, peerId);
-    peer.dataChannel.send(JSON.stringify({
-      type: 'encrypted',
-      payload: encrypted
-    }));
+    // 1. If WebRTC data channel is open, send via WebRTC
+    if (peer && peer.dataChannel && peer.dataChannel.readyState === 'open') {
+      const encrypted = this.encryptMessage(message, peerId);
+      peer.dataChannel.send(JSON.stringify({
+        type: 'encrypted',
+        payload: encrypted
+      }));
+      return;
+    }
+
+    // 2. Relay-tunneled E2E encrypted message
+    if (this.relaySocket && this.relaySocket.readyState === WebSocket.OPEN) {
+      const remotePublicKey = peer?.remotePublicKey || this.remotePeerKeys?.get(peerId);
+      if (remotePublicKey) {
+        const encrypted = NexVaultCrypto.encrypt(JSON.stringify(message), remotePublicKey);
+        this.sendRelaySignal(peerId, {
+          type: 'encrypted',
+          payload: encrypted
+        });
+      } else {
+        this.sendRelaySignal(peerId, message);
+      }
+      return;
+    }
+
+    throw new Error(`Peer ${peerId} is not connected via WebRTC or Relay`);
   }
 
   /**
@@ -157,9 +175,12 @@ class NexGrid extends EventEmitter {
   }
 
   setPeerPublicKey(peerId, publicKey) {
+    if (!this.remotePeerKeys) this.remotePeerKeys = new Map();
+    this.remotePeerKeys.set(peerId, publicKey);
     const peer = this.peers.get(peerId);
-    if (!peer) throw new Error(`Peer ${peerId} not found`);
-    peer.remotePublicKey = publicKey;
+    if (peer) {
+      peer.remotePublicKey = publicKey;
+    }
   }
 
   /**
@@ -248,7 +269,14 @@ class NexGrid extends EventEmitter {
    */
   async discoverPeers(token) {
     if (!token || !token.tokenId) throw new Error('Token is required for discovery');
-    this.deviceId = token.publicKey;
+    this.token = token;
+    this.deviceId = token.devicePublicKey || token.deviceId || token.publicKey;
+    
+    // Ensure local X25519 keypair exists for this device connection
+    if (!this.localKeyPairs.has(this.deviceId)) {
+      this.localKeyPairs.set(this.deviceId, NexVaultCrypto.generateKeyPair());
+    }
+
     if (this.relaySocket && this.relaySocket.readyState === WebSocket.OPEN) {
       return this.requestPeerList(token);
     }
@@ -258,25 +286,41 @@ class NexGrid extends EventEmitter {
       const timeout = setTimeout(() => {
         socket.close();
         resolve([]);
-      }, 1500);
+      }, 3000);
       socket.once('open', () => {
         this.relaySocket = socket;
+        const myX25519Key = this.localKeyPairs.get(this.deviceId).publicKey;
         socket.send(JSON.stringify({
           type: 'device-auth',
           token,
           deviceId: this.deviceId,
-          publicKey: this.localKeyPairs.get(this.deviceId)?.publicKey || token.publicKey
+          publicKey: myX25519Key,
+          deviceName: this.deviceName || 'NexVault Desktop'
         }));
       });
       socket.on('message', (raw) => {
-        const message = JSON.parse(raw.toString());
-        if (message.type === 'peer-list') {
-          clearTimeout(timeout);
-          resolve(message.peers || []);
-        } else if (message.type === 'signal') {
-          this.handleSignalingMessage(message.from, message.payload).catch((error) => {
-            this.emit('signaling-error', message.from, error);
-          });
+        try {
+          const message = JSON.parse(raw.toString());
+          if (message.type === 'peer-list') {
+            clearTimeout(timeout);
+            const peers = message.peers || [];
+            peers.forEach(p => {
+              if (p.publicKey) this.setPeerPublicKey(p.deviceId, p.publicKey);
+            });
+            resolve(peers);
+            this.emit('peer-list', peers);
+          } else if (message.type === 'peer-joined') {
+            if (message.peer?.publicKey) {
+              this.setPeerPublicKey(message.peer.deviceId, message.peer.publicKey);
+            }
+            this.emit('peer-joined', message.peer);
+          } else if (message.type === 'peer-left') {
+            this.handlePeerDisconnect(message.deviceId);
+          } else if (message.type === 'signal') {
+            this.handleIncomingSignal(message.from, message.payload);
+          }
+        } catch (err) {
+          console.error('[NexGrid] Error parsing relay message:', err);
         }
       });
       socket.once('error', () => {
@@ -285,6 +329,63 @@ class NexGrid extends EventEmitter {
       });
       socket.once('close', () => this.emit('relay-disconnected'));
     });
+  }
+
+  handleIncomingSignal(fromPeerId, payload) {
+    if (!payload || typeof payload !== 'object') return;
+
+    // WebRTC signaling
+    if (payload.type === 'offer' || payload.type === 'answer' || payload.type === 'ice-candidate') {
+      this.handleSignalingMessage(fromPeerId, payload).catch((error) => {
+        this.emit('signaling-error', fromPeerId, error);
+      });
+      return;
+    }
+
+    // Direct encrypted tunnel via relay
+    if (payload.type === 'encrypted') {
+      try {
+        const localKeyPair = this.localKeyPairs.get(this.deviceId);
+        if (localKeyPair) {
+          const decrypted = JSON.parse(NexVaultCrypto.decrypt(payload.payload, localKeyPair.secretKey));
+          if (decrypted && decrypted.type === 'vault-sync') {
+            this.emit('vault-sync-received', fromPeerId, decrypted.vaultData);
+          }
+          this.emit('secure-message', fromPeerId, decrypted);
+          return;
+        }
+      } catch (err) {
+        console.error('[NexGrid] Failed to decrypt relay signal:', err);
+      }
+    }
+
+    // Structured pairing and sync protocol
+    if (payload.type === 'pair-request') {
+      if (payload.publicKey) this.setPeerPublicKey(fromPeerId, payload.publicKey);
+      this.emit('pair-request', {
+        from: fromPeerId,
+        deviceName: payload.deviceName || 'NexVault Device',
+        publicKey: payload.publicKey,
+        code: payload.code,
+        timestamp: payload.timestamp || Date.now()
+      });
+    } else if (payload.type === 'pair-approved') {
+      if (payload.publicKey) this.setPeerPublicKey(fromPeerId, payload.publicKey);
+      this.emit('pair-approved', {
+        from: fromPeerId,
+        deviceName: payload.deviceName || 'NexVault Device',
+        publicKey: payload.publicKey
+      });
+    } else if (payload.type === 'pair-rejected') {
+      this.emit('pair-rejected', {
+        from: fromPeerId,
+        reason: payload.reason || 'Pairing rejected'
+      });
+    } else if (payload.type === 'vault-sync') {
+      this.emit('vault-sync-received', fromPeerId, payload.vaultData);
+    } else {
+      this.emit('message', fromPeerId, payload);
+    }
   }
 
   requestPeerList(token) {

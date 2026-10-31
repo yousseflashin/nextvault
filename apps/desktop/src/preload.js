@@ -10,13 +10,16 @@ contextBridge.exposeInMainWorld('nexVault', {
   getToken: () => ipcRenderer.invoke('get-token'),
   authorizeToken: (token) => ipcRenderer.invoke('authorize-token', token),
   getTrustHistory: () => ipcRenderer.invoke('get-trust-history'),
-  startNexGrid: () => ipcRenderer.invoke('start-nex-grid'),
+  startNexGrid: (customRelayUrl) => ipcRenderer.invoke('start-nex-grid', customRelayUrl),
   connectPeer: (peerId) => ipcRenderer.invoke('connect-peer', peerId),
   acceptConnection: (peerId) => ipcRenderer.invoke('accept-connection', peerId),
   sendSecureMessage: (peerId, message) => ipcRenderer.invoke('send-secure-message', peerId, message),
   setPeerPublicKey: (peerId, publicKey) => ipcRenderer.invoke('set-peer-public-key', peerId, publicKey),
   stopNexGrid: () => ipcRenderer.invoke('stop-nex-grid'),
   requestPairingCode: () => ipcRenderer.invoke('request-pairing-code'),
+  approvePairRequest: (peerId) => ipcRenderer.invoke('approve-pair-request', peerId),
+  rejectPairRequest: (peerId) => ipcRenderer.invoke('reject-pair-request', peerId),
+  syncVaultToPeers: () => ipcRenderer.invoke('sync-vault-to-peers'),
   addPassword: (serviceName, password, username) => ipcRenderer.invoke('add-password', serviceName, password, username),
   getPassword: (serviceName) => ipcRenderer.invoke('get-password', serviceName),
   listPasswords: () => ipcRenderer.invoke('list-passwords'),
@@ -54,5 +57,9 @@ contextBridge.exposeInMainWorld('nexVault', {
   extendSecurityWindow: (duration) => ipcRenderer.invoke('extend-security-window', duration),
   nuke: () => ipcRenderer.invoke('nuke'),
   onPeerData: (callback) => ipcRenderer.on('peer-data', (event, data) => callback(data)),
-  onExtensionMessage: (callback) => ipcRenderer.on('extension-message', (event, data) => callback(data))
+  onExtensionMessage: (callback) => ipcRenderer.on('extension-message', (event, data) => callback(data)),
+  onIncomingPairRequest: (callback) => ipcRenderer.on('incoming-pair-request', (event, data) => callback(data)),
+  onPeerJoined: (callback) => ipcRenderer.on('peer-joined', (event, data) => callback(data)),
+  onPeerPaired: (callback) => ipcRenderer.on('peer-paired', (event, data) => callback(data)),
+  onVaultUpdated: (callback) => ipcRenderer.on('vault-updated', () => callback())
 });

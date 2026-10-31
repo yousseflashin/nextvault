@@ -148,11 +148,15 @@ class NexVaultSecurity {
   }
 
   getToken() {
-    const publicKey = this.store.get('device.publicKey');
+    const devicePublicKey = this.store.get('device.publicKey');
     const bootstrapToken = this.store.get('user.bootstrapToken');
 
-    if (!publicKey || !bootstrapToken) return null;
-    return { publicKey, ...bootstrapToken };
+    if (!devicePublicKey || !bootstrapToken) return null;
+    return {
+      ...bootstrapToken,
+      devicePublicKey,
+      deviceId: devicePublicKey
+    };
   }
 
   getUserContext() {
