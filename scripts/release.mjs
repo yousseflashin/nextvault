@@ -382,3 +382,4 @@ await uploadToGitHub().catch(err => {
   console.error('\n❌ Error during release upload:', err.message);
   console.log(`\nYou can still publish manually at: https://github.com/${GITHUB_REPO}/releases/new?tag=v${nextVersion}`);
 });
+

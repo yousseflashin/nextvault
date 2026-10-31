@@ -6,10 +6,10 @@ const GITHUB_LATEST_RELEASE = `https://github.com/${GITHUB_REPO}/releases/latest
 
 // Direct latest asset download endpoints on GitHub Releases
 const DEFAULT_DESKTOP_DOWNLOAD = `https://github.com/${GITHUB_REPO}/releases/download/v0.1.0/NexVault-0.1.0.AppImage`;
-const DEFAULT_MOBILE_DOWNLOAD = `https://github.com/${GITHUB_REPO}/releases/download/v0.1.0/NexVault-mobile-app-debug.apk`;
+const DEFAULT_MOBILE_DOWNLOAD = `https://github.com/${GITHUB_REPO}/releases/download/v0.1.1/NexVault-mobile-app-debug.apk`;
 
 export default function DownloadsSection() {
-  const [releaseTag, setReleaseTag] = useState('v0.1.0');
+  const [releaseTag, setReleaseTag] = useState('v0.1.1');
   const [desktopAsset, setDesktopAsset] = useState(null);
   const [mobileAsset, setMobileAsset] = useState(null);
 
