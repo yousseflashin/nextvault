@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Download NexVault | Local-First Password & Trusted Device Network</title>
-  <meta name="description" content="Download NexVault for desktop (Linux AppImage) and Android. Local-first password manager, OTP authenticator, and trusted device network. No cloud, fully encrypted.">
+  <meta name="description" content="Download NexVault for desktop (Linux AppImage) and Android directly from GitHub Releases. Local-first password manager, OTP authenticator, and trusted device network.">
   <link rel="stylesheet" href="style.css">
 </head>
 <body class="antialiased min-h-screen flex flex-col font-sans">
@@ -19,42 +19,60 @@
   </header>
 
   <main class="flex-grow w-full max-w-4xl mx-auto px-6 py-16">
+    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-mono uppercase tracking-widest text-blue-400 bg-blue-950/40 border border-blue-800/40 mb-4">
+      <span>Official Distribution · GitHub Releases</span>
+    </div>
     <h1 class="text-4xl md:text-5xl font-extrabold tracking-tight text-white mb-4">Download NexVault</h1>
-    <p class="text-lg text-gray-400 mb-12">Free, local-first, and offline-capable. Your data never leaves your devices.</p>
+    <p class="text-lg text-gray-400 mb-12">Free, local-first, and offline-capable. All binaries are distributed securely via GitHub Releases.</p>
 
     <div id="artifacts" class="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-      <div class="p-6 bg-gray-900 rounded-xl border border-gray-800 flex flex-col">
-        <div class="w-10 h-10 rounded-lg bg-brand-blue/20 flex items-center justify-center text-brand-blue mb-4">
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+      <div class="p-6 bg-gray-900 rounded-xl border border-gray-800 flex flex-col justify-between">
+        <div>
+          <div class="w-10 h-10 rounded-lg bg-brand-blue/20 flex items-center justify-center text-brand-blue mb-4">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+          </div>
+          <h2 class="text-xl font-bold text-white mb-1">Desktop Vault</h2>
+          <p class="text-sm text-gray-500 mb-4">Linux · AppImage · x86_64</p>
+          <p class="text-gray-400 text-sm mb-6">The primary vault: password manager, OTP authenticator, and trusted-device bridge for the browser extension.</p>
         </div>
-        <h2 class="text-xl font-bold text-white mb-1">Desktop</h2>
-        <p class="text-sm text-gray-500 mb-4">Linux · AppImage · works offline</p>
-        <p class="text-gray-400 text-sm mb-6 flex-grow">The primary vault: password manager, OTP authenticator, and trusted-device bridge for the browser extension.</p>
-        <a id="desktop-link" href="/downloads/NexVault-0.1.0.AppImage" download="NexVault-0.1.0.AppImage" class="px-6 py-3 rounded-lg bg-brand-blue hover:bg-brand-hover text-white font-medium transition flex items-center justify-center gap-2">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-          Download Desktop (124.5 MB)
-        </a>
+        <div>
+          <a id="desktop-link" href="https://github.com/yousseflashin/nextvault/releases/download/v0.1.0/NexVault-0.1.0.AppImage" target="_blank" rel="noopener noreferrer" class="px-6 py-3 rounded-lg bg-brand-blue hover:bg-brand-hover text-white font-medium transition flex items-center justify-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+            <span>Download Desktop (124.5 MB)</span>
+          </a>
+          <span class="text-xs text-gray-500 block text-center mt-2">Requires glibc 2.31+</span>
+        </div>
       </div>
 
-      <div class="p-6 bg-gray-900 rounded-xl border border-gray-800 flex flex-col">
-        <div class="w-10 h-10 rounded-lg bg-brand-blue/20 flex items-center justify-center text-brand-blue mb-4">
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+      <div class="p-6 bg-gray-900 rounded-xl border border-gray-800 flex flex-col justify-between">
+        <div>
+          <div class="w-10 h-10 rounded-lg bg-brand-blue/20 flex items-center justify-center text-brand-blue mb-4">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+          </div>
+          <h2 class="text-xl font-bold text-white mb-1">Mobile App</h2>
+          <p class="text-sm text-gray-500 mb-4">Android · APK · debug build</p>
+          <p class="text-gray-400 text-sm mb-6">Carry your vault on the go. Pairs with the desktop app over encrypted peer-to-peer channels.</p>
         </div>
-        <h2 class="text-xl font-bold text-white mb-1">Mobile</h2>
-        <p class="text-sm text-gray-500 mb-4">Android · APK · debug build</p>
-        <p class="text-gray-400 text-sm mb-6 flex-grow">Carry your vault on the go. Pairs with the desktop app over encrypted peer-to-peer channels.</p>
-        <a id="mobile-link" href="/downloads/NexVault-mobile-app-debug.apk" download="NexVault-mobile-app-debug.apk" class="px-6 py-3 rounded-lg bg-gray-800 hover:bg-gray-700 text-white border border-gray-700 font-medium transition flex items-center justify-center gap-2">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-          Download Android APK (4.0 MB)
-        </a>
+        <div>
+          <a id="mobile-link" href="https://github.com/yousseflashin/nextvault/releases/download/v0.1.0/NexVault-mobile-app-debug.apk" target="_blank" rel="noopener noreferrer" class="px-6 py-3 rounded-lg bg-gray-800 hover:bg-gray-700 text-white border border-gray-700 font-medium transition flex items-center justify-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+            <span>Download Android APK (4.0 MB)</span>
+          </a>
+          <span class="text-xs text-gray-500 block text-center mt-2">Android 8.0+</span>
+        </div>
       </div>
 
     </div>
 
-    <section class="mt-16 p-6 bg-gray-900/50 rounded-xl border border-gray-800">
-      <h2 class="text-lg font-bold text-white mb-2">Verify a build</h2>
-      <p class="text-gray-400 text-sm">Published artifacts are listed in <a class="text-brand-blue hover:underline" href="/downloads/manifest.json">manifest.json</a> with exact file sizes. Builds are produced by the open-source repository; audit the code before trusting a binary.</p>
+    <section class="mt-12 p-6 bg-gray-900/50 rounded-xl border border-gray-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div>
+        <h2 class="text-base font-bold text-white mb-1">GitHub Releases Hub</h2>
+        <p class="text-gray-400 text-xs">View all published builds, commit tags, and release notes.</p>
+      </div>
+      <a href="https://github.com/yousseflashin/nextvault/releases" target="_blank" rel="noopener noreferrer" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white text-sm rounded-lg border border-gray-700 transition shrink-0">
+        Browse All Releases ↗
+      </a>
     </section>
   </main>
 
@@ -63,24 +81,21 @@
   </footer>
 
   <script>
-    fetch('/downloads/manifest.json')
+    fetch('https://api.github.com/repos/yousseflashin/nextvault/releases/latest')
       .then(r => r.json())
-      .then(list => {
-        const desktop = list.find(a => a.kind === 'desktop');
-        const mobile = list.find(a => a.kind === 'mobile');
+      .then(data => {
+        if (!data || !Array.isArray(data.assets)) return;
+        const desktop = data.assets.find(a => a.name.endsWith('.AppImage'));
+        const mobile = data.assets.find(a => a.name.endsWith('.apk'));
         if (desktop) {
           const el = document.getElementById('desktop-link');
-          const file = desktop.file.startsWith('/') ? desktop.file : '/' + desktop.file;
-          el.href = file;
-          el.setAttribute('download', desktop.name);
-          el.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg> Download Desktop (' + (desktop.size / 1048576).toFixed(1) + ' MB)';
+          el.href = desktop.browser_download_url;
+          el.querySelector('span').textContent = 'Download Desktop (' + (desktop.size / 1048576).toFixed(1) + ' MB)';
         }
         if (mobile) {
           const el = document.getElementById('mobile-link');
-          const file = mobile.file.startsWith('/') ? mobile.file : '/' + mobile.file;
-          el.href = file;
-          el.setAttribute('download', mobile.name);
-          el.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg> Download Android APK (' + (mobile.size / 1048576).toFixed(1) + ' MB)';
+          el.href = mobile.browser_download_url;
+          el.querySelector('span').textContent = 'Download Android APK (' + (mobile.size / 1048576).toFixed(1) + ' MB)';
         }
       })
       .catch(() => {});
