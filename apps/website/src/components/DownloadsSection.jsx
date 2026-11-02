@@ -1,15 +1,17 @@
 import React, { useEffect, useState } from 'react';
+import releaseInfo from '../release-info.json';
 
 const GITHUB_REPO = 'yousseflashin/nextvault';
 const GITHUB_RELEASES_PAGE = `https://github.com/${GITHUB_REPO}/releases`;
 const GITHUB_LATEST_RELEASE = `https://github.com/${GITHUB_REPO}/releases/latest`;
 
-// Direct latest asset download endpoints on GitHub Releases
-const DEFAULT_DESKTOP_DOWNLOAD = `https://github.com/${GITHUB_REPO}/releases/download/v0.1.0/NexVault-0.1.0.AppImage`;
-const DEFAULT_MOBILE_DOWNLOAD = `https://github.com/${GITHUB_REPO}/releases/download/v0.1.1/NexVault-mobile-app-debug.apk`;
+// Direct latest asset download endpoints on GitHub Releases derived from release-info.json
+const CURRENT_TAG = releaseInfo.tag || `v${releaseInfo.version || '0.1.1'}`;
+const DEFAULT_DESKTOP_DOWNLOAD = releaseInfo.desktop?.url || `https://github.com/${GITHUB_REPO}/releases/download/${CURRENT_TAG}/${releaseInfo.desktop?.filename || 'NexVault-0.1.1.AppImage'}`;
+const DEFAULT_MOBILE_DOWNLOAD = releaseInfo.mobile?.url || `https://github.com/${GITHUB_REPO}/releases/download/${CURRENT_TAG}/${releaseInfo.mobile?.filename || 'NexVault-mobile-app-debug.apk'}`;
 
 export default function DownloadsSection() {
-  const [releaseTag, setReleaseTag] = useState('v0.1.1');
+  const [releaseTag, setReleaseTag] = useState(CURRENT_TAG);
   const [desktopAsset, setDesktopAsset] = useState(null);
   const [mobileAsset, setMobileAsset] = useState(null);
 
@@ -33,12 +35,12 @@ export default function DownloadsSection() {
   const desktopUrl = desktopAsset?.browser_download_url || DEFAULT_DESKTOP_DOWNLOAD;
   const desktopSize = desktopAsset?.size
     ? `(${(desktopAsset.size / 1048576).toFixed(1)} MB)`
-    : '(124.5 MB)';
+    : `(${releaseInfo.desktop?.size || '124.5 MB'})`;
 
   const mobileUrl = mobileAsset?.browser_download_url || DEFAULT_MOBILE_DOWNLOAD;
   const mobileSize = mobileAsset?.size
     ? `(${(mobileAsset.size / 1048576).toFixed(1)} MB)`
-    : '(4.0 MB)';
+    : `(${releaseInfo.mobile?.size || '4.0 MB'})`;
 
   return (
     <section id="downloads" className="py-24 bg-nv-bg2/80 border-t border-white/5 relative z-10">

@@ -281,6 +281,31 @@ async function main() {
     console.log(`  ✓ Successfully attached "${fileName}" to Release ${tag}!`);
   }
 
+  // Update website release-info.json
+  try {
+    const { writeFileSync } = await import('node:fs');
+    const desktopFile = filesToUpload.find(f => f.endsWith('.AppImage'));
+    const mobileFile = filesToUpload.find(f => f.endsWith('.apk'));
+    const releaseMeta = {
+      version,
+      tag,
+      desktop: {
+        filename: desktopFile || `NexVault-${version}.AppImage`,
+        size: desktopFile ? `${(statSync(join(releaseDir, desktopFile)).size / 1024 / 1024).toFixed(1)} MB` : '124.5 MB',
+        url: `https://github.com/${GITHUB_REPO}/releases/download/${tag}/${desktopFile || `NexVault-${version}.AppImage`}`
+      },
+      mobile: {
+        filename: mobileFile || 'NexVault-mobile-app-debug.apk',
+        size: mobileFile ? `${(statSync(join(releaseDir, mobileFile)).size / 1024 / 1024).toFixed(1)} MB` : '4.0 MB',
+        url: `https://github.com/${GITHUB_REPO}/releases/download/${tag}/${mobileFile || 'NexVault-mobile-app-debug.apk'}`
+      },
+      publishedAt: new Date().toISOString()
+    };
+    writeFileSync(join(ROOT, 'apps/website/src/release-info.json'), JSON.stringify(releaseMeta, null, 2) + '\n');
+    writeFileSync(join(ROOT, 'apps/website/public/release-info.json'), JSON.stringify(releaseMeta, null, 2) + '\n');
+    console.log('  ✓ Updated apps/website release-info.json');
+  } catch {}
+
   console.log('\n====================================================');
   console.log(`🎉 SUCCESS: Release ${tag} is now fully published on GitHub!`);
   console.log(`🔗 Release URL: https://github.com/${GITHUB_REPO}/releases/tag/${tag}`);

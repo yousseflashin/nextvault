@@ -205,17 +205,30 @@ updateFileContent('apps/mobile/src/mobileVault.ts', (content) => {
   return content.replace(/export const CURRENT_VERSION = ['"][^'"]+['"];/, `export const CURRENT_VERSION = '${nextVersion}';`);
 });
 
-// Update website downloads
-updateFileContent('apps/website/src/components/DownloadsSection.jsx', (content) => {
-  return content
-    .replace(/releases\/download\/v[^/]+\/NexVault-[^.]+\.AppImage/, `releases/download/v${nextVersion}/NexVault-${nextVersion}.AppImage`)
-    .replace(/releases\/download\/v[^/]+\/NexVault-mobile-app-debug\.apk/, `releases/download/v${nextVersion}/NexVault-mobile-app-debug.apk`)
-    .replace(/useState\('v[^']+'\)/, `useState('v${nextVersion}')`);
-});
+// Update website downloads and metadata
+const releaseMeta = {
+  version: nextVersion,
+  tag: `v${nextVersion}`,
+  desktop: {
+    filename: `NexVault-${nextVersion}.AppImage`,
+    size: '124.5 MB',
+    url: `https://github.com/${GITHUB_REPO}/releases/download/v${nextVersion}/NexVault-${nextVersion}.AppImage`
+  },
+  mobile: {
+    filename: 'NexVault-mobile-app-debug.apk',
+    size: '4.0 MB',
+    url: `https://github.com/${GITHUB_REPO}/releases/download/v${nextVersion}/NexVault-mobile-app-debug.apk`
+  },
+  publishedAt: new Date().toISOString()
+};
+
+writeFileSync(join(ROOT, 'apps/website/src/release-info.json'), JSON.stringify(releaseMeta, null, 2) + '\n');
+writeFileSync(join(ROOT, 'apps/website/public/release-info.json'), JSON.stringify(releaseMeta, null, 2) + '\n');
+log('  ✓ Updated apps/website/src/release-info.json and public/release-info.json');
 
 updateFileContent('apps/website/public/downloads.html', (content) => {
   return content
-    .replace(/releases\/download\/v[^/]+\/NexVault-[^.]+\.AppImage/g, `releases/download/v${nextVersion}/NexVault-${nextVersion}.AppImage`)
+    .replace(/releases\/download\/v[^/]+\/NexVault-.*?\.AppImage/g, `releases/download/v${nextVersion}/NexVault-${nextVersion}.AppImage`)
     .replace(/releases\/download\/v[^/]+\/NexVault-mobile-app-debug\.apk/g, `releases/download/v${nextVersion}/NexVault-mobile-app-debug.apk`);
 });
 
@@ -250,6 +263,17 @@ if (skipBuild) {
 log(`[3/5] Git staging and tagging release v${nextVersion}...`);
 try {
   runCmd('git', ['add', '-A']);
+
+  // Security audit: ensure no staged files contain raw GitHub Personal Access Tokens
+  const tokenAudit = spawnSync('git', ['diff', '--cached', '-G', 'ghp_[A-Za-z0-9]{20,}', '--name-only'], {
+    cwd: ROOT,
+    encoding: 'utf8'
+  });
+  if (tokenAudit.stdout && tokenAudit.stdout.trim()) {
+    runCmd('git', ['reset']);
+    throw new Error(`SECURITY ALERT: Aborting release! Staged file(s) contain a GitHub token:\n${tokenAudit.stdout.trim()}`);
+  }
+
   const commitMsg = `chore(release): v${nextVersion}`;
   runCmd('git', ['commit', '-m', commitMsg], { allowFailure: true });
   

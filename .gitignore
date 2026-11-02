@@ -3,7 +3,6 @@ dist/
 node_modules/
 release/
 apps/website/public/downloads/
-.env
-.env.local
-.env.dev
+.env*
+!.env*.example
 .github_token
