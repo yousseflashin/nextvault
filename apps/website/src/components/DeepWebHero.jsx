@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import releaseInfo from '../release-info.json';
+import { useReleaseInfo } from '../useReleaseInfo.js';
 import DeepWebBackground from './DeepWebBackground.jsx';
 
 export default function DeepWebHero() {
+  const releaseInfo = useReleaseInfo();
   const [activeConsoleTab, setActiveConsoleTab] = useState('mesh');
   const [copiedText, setCopiedText] = useState(null);
 

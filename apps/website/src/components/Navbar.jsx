@@ -1,8 +1,9 @@
 import React from 'react';
-import releaseInfo from '../release-info.json';
+import { useReleaseInfo } from '../useReleaseInfo.js';
 
 export default function Navbar() {
-  const currentTag = releaseInfo.tag || `v${releaseInfo.version || '0.1.1'}`;
+  const releaseInfo = useReleaseInfo();
+  const currentTag = releaseInfo.tag || `v${releaseInfo.version || '0.1.7'}`;
 
   return (
     <header className="sticky top-0 z-50 backdrop-blur-md bg-dw-bg/90 border-b border-dw-border">

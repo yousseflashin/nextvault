@@ -81,24 +81,48 @@
   </footer>
 
   <script>
-    fetch('https://api.github.com/repos/yousseflashin/nextvault/releases/latest')
+    fetch('/release-info.json?t=' + Date.now())
       .then(r => r.json())
       .then(data => {
-        if (!data || !Array.isArray(data.assets)) return;
-        const desktop = data.assets.find(a => a.name.endsWith('.AppImage'));
-        const mobile = data.assets.find(a => a.name.endsWith('.apk'));
-        if (desktop) {
+        if (!data) return;
+        if (data.desktop?.url) {
           const el = document.getElementById('desktop-link');
-          el.href = desktop.browser_download_url;
-          el.querySelector('span').textContent = 'Download Desktop (' + (desktop.size / 1048576).toFixed(1) + ' MB)';
+          if (el) {
+            el.href = data.desktop.url;
+            const span = el.querySelector('span');
+            if (span) span.textContent = 'Download Desktop (' + (data.desktop.size || '125.4 MB') + ')';
+          }
         }
-        if (mobile) {
+        if (data.mobile?.url) {
           const el = document.getElementById('mobile-link');
-          el.href = mobile.browser_download_url;
-          el.querySelector('span').textContent = 'Download Android APK (' + (mobile.size / 1048576).toFixed(1) + ' MB)';
+          if (el) {
+            el.href = data.mobile.url;
+            const span = el.querySelector('span');
+            if (span) span.textContent = 'Download Android APK (' + (data.mobile.size || '4.0 MB') + ')';
+          }
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        // Fallback to GitHub API if available
+        fetch('https://api.github.com/repos/yousseflashin/nextvault/releases/latest')
+          .then(r => r.json())
+          .then(data => {
+            if (!data || !Array.isArray(data.assets)) return;
+            const desktop = data.assets.find(a => a.name.endsWith('.AppImage'));
+            const mobile = data.assets.find(a => a.name.endsWith('.apk'));
+            if (desktop) {
+              const el = document.getElementById('desktop-link');
+              el.href = desktop.browser_download_url;
+              el.querySelector('span').textContent = 'Download Desktop (' + (desktop.size / 1048576).toFixed(1) + ' MB)';
+            }
+            if (mobile) {
+              const el = document.getElementById('mobile-link');
+              el.href = mobile.browser_download_url;
+              el.querySelector('span').textContent = 'Download Android APK (' + (mobile.size / 1048576).toFixed(1) + ' MB)';
+            }
+          })
+          .catch(() => {});
+      });
   </script>
 </body>
 </html>

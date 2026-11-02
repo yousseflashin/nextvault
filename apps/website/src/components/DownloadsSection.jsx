@@ -1,48 +1,21 @@
-import React, { useEffect, useState } from 'react';
-import releaseInfo from '../release-info.json';
+import React, { useState } from 'react';
+import { useReleaseInfo } from '../useReleaseInfo.js';
 
 const GITHUB_REPO = 'yousseflashin/nextvault';
 const GITHUB_RELEASES_PAGE = `https://github.com/${GITHUB_REPO}/releases`;
 
-const CURRENT_VERSION = releaseInfo.version || '0.1.1';
-const CURRENT_TAG = releaseInfo.tag || `v${CURRENT_VERSION}`;
-const DEFAULT_DESKTOP_DOWNLOAD = releaseInfo.desktop?.url || `https://github.com/${GITHUB_REPO}/releases/download/${CURRENT_TAG}/${releaseInfo.desktop?.filename || 'NexVault-0.1.1.AppImage'}`;
-const DEFAULT_MOBILE_DOWNLOAD = releaseInfo.mobile?.url || `https://github.com/${GITHUB_REPO}/releases/download/${CURRENT_TAG}/${releaseInfo.mobile?.filename || 'NexVault-mobile-app-debug.apk'}`;
-
 export default function DownloadsSection() {
-  const [releaseTag, setReleaseTag] = useState(CURRENT_TAG);
-  const [desktopAsset, setDesktopAsset] = useState(null);
-  const [mobileAsset, setMobileAsset] = useState(null);
+  const releaseInfo = useReleaseInfo();
   const [copiedKey, setCopiedKey] = useState(null);
 
-  useEffect(() => {
-    fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (!data) return;
-        if (data.tag_name) setReleaseTag(data.tag_name);
-        if (Array.isArray(data.assets)) {
-          const dt = data.assets.find((a) => a.name.endsWith('.AppImage'));
-          const mb = data.assets.find((a) => a.name.endsWith('.apk'));
-          if (dt) setDesktopAsset(dt);
-          if (mb) setMobileAsset(mb);
-        }
-      })
-      .catch(() => {});
-  }, []);
+  const releaseTag = releaseInfo.tag || `v${releaseInfo.version || '0.1.7'}`;
+  const desktopUrl = releaseInfo.desktop?.url || `https://github.com/${GITHUB_REPO}/releases/download/${releaseTag}/${releaseInfo.desktop?.filename || `NexVault-${releaseInfo.version}.AppImage`}`;
+  const desktopSize = `(${releaseInfo.desktop?.size || '125.4 MB'})`;
 
-  const desktopUrl = desktopAsset?.browser_download_url || DEFAULT_DESKTOP_DOWNLOAD;
-  const desktopSize = desktopAsset?.size
-    ? `(${(desktopAsset.size / 1048576).toFixed(1)} MB)`
-    : `(${releaseInfo.desktop?.size || '124.5 MB'})`;
+  const mobileUrl = releaseInfo.mobile?.url || `https://github.com/${GITHUB_REPO}/releases/download/${releaseTag}/${releaseInfo.mobile?.filename || 'NexVault-mobile-app-debug.apk'}`;
+  const mobileSize = `(${releaseInfo.mobile?.size || '4.0 MB'})`;
 
-  const mobileUrl = mobileAsset?.browser_download_url || DEFAULT_MOBILE_DOWNLOAD;
-  const mobileSize = mobileAsset?.size
-    ? `(${(mobileAsset.size / 1048576).toFixed(1)} MB)`
-    : `(${releaseInfo.mobile?.size || '4.0 MB'})`;
-
-  const desktopSha256 = 'e9c8...4f12';
-  const verifyCmd = `sha256sum NexVault-${CURRENT_VERSION}.AppImage`;
+  const verifyCmd = `sha256sum ${releaseInfo.desktop?.filename || `NexVault-${releaseInfo.version}.AppImage`}`;
 
   const handleCopy = (text, key) => {
     if (navigator?.clipboard) {
