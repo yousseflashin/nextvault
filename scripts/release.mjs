@@ -300,7 +300,11 @@ try {
 // 6. GitHub Release & Asset Upload
 log(`[4/5] Checking release artifacts in ./release/...`);
 const releaseDir = join(ROOT, 'release');
-const artifacts = existsSync(releaseDir) ? readdirSync(releaseDir) : [];
+const artifacts = existsSync(releaseDir) ? readdirSync(releaseDir).filter(f => {
+  if (f.endsWith('.apk')) return true;
+  if (f.endsWith('.AppImage') && (f === `NexVault-${nextVersion}.AppImage` || f.includes(nextVersion))) return true;
+  return false;
+}) : [];
 
 if (artifacts.length === 0) {
   console.warn('⚠️ No files found in ./release/. Please check build logs.');
