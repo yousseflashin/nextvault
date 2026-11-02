@@ -65,5 +65,7 @@ contextBridge.exposeInMainWorld('nexVault', {
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
   openExternalUrl: (url) => ipcRenderer.invoke('open-external-url', url),
   getTrustedDevices: () => ipcRenderer.invoke('get-trusted-devices'),
-  removeTrustedDevice: (deviceId) => ipcRenderer.invoke('remove-trusted-device', deviceId)
+  removeTrustedDevice: (deviceId) => ipcRenderer.invoke('remove-trusted-device', deviceId),
+  setGithubToken: (token) => ipcRenderer.invoke('set-github-token', token),
+  getGithubToken: () => ipcRenderer.invoke('get-github-token')
 });

@@ -579,23 +579,43 @@
     let latestUpdateInfo = null;
 
     async function checkForUpdates(manual = false) {
-      if (manual) setStatus('Checking for updates...');
+      if (manual) setStatus('Checking GitHub for updates...');
       try {
         const info = await window.nexVault.checkForUpdates();
         if (info && info.hasUpdate) {
           latestUpdateInfo = info;
           $('update-version').textContent = info.latestVersion;
           $('update-desc').textContent = `${info.releaseName || 'Version ' + info.latestVersion} is available. Click below to download the latest Linux AppImage.`;
+          $('update-action-btn').style.display = 'inline-block';
           $('update-banner').style.display = 'flex';
           setStatus(`Update available: ${info.latestVersion}`);
-        } else {
-          $('update-banner').style.display = 'none';
+        } else if (info && info.success) {
           if (manual) {
-            setStatus(info?.message || `NexVault is up to date (v0.1.5)`);
+            $('update-version').textContent = `v${info.currentVersion} (Latest)`;
+            $('update-desc').textContent = `✓ NexVault Desktop is up to date! Running version v${info.currentVersion}. (GitHub latest: ${info.latestVersion}).`;
+            $('update-action-btn').style.display = 'none';
+            $('update-banner').style.display = 'flex';
+            setStatus(`Up to date: v${info.currentVersion}`);
+          } else {
+            $('update-banner').style.display = 'none';
+          }
+        } else {
+          if (manual) {
+            $('update-version').textContent = `Notice`;
+            $('update-desc').textContent = info?.error || info?.message || 'Update check failed.';
+            $('update-action-btn').style.display = 'none';
+            $('update-banner').style.display = 'flex';
+            setStatus(`Notice: ${info?.message || 'Update check failed'}`);
           }
         }
       } catch (err) {
-        if (manual) setStatus('Update check failed: ' + err.message);
+        if (manual) {
+          $('update-version').textContent = 'Check Failed';
+          $('update-desc').textContent = err.message;
+          $('update-action-btn').style.display = 'none';
+          $('update-banner').style.display = 'flex';
+          setStatus('Update check error: ' + err.message);
+        }
       }
     }
 

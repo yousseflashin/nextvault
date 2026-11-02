@@ -68,11 +68,16 @@ function App() {
       const res = await (window as any).nexVault.checkForUpdates();
       if (res && res.hasUpdate) {
         setUpdateInfo(res);
-        showToast(`Update available: ${res.latestVersion}!`);
+        showToast(`🚀 Update Available: v${res.latestVersion}! Click download below.`);
+      } else if (res && res.success) {
+        setUpdateInfo(null);
+        if (manual) {
+          showToast(`✓ Up to Date: Running v${res.currentVersion} (Latest: v${res.latestVersion})`);
+        }
       } else {
         setUpdateInfo(null);
         if (manual) {
-          showToast(res?.message || `NexVault Mobile is up to date (${res?.currentVersion || 'v0.1.0'})`);
+          showToast(`⚠️ ${res?.message || 'Update check failed.'}`);
         }
       }
     } catch (err: any) {

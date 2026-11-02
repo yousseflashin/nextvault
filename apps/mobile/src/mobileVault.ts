@@ -911,11 +911,12 @@ export function initMobileVault() {
         });
         if (resp.status === 404) {
           return {
-            success: true,
+            success: false,
+            statusCode: 404,
             currentVersion: CURRENT_VERSION,
             latestVersion: CURRENT_VERSION,
             hasUpdate: false,
-            message: `NexVault Mobile is running the latest version (${CURRENT_VERSION}).`
+            message: `GitHub returned 404 (Not Found). If repository '${GITHUB_REPO}' is private, please make it public on GitHub.`
           };
         }
         if (!resp.ok) {

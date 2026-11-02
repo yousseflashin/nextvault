@@ -911,7 +911,11 @@ function compareVersions(v1, v2) {
 function fetchGithubRelease() {
   return new Promise((resolve) => {
     const url = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
-    const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
+    let storedToken = null;
+    try {
+      storedToken = nexVaultSecurity.store.get('security.githubToken');
+    } catch {}
+    const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN || storedToken;
     const reqHeaders = {
       'User-Agent': 'NexVault-Desktop/' + CURRENT_VERSION,
       'Accept': 'application/vnd.github.v3+json'
@@ -936,7 +940,7 @@ function fetchGithubRelease() {
               if (redirectRes.statusCode === 200) {
                 resolve({ success: true, release: JSON.parse(data) });
               } else {
-                resolve({ success: false, statusCode: redirectRes.statusCode });
+                resolve({ success: false, statusCode: redirectRes.statusCode, error: 'Status: ' + redirectRes.statusCode });
               }
             } catch (e) {
               resolve({ success: false, error: e.message });
@@ -969,12 +973,19 @@ ipcMain.handle('check-for-updates', async () => {
   try {
     const result = await fetchGithubRelease();
     if (!result.success || !result.release) {
+      const is404 = result.statusCode === 404;
       return {
-        success: true,
+        success: false,
+        statusCode: result.statusCode,
+        error: is404
+          ? `GitHub returned 404 (Not Found). Note: If repository '${GITHUB_REPO}' is private, make it public or configure a token.`
+          : (result.error || `HTTP error ${result.statusCode || 'unknown'}`),
         currentVersion: CURRENT_VERSION,
         latestVersion: CURRENT_VERSION,
         hasUpdate: false,
-        message: `NexVault Desktop is running the latest version (${CURRENT_VERSION}).`
+        message: is404
+          ? `Repository is private (HTTP 404). Make '${GITHUB_REPO}' public on GitHub or configure a token.`
+          : (result.error || 'Unable to check for updates.')
       };
     }
     const release = result.release;
@@ -994,15 +1005,42 @@ ipcMain.handle('check-for-updates', async () => {
       releaseUrl: release.html_url || `https://github.com/${GITHUB_REPO}/releases`,
       releaseName: release.name || latestTag,
       notes: release.body || '',
-      publishedAt: release.published_at
+      publishedAt: release.published_at,
+      message: hasUpdate
+        ? `Update available: ${latestTag} (installed: v${CURRENT_VERSION})`
+        : `NexVault is up to date (v${CURRENT_VERSION})`
     };
   } catch (err) {
     return {
       success: false,
       error: err.message,
       currentVersion: CURRENT_VERSION,
-      hasUpdate: false
+      hasUpdate: false,
+      message: 'Update check failed: ' + err.message
     };
+  }
+});
+
+ipcMain.handle('set-github-token', async (event, token) => {
+  try {
+    if (token) {
+      nexVaultSecurity.store.set('security.githubToken', token.trim());
+      process.env.GITHUB_TOKEN = token.trim();
+    } else {
+      nexVaultSecurity.store.delete('security.githubToken');
+    }
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('get-github-token', async () => {
+  try {
+    const token = process.env.GITHUB_TOKEN || nexVaultSecurity.store.get('security.githubToken') || '';
+    return { success: true, token };
+  } catch (err) {
+    return { success: false, token: '' };
   }
 });
 
