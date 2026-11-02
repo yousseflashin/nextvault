@@ -3,6 +3,22 @@
 @tailwind utilities;
 
 body {
-  background-color: #0f1117;
-  color: #e0e0e0;
+  background-color: #05070a;
+  color: #f1f5f9;
+  overflow-x: hidden;
+}
+
+/* Deep Web Minimalist Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #05070a;
+}
+::-webkit-scrollbar-thumb {
+  background: #1a2336;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #00e676;
 }
