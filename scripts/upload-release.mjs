@@ -15,9 +15,21 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import https from 'node:https';
 import readline from 'node:readline';
+import { spawnSync } from 'node:child_process';
 
 const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 const GITHUB_REPO = 'yousseflashin/nextvault';
+
+function getCurrentBranch() {
+  try {
+    const res = spawnSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { encoding: 'utf8' });
+    const b = (res.stdout || '').trim();
+    return b && b !== 'HEAD' ? b : 'main';
+  } catch {
+    return 'main';
+  }
+}
+const currentBranch = getCurrentBranch();
 
 // Load .env files (.env, .env.local, .env.dev)
 function loadDotenv() {
@@ -215,7 +227,7 @@ async function main() {
       headers: { 'Content-Type': 'application/json' }
     }, {
       tag_name: tag,
-      target_commitish: 'master',
+      target_commitish: currentBranch,
       name: `NexVault ${tag}`,
       body: `## NexVault ${tag}\n\n- Local-first password & OTP authenticator\n- Zero cloud reliance with peer-to-peer WebRTC sync\n- Built-in In-App Auto-Updates\n\n### Official Downloads\n- \`NexVault-${version}.AppImage\` (Desktop Linux)\n- \`NexVault-mobile-app-debug.apk\` (Android)`,
       draft: false,

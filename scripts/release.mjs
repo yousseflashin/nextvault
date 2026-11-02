@@ -32,6 +32,17 @@ import readline from 'node:readline';
 const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 const GITHUB_REPO = 'yousseflashin/nextvault';
 
+function getCurrentBranch() {
+  try {
+    const res = spawnSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { encoding: 'utf8' });
+    const b = (res.stdout || '').trim();
+    return b && b !== 'HEAD' ? b : 'main';
+  } catch {
+    return 'main';
+  }
+}
+const currentBranch = getCurrentBranch();
+
 // Load .env files (.env, .env.local, .env.dev)
 function loadDotenv() {
   const envFiles = ['.env', '.env.local', '.env.dev'];
@@ -285,12 +296,16 @@ try {
   log(`  ✓ Created git tag v${nextVersion}`);
 
   if (!skipPush) {
-    log('Pushing commits and tags to origin/master...');
-    const pushRes = runCmd('git', ['push', 'origin', 'master', '--tags', '--force'], { allowFailure: true });
+    log(`Pushing commits and tags to origin/${currentBranch}...`);
+    let pushRes = runCmd('git', ['push', 'origin', currentBranch, '--tags', '--force'], { allowFailure: true });
+    if (pushRes.status !== 0 && token) {
+      log('  Retrying git push with GITHUB_TOKEN authentication...');
+      pushRes = runCmd('git', ['push', `https://${token}@github.com/${GITHUB_REPO}.git`, currentBranch, '--tags', '--force'], { allowFailure: true, silent: true });
+    }
     if (pushRes.status === 0) {
       log('  ✓ Pushed commits and tags to GitHub successfully.');
     } else {
-      log('  ⚠️ Git push failed or required credentials. You can push manually using: git push origin master --tags');
+      log(`  ⚠️ Git push failed or required credentials. You can push manually using: git push origin ${currentBranch} --tags`);
     }
   }
 } catch (err) {
@@ -453,7 +468,7 @@ async function uploadToGitHub() {
       headers: { ...headers, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         tag_name: `v${nextVersion}`,
-        target_commitish: 'master',
+        target_commitish: currentBranch,
         name: `NexVault v${nextVersion}`,
         body: releaseBody,
         draft: false,
