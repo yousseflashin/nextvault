@@ -2,8 +2,9 @@
   "name": "@nexvault/desktop",
   "private": true,
   "version": "0.1.5",
+  "license": "GPL-3.0-or-later",
   "description": "Local-First Encrypted Vault & P2P Mesh",
-  "author": "NexVault",
+  "author": "Youssef Lashin",
   "repository": {
     "type": "git",
     "url": "https://github.com/yousseflashin/nextvault.git"

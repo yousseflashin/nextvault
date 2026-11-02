@@ -1,5 +1,7 @@
 # NexVault
 
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+
 NexVault is a local-first, end-to-end encrypted password manager, OTP authenticator, and trusted-device network that runs on desktop (Electron), mobile (Capacitor), and as a browser extension. Your data never leaves your devices: it stays encrypted locally and syncs peer-to-peer via an authenticated signaling relay (no cloud storage).
 
 > 📖 **Full Installation & Architecture Guide**: See [DOCUMENTATION.md](DOCUMENTATION.md) for complete setup, end-to-end workflows, security architecture, and troubleshooting.
@@ -148,3 +150,12 @@ The relay server manages WebRTC signaling. **Requires persistent WebSocket suppo
 - Run the full test suite: `npm test`
 - Lint: `npm run lint` (if configured)
 - The cyber theme (binary rain + scanlines) lives in `packages/assets/` and is synced by `scripts/sync-assets.mjs`.
+
+---
+
+## License
+
+This project is licensed under the **GNU General Public License v3.0** (GPLv3) - see the [LICENSE](LICENSE) file for details.
+
+Copyright (C) 2026 Youssef Lashin. All rights reserved.
+
