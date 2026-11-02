@@ -1,7 +1,7 @@
 {
   "name": "@nexvault/desktop",
   "private": true,
-  "version": "0.1.2",
+  "version": "0.1.4",
   "description": "Local-First Encrypted Vault & P2P Mesh",
   "author": "NexVault",
   "repository": {

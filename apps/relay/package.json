@@ -1,6 +1,6 @@
 {
   "name": "@nexvault/relay",
-  "version": "0.1.2",
+  "version": "0.1.4",
   "private": true,
   "main": "server.js",
   "exports": {
