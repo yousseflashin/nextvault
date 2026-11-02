@@ -97,7 +97,7 @@
         <span>NEX<span class="nv-gradient-text">VAULT</span></span>
       </a>
       <div style="display: flex; align-items: center; gap: 0.75rem;">
-        <span class="nv-badge" style="cursor: pointer; border-color: rgba(0,255,157,0.3);" onclick="checkForUpdates(true)" title="NexVault Desktop v0.1.4">v0.1.4</span>
+        <span class="nv-badge" style="cursor: pointer; border-color: rgba(0,255,157,0.3);" onclick="checkForUpdates(true)" title="NexVault Desktop v0.1.5">v0.1.5</span>
         <button class="nv-btn nv-btn-ghost" style="padding: 0.25rem 0.6rem; font-size: 0.7rem;" onclick="checkForUpdates(true)">Check Updates</button>
         <div class="nv-status" id="header-status">
           <span class="dot"></span>
@@ -591,7 +591,7 @@
         } else {
           $('update-banner').style.display = 'none';
           if (manual) {
-            setStatus(info?.message || `NexVault is up to date (v0.1.4)`);
+            setStatus(info?.message || `NexVault is up to date (v0.1.5)`);
           }
         }
       } catch (err) {

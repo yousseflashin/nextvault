@@ -49,7 +49,7 @@ const pendingPairingRequests = new Map();
 let activePairingCode = null;
 const trustedPeers = new Set();
 
-const CURRENT_VERSION = '0.1.4';
+const CURRENT_VERSION = '0.1.5';
 const GITHUB_REPO = 'yousseflashin/nextvault';
 
 // Persistent trusted devices management
