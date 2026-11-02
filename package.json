@@ -4,6 +4,7 @@
   "version": "0.1.7",
   "license": "GPL-3.0-or-later",
   "scripts": {
+    "build": "npm run build:website",
     "start:relay": "npm --prefix apps/relay run start",
     "build:relay": "npm --prefix apps/relay run build",
     "test:relay": "npm --prefix apps/relay test",
