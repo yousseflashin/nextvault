@@ -242,9 +242,11 @@ if (skipBuild) {
   // Sync core packages first
   runCmd('node', ['scripts/sync-core.mjs']);
 
-  // Desktop AppImage build
+  // Desktop AppImage build (suppress GITHUB_TOKEN from electron-builder to avoid auto-publish crash)
   log('Building Desktop AppImage...');
-  runCmd('npm', ['--prefix', 'apps/desktop', 'run', 'build']);
+  runCmd('npm', ['--prefix', 'apps/desktop', 'run', 'build'], {
+    env: { GH_TOKEN: '', GITHUB_TOKEN: '' }
+  });
 
   // Mobile Android APK build
   log('Building Mobile Android APK...');
