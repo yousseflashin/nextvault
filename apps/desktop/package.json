@@ -1,12 +1,18 @@
 {
   "name": "@nexvault/desktop",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.1.2",
+  "description": "Local-First Encrypted Vault & P2P Mesh",
+  "author": "NexVault",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yousseflashin/nextvault.git"
+  },
   "main": "src/main.js",
   "scripts": {
     "prestart": "node ../../scripts/sync-core.mjs",
     "start": "electron . --no-sandbox",
-    "build": "electron-builder"
+    "build": "electron-builder --publish never"
   },
   "dependencies": {
     "@nexvault/core": "file:../../packages/core",
@@ -22,6 +28,11 @@
     "appId": "com.nexvault.desktop",
     "productName": "NexVault",
     "executableName": "nexvault",
+    "publish": {
+      "provider": "github",
+      "owner": "yousseflashin",
+      "repo": "nextvault"
+    },
     "directories": {
       "output": "dist"
     },
