@@ -1,10 +1,11 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
 const { NexVaultToken, NexVaultCrypto, NexVaultSecurity, NexGrid, NexVaultDatabase, generateTotp } = require('@nexvault/core');
 const { WebSocketServer } = require('ws');
 const crypto = require('crypto');
+const { setupLinuxDesktopIntegration } = require('./linuxIntegration');
 
 function loadDesktopDotenv() {
   const envCandidates = [
@@ -38,6 +39,14 @@ function loadDesktopDotenv() {
   }
 }
 loadDesktopDotenv();
+
+// Single instance lock for Linux & Desktop: focus existing window on duplicate launch
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  console.log('[Desktop] Another NexVault instance is already active. Quitting duplicate.');
+  app.quit();
+  process.exit(0);
+}
 
 let mainWindow;
 let nexVaultSecurity = new NexVaultSecurity(app.getPath('userData'));
@@ -1066,11 +1075,73 @@ ipcMain.handle('remove-trusted-device', async (event, deviceId) => {
   return { success: ok };
 });
 
+let appTray = null;
+
+function setupTray() {
+  if (appTray) return;
+  const iconPath = path.join(__dirname, 'assets', 'icon.png');
+  if (!fs.existsSync(iconPath)) return;
+
+  try {
+    const iconImage = nativeImage.createFromPath(iconPath).resize({ width: 22, height: 22 });
+    appTray = new Tray(iconImage);
+    appTray.setToolTip('NexVault - Local-First Encrypted Vault');
+
+    const contextMenu = Menu.buildFromTemplate([
+      {
+        label: 'Open NexVault',
+        click: () => {
+          if (mainWindow) {
+            if (mainWindow.isMinimized()) mainWindow.restore();
+            mainWindow.show();
+            mainWindow.focus();
+          }
+        }
+      },
+      {
+        label: 'Check for Updates...',
+        click: () => {
+          if (mainWindow) {
+            if (mainWindow.isMinimized()) mainWindow.restore();
+            mainWindow.show();
+            mainWindow.focus();
+          }
+        }
+      },
+      { type: 'separator' },
+      {
+        label: 'Quit NexVault',
+        click: () => {
+          app.isQuitting = true;
+          app.quit();
+        }
+      }
+    ]);
+
+    appTray.setContextMenu(contextMenu);
+    appTray.on('click', () => {
+      if (mainWindow) {
+        if (mainWindow.isVisible()) {
+          mainWindow.hide();
+        } else {
+          mainWindow.show();
+          mainWindow.focus();
+        }
+      }
+    });
+  } catch (err) {
+    console.warn('[Desktop] Tray initialization notice:', err.message);
+  }
+}
+
 // Window management
 function createWindow() {
+  const iconPath = path.join(__dirname, 'assets', 'icon.png');
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
+    title: 'NexVault',
+    icon: fs.existsSync(iconPath) ? iconPath : undefined,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -1087,7 +1158,11 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  app.setAppUserModelId('nexvault');
+  setupLinuxDesktopIntegration();
   createWindow();
+  setupTray();
+
   // Run startup integrity check safely
   try {
     nexVaultSecurity.checkIntegrity();
@@ -1099,6 +1174,14 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+});
+
+app.on('second-instance', () => {
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  }
 });
 
 app.on('window-all-closed', () => {

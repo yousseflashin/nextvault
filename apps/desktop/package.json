@@ -25,6 +25,7 @@
     "electron": "38.8.6",
     "electron-builder": "^26.0.12"
   },
+  "desktopName": "nexvault",
   "build": {
     "appId": "com.nexvault.desktop",
     "productName": "NexVault",
@@ -35,16 +36,32 @@
       "repo": "nextvault"
     },
     "directories": {
-      "output": "dist"
+      "output": "dist",
+      "buildResources": "build"
     },
     "linux": {
       "target": [
-        "AppImage",
-        "dir"
-      ]
+        "AppImage"
+      ],
+      "category": "Utility;Security;",
+      "icon": "build/icons",
+      "syncDesktopName": true,
+      "maintainer": "Youssef Lashin <youssef.mlashin.yml@gmail.com>",
+      "synopsis": "Local-First Encrypted Vault & P2P Mesh",
+      "description": "NexVault is a local-first, zero-cloud encrypted password manager and OTP authenticator with peer-to-peer sync.",
+      "mimeTypes": [
+        "x-scheme-handler/nexvault"
+      ],
+      "desktop": {
+        "entry": {
+          "StartupWMClass": "nexvault",
+          "Keywords": "password;vault;security;authenticator;totp;crypto;nexvault;"
+        }
+      }
     },
     "files": [
       "src/**/*",
+      "build/icons/**/*",
       "../../packages/core/**/*",
       "package.json"
     ]
