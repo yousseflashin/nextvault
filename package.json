@@ -21,6 +21,7 @@
     "prestart": "node scripts/sync-assets.mjs && node scripts/sync-core.mjs",
     "publish:builds": "node scripts/publish-builds.mjs",
     "release": "node scripts/release.mjs",
+    "release:upload": "node scripts/upload-release.mjs",
     "release:builds": "npm run build:desktop && npm run build:mobile:android && npm run publish:builds && npm run build:website",
     "ext:firefox": "cp apps/extension/src/manifest.firefox.json apps/extension/src/manifest.json",
     "ext:chrome": "cp apps/extension/src/manifest.chrome.json apps/extension/src/manifest.json"

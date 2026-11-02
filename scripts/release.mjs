@@ -21,15 +21,44 @@
  *   --dry-run          Preview version bumps without modifying files
  */
 
-import { existsSync, readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, readdirSync, statSync, createReadStream } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import https from 'node:https';
 import readline from 'node:readline';
 
 const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 const GITHUB_REPO = 'yousseflashin/nextvault';
+
+// Load .env files (.env, .env.local, .env.dev)
+function loadDotenv() {
+  const envFiles = ['.env', '.env.local', '.env.dev'];
+  for (const file of envFiles) {
+    const fullPath = join(ROOT, file);
+    if (!existsSync(fullPath)) continue;
+    try {
+      const content = readFileSync(fullPath, 'utf8');
+      for (const rawLine of content.split('\n')) {
+        let line = rawLine.trim();
+        if (!line || line.startsWith('#')) continue;
+        if (line.startsWith('export ')) line = line.slice(7).trim();
+        const eqIdx = line.indexOf('=');
+        if (eqIdx <= 0) continue;
+        const key = line.slice(0, eqIdx).trim();
+        let val = line.slice(eqIdx + 1).trim();
+        if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+          val = val.slice(1, -1);
+        }
+        if (!process.env[key] && val) {
+          process.env[key] = val;
+        }
+      }
+    } catch {}
+  }
+}
+loadDotenv();
 
 function log(msg) {
   console.log(`[NexVault Release] ${msg}`);
@@ -257,6 +286,70 @@ if (artifacts.length === 0) {
   }
 }
 
+function uploadAssetStream({ uploadUrl, filePath, fileName, fileSize }) {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(uploadUrl);
+    const reqOpts = {
+      hostname: parsed.hostname,
+      path: parsed.pathname + parsed.search,
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/octet-stream',
+        'Content-Length': fileSize,
+        'User-Agent': 'NexVault-Release-Bot',
+        'Accept': 'application/vnd.github.v3+json'
+      }
+    };
+
+    const req = https.request(reqOpts, (res) => {
+      let data = '';
+      res.on('data', chunk => { data += chunk; });
+      res.on('end', () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          resolve(JSON.parse(data || '{}'));
+        } else {
+          reject(new Error(`HTTP ${res.statusCode}: ${data}`));
+        }
+      });
+    });
+
+    req.on('error', reject);
+
+    let uploaded = 0;
+    const fileStream = createReadStream(filePath);
+    let lastPercent = -1;
+
+    fileStream.on('data', chunk => {
+      uploaded += chunk.length;
+      const pct = Math.floor((uploaded / fileSize) * 100);
+      if (pct % 20 === 0 && pct !== lastPercent) {
+        lastPercent = pct;
+        process.stdout.write(`  ${fileName}: ${pct}% (${(uploaded / 1024 / 1024).toFixed(1)} / ${(fileSize / 1024 / 1024).toFixed(1)} MB)\r`);
+      }
+    });
+
+    fileStream.on('end', () => {
+      process.stdout.write(`  ${fileName}: 100% uploaded. Finalizing with GitHub...\n`);
+    });
+
+    fileStream.pipe(req);
+  });
+}
+
+function promptQuestion(query) {
+  return new Promise((resolve) => {
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout
+    });
+    rl.question(query, (ans) => {
+      rl.close();
+      resolve(ans.trim());
+    });
+  });
+}
+
 async function uploadToGitHub() {
   if (skipUpload) {
     log('Skipping GitHub upload (--skip-upload passed).');
@@ -265,18 +358,31 @@ async function uploadToGitHub() {
 
   if (!token) {
     console.log('\n------------------------------------------------------------');
-    console.log('🔑 GitHub Token not found.');
-    console.log('To automatically upload and publish releases directly from this script:');
-    console.log(`  1. Create a Personal Access Token on GitHub with 'repo' scope:`);
-    console.log('     https://github.com/settings/tokens/new');
-    console.log('  2. Run the release script with your token:');
-    console.log(`     GITHUB_TOKEN=ghp_xxxx npm run release ${nextVersion}`);
-    console.log('     OR save it in a .github_token file in your project root.');
-    console.log('\nManual Alternative:');
-    console.log(`  Upload the files in ./release/ directly to GitHub:`);
-    console.log(`  https://github.com/${GITHUB_REPO}/releases/new?tag=v${nextVersion}`);
-    console.log('------------------------------------------------------------\n');
-    return;
+    console.log('🔑 GitHub Token not found in environment, .env, or .env.dev.');
+    console.log('Get a Personal Access Token here:');
+    console.log('👉 https://github.com/settings/tokens/new?scopes=repo&description=NexVault+Releases\n');
+    const inputToken = await promptQuestion('Enter GitHub Token to upload release (or press Enter to skip): ');
+    if (inputToken) {
+      token = inputToken;
+      const envDevPath = join(ROOT, '.env.dev');
+      if (existsSync(envDevPath)) {
+        try {
+          let devContent = readFileSync(envDevPath, 'utf8');
+          if (devContent.includes('export GITHUB_TOKEN=')) {
+            devContent = devContent.replace(/export GITHUB_TOKEN=.*$/, `export GITHUB_TOKEN=${token}`);
+          } else {
+            devContent += `\nexport GITHUB_TOKEN=${token}\n`;
+          }
+          writeFileSync(envDevPath, devContent);
+          log('✓ Saved GITHUB_TOKEN to .env.dev for future runs.');
+        } catch {}
+      }
+    } else {
+      console.log('No token provided. Skipping GitHub API upload.');
+      console.log(`Manual upload: https://github.com/${GITHUB_REPO}/releases/new?tag=v${nextVersion}`);
+      console.log('------------------------------------------------------------\n');
+      return;
+    }
   }
 
   log(`[5/5] Connecting to GitHub API (repo: ${GITHUB_REPO})...`);
@@ -338,8 +444,9 @@ async function uploadToGitHub() {
   const existingAssets = release.assets || [];
   for (const file of artifacts) {
     const filePath = join(releaseDir, file);
-    const fileBytes = readFileSync(filePath);
-    const sizeMb = (fileBytes.length / 1024 / 1024).toFixed(1);
+    const stats = statSync(filePath);
+    const size = stats.size;
+    const sizeMb = (size / 1024 / 1024).toFixed(1);
 
     // Delete existing asset with same name if present
     const existing = existingAssets.find(a => a.name === file);
@@ -353,22 +460,13 @@ async function uploadToGitHub() {
 
     log(`Uploading ${file} (${sizeMb} MB) to GitHub Release...`);
     const uploadUrl = `https://uploads.github.com/repos/${GITHUB_REPO}/releases/${release.id}/assets?name=${encodeURIComponent(file)}`;
-    const uploadRes = await fetch(uploadUrl, {
-      method: 'POST',
-      headers: {
-        ...headers,
-        'Content-Type': 'application/octet-stream',
-        'Content-Length': String(fileBytes.length)
-      },
-      body: fileBytes
+    await uploadAssetStream({
+      uploadUrl,
+      filePath,
+      fileName: file,
+      fileSize: size
     });
-
-    if (!uploadRes.ok) {
-      const errText = await uploadRes.text();
-      console.warn(`  ⚠️ Failed to upload ${file} (HTTP ${uploadRes.status}): ${errText}`);
-    } else {
-      log(`  ✓ Successfully uploaded ${file}`);
-    }
+    log(`  ✓ Successfully uploaded ${file}`);
   }
 
   console.log('\n====================================================');

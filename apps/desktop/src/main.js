@@ -1,9 +1,43 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const https = require('https');
 const { NexVaultToken, NexVaultCrypto, NexVaultSecurity, NexGrid, NexVaultDatabase, generateTotp } = require('@nexvault/core');
 const { WebSocketServer } = require('ws');
 const crypto = require('crypto');
+
+function loadDesktopDotenv() {
+  const envCandidates = [
+    path.join(__dirname, '..', '..', '..', '.env'),
+    path.join(__dirname, '..', '..', '..', '.env.local'),
+    path.join(__dirname, '..', '..', '..', '.env.dev'),
+    path.join(process.cwd(), '.env'),
+    path.join(process.cwd(), '.env.local'),
+    path.join(process.cwd(), '.env.dev')
+  ];
+  for (const envFile of envCandidates) {
+    if (!fs.existsSync(envFile)) continue;
+    try {
+      const content = fs.readFileSync(envFile, 'utf8');
+      for (const rawLine of content.split('\n')) {
+        let line = rawLine.trim();
+        if (!line || line.startsWith('#')) continue;
+        if (line.startsWith('export ')) line = line.slice(7).trim();
+        const eqIdx = line.indexOf('=');
+        if (eqIdx <= 0) continue;
+        const key = line.slice(0, eqIdx).trim();
+        let val = line.slice(eqIdx + 1).trim();
+        if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+          val = val.slice(1, -1);
+        }
+        if (!process.env[key] && val) {
+          process.env[key] = val;
+        }
+      }
+    } catch {}
+  }
+}
+loadDesktopDotenv();
 
 let mainWindow;
 let nexVaultSecurity = new NexVaultSecurity(app.getPath('userData'));
@@ -877,19 +911,22 @@ function compareVersions(v1, v2) {
 function fetchGithubRelease() {
   return new Promise((resolve) => {
     const url = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
+    const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
+    const reqHeaders = {
+      'User-Agent': 'NexVault-Desktop/' + CURRENT_VERSION,
+      'Accept': 'application/vnd.github.v3+json'
+    };
+    if (token) {
+      reqHeaders['Authorization'] = `Bearer ${token}`;
+    }
+
     const req = https.get(url, {
-      headers: {
-        'User-Agent': 'NexVault-Desktop/' + CURRENT_VERSION,
-        'Accept': 'application/vnd.github.v3+json'
-      },
+      headers: reqHeaders,
       timeout: 6000
     }, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         https.get(res.headers.location, {
-          headers: {
-            'User-Agent': 'NexVault-Desktop/' + CURRENT_VERSION,
-            'Accept': 'application/vnd.github.v3+json'
-          },
+          headers: reqHeaders,
           timeout: 6000
         }, (redirectRes) => {
           let data = '';

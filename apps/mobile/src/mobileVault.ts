@@ -901,8 +901,13 @@ export function initMobileVault() {
 
     async checkForUpdates() {
       try {
+        const token = (typeof localStorage !== 'undefined' && localStorage.getItem('nexvault_github_token')) || (import.meta as any).env?.VITE_GITHUB_TOKEN || '';
+        const headers: Record<string, string> = { 'Accept': 'application/vnd.github.v3+json' };
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
         const resp = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`, {
-          headers: { 'Accept': 'application/vnd.github.v3+json' }
+          headers
         });
         if (resp.status === 404) {
           return {
