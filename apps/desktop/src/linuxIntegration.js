@@ -102,3 +102,4 @@ function setupLinuxDesktopIntegration() {
 }
 
 module.exports = { setupLinuxDesktopIntegration };
+
