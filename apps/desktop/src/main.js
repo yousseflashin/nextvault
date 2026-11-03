@@ -164,26 +164,57 @@ function approvePairing(peerId, publicKey, deviceName) {
 
 function syncVaultToPeer(peerId) {
   try {
+    if (!peerId) return;
     const context = nexVaultSecurity.getUserContext();
-    if (!context) return;
+    if (!context) {
+      console.warn(`[Desktop] syncVaultToPeer: User not authenticated / vault locked.`);
+      return;
+    }
     const user = nexVaultDatabase.getUser(context.username);
-    if (!user) return;
-    const passwords = nexVaultDatabase.listPasswords(user.id);
-    const otps = nexVaultDatabase.listOTPs(user.id);
+    if (!user) {
+      console.warn(`[Desktop] syncVaultToPeer: User "${context.username}" not found.`);
+      return;
+    }
 
-    const decryptedPasswords = passwords.map(p => {
-      const full = nexVaultDatabase.getPassword(user.id, p.service);
-      if (!full) return p;
-      const decrypted = nexVaultDatabase.decrypt(full.credential_blob, context.encryptionKey, full.nonce);
-      return { service: p.service, username: p.username || '', credential: decrypted, createdAt: p.created_at };
-    });
+    // Ensure remote public key is registered in nexGrid
+    const trustedList = getTrustedDevices();
+    const matchedDev = trustedList.find(d => d.deviceId === peerId);
+    if (matchedDev?.publicKey) {
+      nexGrid.setPeerPublicKey(peerId, matchedDev.publicKey);
+    }
 
-    const decryptedOtps = otps.map(o => {
-      const full = nexVaultDatabase.getOTP(user.id, o.service);
-      if (!full) return o;
-      const decrypted = nexVaultDatabase.decrypt(full.secret_blob, context.encryptionKey, full.nonce);
-      return { service: o.service, secret: decrypted, createdAt: o.created_at };
-    });
+    // Safely retrieve and decrypt all passwords
+    const rawPasswords = nexVaultDatabase.getPasswords(user.id) || [];
+    const decryptedPasswords = [];
+    for (const p of rawPasswords) {
+      try {
+        const credential = nexVaultDatabase.decryptData(p.encrypted_data, context.encryptionKey, p.iv);
+        decryptedPasswords.push({
+          service: p.service_name,
+          username: p.username || '',
+          credential,
+          createdAt: p.created_at
+        });
+      } catch (err) {
+        console.error(`[Desktop] Error decrypting password for ${p.service_name}:`, err.message);
+      }
+    }
+
+    // Safely retrieve and decrypt all OTP secrets
+    const rawOtps = nexVaultDatabase.getOtpSecrets(user.id) || [];
+    const decryptedOtps = [];
+    for (const o of rawOtps) {
+      try {
+        const secret = nexVaultDatabase.decryptData(o.encrypted_data, context.encryptionKey, o.iv);
+        decryptedOtps.push({
+          service: o.service_name,
+          secret,
+          createdAt: o.created_at
+        });
+      } catch (err) {
+        console.error(`[Desktop] Error decrypting OTP for ${o.service_name}:`, err.message);
+      }
+    }
 
     nexGrid.sendSecureMessage(peerId, {
       type: 'vault-sync',
@@ -193,9 +224,37 @@ function syncVaultToPeer(peerId) {
         timestamp: Date.now()
       }
     });
-    console.log(`[Desktop] Vault synchronized to paired peer: ${peerId}`);
+    console.log(`[Desktop] Successfully synchronized vault (${decryptedPasswords.length} passwords, ${decryptedOtps.length} OTPs) to peer: ${peerId}`);
   } catch (err) {
-    console.error('[Desktop] Error syncing vault to peer:', err);
+    console.error(`[Desktop] Error syncing vault to peer "${peerId}":`, err);
+  }
+}
+
+function broadcastVaultToPeers() {
+  try {
+    const list = getTrustedDevices();
+    const targetPeerIds = new Set();
+    for (const d of list) {
+      if (d.deviceId) {
+        targetPeerIds.add(d.deviceId);
+        if (d.publicKey) nexGrid.setPeerPublicKey(d.deviceId, d.publicKey);
+      }
+    }
+    for (const p of trustedPeers) {
+      if (p && typeof p === 'string' && !p.includes('=') && !p.includes('/')) {
+        targetPeerIds.add(p);
+      }
+    }
+    if (targetPeerIds.size === 0) {
+      console.log('[Desktop] broadcastVaultToPeers: No trusted peers registered yet.');
+      return;
+    }
+    console.log(`[Desktop] Broadcasting vault to ${targetPeerIds.size} peer(s): ${Array.from(targetPeerIds).join(', ')}`);
+    for (const pid of targetPeerIds) {
+      syncVaultToPeer(pid);
+    }
+  } catch (err) {
+    console.error('[Desktop] Failed to broadcast vault update to peers:', err);
   }
 }
 
@@ -209,9 +268,36 @@ nexGrid.on('peer-disconnected', (peerId) => {
 
 nexGrid.on('peer-connected', (peerId) => {
   nexVaultSecurity.resetCountdown();
+  if (isDeviceTrusted(peerId) || trustedPeers.has(peerId)) {
+    syncVaultToPeer(peerId);
+  }
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('security-countdown-stopped');
     mainWindow.webContents.send('peer-connected', peerId);
+  }
+});
+
+nexGrid.on('peer-list', (peers) => {
+  if (!Array.isArray(peers)) return;
+  for (const peer of peers) {
+    if (isDeviceTrusted(peer.deviceId, peer.publicKey)) {
+      console.log(`[Desktop] Trusted device in peer-list: ${peer.deviceName || peer.deviceId}. Auto-handshaking & syncing.`);
+      if (peer.publicKey) {
+        nexGrid.setPeerPublicKey(peer.deviceId, peer.publicKey);
+        trustedPeers.add(peer.publicKey);
+      }
+      trustedPeers.add(peer.deviceId);
+      nexGrid.sendRelaySignal(peer.deviceId, {
+        type: 'pair-approved',
+        fromDeviceId: nexGrid.deviceId,
+        fromDeviceName: 'NextVault Desktop Mesh Node',
+        publicKey: nexGrid.localKeyPairs.get(nexGrid.deviceId)?.publicKey
+      });
+      syncVaultToPeer(peer.deviceId);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('peer-paired', { peerId: peer.deviceId, deviceName: peer.deviceName || 'Mesh Peer' });
+      }
+    }
   }
 });
 
@@ -629,6 +715,7 @@ ipcMain.handle('add-password', async (event, serviceName, password, username = '
     const user = nexVaultDatabase.getUser(context.username);
     if (!user) throw new Error('User not found');
     nexVaultDatabase.addPassword(user.id, serviceName, password, context.encryptionKey, username);
+    broadcastVaultToPeers();
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
@@ -655,6 +742,7 @@ ipcMain.handle('delete-password', async (event, serviceName) => {
     const user = nexVaultDatabase.getUser(context.username);
     if (!user) throw new Error('User not found');
     nexVaultDatabase.deletePassword(user.id, serviceName);
+    broadcastVaultToPeers();
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
@@ -689,6 +777,7 @@ ipcMain.handle('add-otp', async (event, serviceName, secret) => {
     const user = nexVaultDatabase.getUser(context.username);
     if (!user) throw new Error('User not found');
     nexVaultDatabase.addOtpSecret(user.id, serviceName, 'TOTP', secret, context.encryptionKey);
+    broadcastVaultToPeers();
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
@@ -730,6 +819,7 @@ ipcMain.handle('delete-otp', async (event, serviceName) => {
     const user = nexVaultDatabase.getUser(context.username);
     if (!user) throw new Error('User not found');
     nexVaultDatabase.deleteOtpSecret(user.id, serviceName);
+    broadcastVaultToPeers();
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
@@ -743,6 +833,7 @@ ipcMain.handle('add-otp-secret', async (event, otpType, secret) => {
     const user = nexVaultDatabase.getUser(context.username);
     if (!user) throw new Error('User not found');
     nexVaultDatabase.addOtpSecret(user.id, otpType, secret, context.encryptionKey);
+    broadcastVaultToPeers();
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };

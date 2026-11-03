@@ -169,6 +169,13 @@ function App() {
 
     checkExistingProfile();
     checkMobileUpdates(false);
+
+    if ((window as any).nexVault?.onVaultUpdated) {
+      (window as any).nexVault.onVaultUpdated(() => {
+        refreshVault(false);
+        refreshOTPs(false);
+      });
+    }
   }, []);
 
   async function onNewUser() {
@@ -226,7 +233,15 @@ function App() {
       if (relayUrl) {
         try { localStorage.setItem('nexvault_relay_url', relayUrl); } catch {}
       }
-      const r = await (window as any).nexVault.startNexGrid({ relayUrl });
+      const r = await (window as any).nexVault.startNexGrid({ relayUrl }, {
+        onLog: (msg: string) => log(msg),
+        onStatusChange: (s: any) => setGridStatus(s),
+        onVaultSynced: () => {
+          refreshVault(false);
+          refreshOTPs(false);
+          showToast('Vault updated from mesh sync');
+        }
+      });
       if (r.success) {
         setGridStatus('connected');
         log('NexGrid connected to relay.');

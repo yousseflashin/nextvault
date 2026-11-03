@@ -45,7 +45,7 @@ export interface MobileVaultState {
   otps: StoredOTP[];
 }
 
-export const CURRENT_VERSION = '0.1.10';
+export const CURRENT_VERSION = '0.1.11';
 export const GITHUB_REPO = 'yousseflashin/nextvault';
 
 export function isPeerTrusted(peerId: string, state: MobileVaultState): boolean {
@@ -377,6 +377,13 @@ function handleIncomingMobileSignal(from: string, payload: any, state: MobileVau
   }
 }
 
+const vaultUpdatedListeners: (() => void)[] = [];
+function notifyVaultUpdated() {
+  vaultUpdatedListeners.forEach(fn => {
+    try { fn(); } catch (err) { console.error('[MobileGrid] Error in onVaultUpdated listener:', err); }
+  });
+}
+
 function applyVaultSync(vaultData: any, state: MobileVaultState, callbacks?: GridCallbacks) {
   if (!vaultData) return;
   let importedPasswords = 0;
@@ -414,8 +421,10 @@ function applyVaultSync(vaultData: any, state: MobileVaultState, callbacks?: Gri
   }
 
   saveVault(state);
-  callbacks?.onLog?.(`🔄 Vault synchronized from desktop: ${importedPasswords} passwords, ${importedOTPs} OTPs loaded!`);
-  callbacks?.onVaultSynced?.(importedPasswords + importedOTPs);
+  const cb = callbacks || currentCallbacks;
+  cb?.onLog?.(`🔄 Vault synchronized from peer: ${importedPasswords} passwords, ${importedOTPs} OTPs loaded!`);
+  cb?.onVaultSynced?.(importedPasswords + importedOTPs);
+  notifyVaultUpdated();
 }
 
 function broadcastVaultToPeer(peerId: string, state: MobileVaultState, socket: WebSocket) {
@@ -881,6 +890,12 @@ export function initMobileVault() {
       if (!state) throw new Error('Vault is locked');
       state.passwords = state.passwords.filter(p => p.service.toLowerCase() !== service.toLowerCase());
       saveVault(state);
+      if (activeSocket && activeSocket.readyState === WebSocket.OPEN) {
+        for (const p of state.trustedPeers) {
+          const peerId = typeof p === 'string' ? p : p.deviceId;
+          broadcastVaultToPeer(peerId, state, activeSocket);
+        }
+      }
       return { success: true };
     },
 
@@ -943,6 +958,12 @@ export function initMobileVault() {
       if (!state) throw new Error('Vault is locked');
       state.otps = state.otps.filter(o => o.service.toLowerCase() !== service.toLowerCase());
       saveVault(state);
+      if (activeSocket && activeSocket.readyState === WebSocket.OPEN) {
+        for (const p of state.trustedPeers) {
+          const peerId = typeof p === 'string' ? p : p.deviceId;
+          broadcastVaultToPeer(peerId, state, activeSocket);
+        }
+      }
       return { success: true };
     },
 
@@ -1079,6 +1100,12 @@ export function initMobileVault() {
         return { success: true, relayUrl: clean };
       }
       return { success: false, error: 'Invalid URL' };
+    },
+
+    onVaultUpdated(callback: () => void) {
+      if (typeof callback === 'function') {
+        vaultUpdatedListeners.push(callback);
+      }
     }
   };
 }
