@@ -1,6 +1,6 @@
 {
   "name": "@nexvault/core",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "license": "GPL-3.0-or-later",
   "author": "Youssef Lashin",
   "main": "index.js",

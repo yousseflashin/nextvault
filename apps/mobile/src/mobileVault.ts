@@ -45,7 +45,7 @@ export interface MobileVaultState {
   otps: StoredOTP[];
 }
 
-export const CURRENT_VERSION = '0.1.11';
+export const CURRENT_VERSION = '0.1.12';
 export const GITHUB_REPO = 'yousseflashin/nextvault';
 
 export function isPeerTrusted(peerId: string, state: MobileVaultState): boolean {
