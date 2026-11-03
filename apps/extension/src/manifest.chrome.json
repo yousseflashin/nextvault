@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "NexVault Password Manager",
   "version": "0.1.9",
-  "description": "Connects browser autofill workflows to the local NexVault desktop vault.",
+  "description": "Connects browser autofill workflows to your local NextVault mesh node.",
   "permissions": [
     "storage",
     "activeTab",

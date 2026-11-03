@@ -3,7 +3,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './cyber/cyber.css';
 import './main.css';
-import { getDefaultRelayUrl, CURRENT_VERSION } from './mobileVault';
+import { getDefaultRelayUrl, getSavedRelayUrl, CURRENT_VERSION } from './mobileVault';
 
 function Shield({ size = 32 }: { size?: number }) {
   return (
@@ -57,9 +57,10 @@ function App() {
   const [countdown, setCountdown] = useState(30);
 
   // NexGrid State
-  const [relayUrl, setRelayUrl] = useState(getDefaultRelayUrl());
+  const [relayUrl, setRelayUrl] = useState(() => getSavedRelayUrl());
   const [gridStatus, setGridStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'paired'>('disconnected');
   const [pairingCode, setPairingCode] = useState('');
+  const [generatedPairCode, setGeneratedPairCode] = useState<string | null>(null);
   const [incomingRequest, setIncomingRequest] = useState<{ from: string; deviceName: string } | null>(null);
   const [trustedDevices, setTrustedDevices] = useState<{ deviceId: string; deviceName?: string; pairedAt?: string }[]>([]);
   const [gridLog, setGridLog] = useState<string[]>([]);
@@ -222,7 +223,10 @@ function App() {
     log('Connecting NexGrid...');
     setGridStatus('connecting');
     try {
-      const r = await (window as any).nexVault.startNexGrid(relayUrl);
+      if (relayUrl) {
+        try { localStorage.setItem('nexvault_relay_url', relayUrl); } catch {}
+      }
+      const r = await (window as any).nexVault.startNexGrid({ relayUrl });
       if (r.success) {
         setGridStatus('connected');
         log('NexGrid connected to relay.');
@@ -230,7 +234,7 @@ function App() {
         if ((window as any).nexVault.onIncomingPairRequest) {
           (window as any).nexVault.onIncomingPairRequest(({ peerId, deviceName }: any) => {
             log(`🔔 Incoming pairing request from ${deviceName || peerId}`);
-            setIncomingRequest({ from: peerId, deviceName: deviceName || 'Desktop Device' });
+            setIncomingRequest({ from: peerId, deviceName: deviceName || 'Mesh Peer' });
           });
         }
         if ((window as any).nexVault.onPeerPaired) {
@@ -289,6 +293,21 @@ function App() {
     } catch (e: any) {
       log('Error pairing: ' + e.message);
       showToast('Pair error: ' + e.message);
+    }
+  }
+
+  async function onGenerateMobilePairCode() {
+    try {
+      const res = await (window as any).nexVault.requestPairingCode();
+      if (res && res.success) {
+        setGeneratedPairCode(res.code);
+        showToast(`Pairing code generated: ${res.code}`);
+        log(`Generated pairing code ${res.code} (valid for 5 mins)`);
+      } else {
+        showToast(res?.error || 'Failed to generate code');
+      }
+    } catch (err: any) {
+      showToast('Error: ' + err.message);
     }
   }
 
@@ -515,7 +534,7 @@ function App() {
                 <img src="/icon.png" alt="NextVault" style={{ width: 56, height: 56, borderRadius: 12, marginBottom: '0.5rem', boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }} />
                 <h1 className="nv-title" style={{ fontSize: '1.35rem', marginTop: '0.25rem' }}>NextVault Mobile</h1>
                 <p className="nv-muted" style={{ fontSize: '0.8rem', margin: '0.25rem 0 0' }}>
-                  Local-first password manager &amp; authenticator.
+                  Decentralized P2P Mesh Vault &amp; Authenticator.
                 </p>
               </div>
 
@@ -776,16 +795,23 @@ function App() {
                 <div>
                   <Card style={{ marginBottom: '1rem' }}>
                     <div className="nv-panel-header">
-                      <span className="nv-panel-title">NexGrid Mesh Connection</span>
+                      <span className="nv-panel-title">NexGrid P2P Mesh</span>
                       <StatusPill ok={gridStatus === 'paired' || gridStatus === 'connected'} label={gridStatus} />
                     </div>
 
                     <div style={{ marginBottom: '0.65rem' }}>
-                      <label className="nv-label">Relay Server URL</label>
+                      <label className="nv-label">Relay Server URL (Saved Persistently)</label>
                       <input
                         className="nv-input nv-mono"
                         value={relayUrl}
-                        onChange={e => setRelayUrl(e.target.value)}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setRelayUrl(val);
+                          try {
+                            localStorage.setItem('nexvault_relay_url', val);
+                            (window as any).nexVault?.setRelayUrl?.(val);
+                          } catch {}
+                        }}
                         placeholder="ws://10.0.2.2:46123 or ws://192.168.1.X:46123"
                         style={{ fontSize: '0.8rem' }}
                       />
@@ -798,16 +824,27 @@ function App() {
                       {gridStatus !== 'disconnected' && (
                         <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={onStopGrid}>Stop</button>
                       )}
+                      <button className="nv-btn nv-btn-accent nv-btn-sm" onClick={onGenerateMobilePairCode}>
+                        Generate Code
+                      </button>
                     </div>
+
+                    {generatedPairCode && (
+                      <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: 'var(--nv-primary-light)', border: '1px solid var(--nv-border-strong)', borderRadius: 'var(--nv-radius-sm)', textAlign: 'center' }}>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--nv-text-secondary)', textTransform: 'uppercase' }}>Active Pairing Code (Enter on Any Peer Node):</div>
+                        <div style={{ fontSize: '1.6rem', fontWeight: 700, color: 'var(--nv-primary)', letterSpacing: '4px', margin: '0.25rem 0' }}>{generatedPairCode}</div>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--nv-muted)' }}>Valid for 5 minutes. Enter this code on desktop or any other mesh node.</div>
+                      </div>
+                    )}
                   </Card>
 
                   {/* Pair with 6-digit Code */}
                   <Card style={{ marginBottom: '1rem' }}>
                     <div style={{ fontWeight: 600, color: '#fff', fontSize: '0.85rem', marginBottom: '0.4rem' }}>
-                      Enter Desktop Pairing Code
+                      Enter Peer Pairing Code
                     </div>
                     <p style={{ fontSize: '0.72rem', color: 'var(--nv-muted)', margin: '0 0 0.65rem' }}>
-                      Generate a pairing code on your Desktop NextVault app and enter it here.
+                      Enter a pairing code generated by any mesh peer node (mobile or desktop).
                     </p>
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                       <input

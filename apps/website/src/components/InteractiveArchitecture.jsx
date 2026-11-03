@@ -35,7 +35,7 @@ const PROTOCOLS = [
     summary: 'Vault updates are encrypted using ephemeral session keys and X25519 Diffie-Hellman public key cryptography before entering the P2P channel.',
     payload: {
       action: 'vault-sync',
-      senderPeerId: 'peer_node_linux_desktop',
+      senderPeerId: 'peer_node_mesh_alpha',
       sessionNonce: '24-byte CSPRNG nonce',
       sealedEnvelope: 'x25519_box(encrypted_sqlite_dump, peerPublicKey, ephemeralSecret)',
       plaintextExposure: '0.00%'
@@ -46,7 +46,7 @@ const PROTOCOLS = [
     id: 'extension',
     name: '04. Localhost Extension Bridge',
     tag: 'IPC:127.0.0.1:46124 · SHADOW DOM',
-    summary: 'The browser extension communicates exclusively with the local desktop daemon over a dedicated loopback socket secured with AES-256-GCM.',
+    summary: 'The browser extension communicates exclusively with the local mesh peer daemon over a dedicated loopback socket secured with AES-256-GCM.',
     payload: {
       transport: 'WebSocket ws://127.0.0.1:46124',
       originPolicy: 'Strict Localhost / Extension ID validation',

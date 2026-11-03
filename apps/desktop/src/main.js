@@ -51,6 +51,12 @@ if (!gotSingleInstanceLock) {
 let mainWindow;
 let nexVaultSecurity = new NexVaultSecurity(app.getPath('userData'));
 let nexGrid = new NexGrid();
+try {
+  const savedRelay = nexVaultSecurity.store.get('settings.relayUrl');
+  if (savedRelay && typeof savedRelay === 'string' && savedRelay.trim()) {
+    nexGrid.relayUrl = savedRelay.trim();
+  }
+} catch {}
 let nexVaultDatabase = new NexVaultDatabase(app.getPath('userData'));
 let extensionServer;
 const relayClients = new Map();
@@ -58,7 +64,13 @@ const pendingPairingRequests = new Map();
 let activePairingCode = null;
 const trustedPeers = new Set();
 
-const CURRENT_VERSION = '0.1.9';
+const CURRENT_VERSION = (function() {
+  try {
+    return app?.getVersion ? (app.getVersion() || '0.1.9') : '0.1.9';
+  } catch {
+    return '0.1.9';
+  }
+})();
 const GITHUB_REPO = 'yousseflashin/nextvault';
 
 // Persistent trusted devices management
@@ -132,13 +144,13 @@ function approvePairing(peerId, publicKey, deviceName) {
   nexGrid.setPeerPublicKey(peerId, publicKey);
 
   if (nexVaultSecurity.ledger) {
-    nexVaultSecurity.ledger.append('device-paired', { peerId, deviceName: deviceName || 'Mobile' });
+    nexVaultSecurity.ledger.append('device-paired', { peerId, deviceName: deviceName || 'Mesh Peer' });
   }
 
   nexGrid.sendRelaySignal(peerId, {
     type: 'pair-approved',
     fromDeviceId: nexGrid.deviceId,
-    fromDeviceName: 'NexVault Desktop',
+    fromDeviceName: 'NextVault Desktop Mesh Node',
     publicKey: nexGrid.localKeyPairs.get(nexGrid.deviceId)?.publicKey
   });
 
@@ -146,7 +158,7 @@ function approvePairing(peerId, publicKey, deviceName) {
   syncVaultToPeer(peerId);
 
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('peer-paired', { peerId, deviceName: deviceName || 'Mobile' });
+    mainWindow.webContents.send('peer-paired', { peerId, deviceName: deviceName || 'Mesh Peer' });
   }
 }
 
@@ -214,12 +226,12 @@ nexGrid.on('peer-joined', (peer) => {
     nexGrid.sendRelaySignal(peer.deviceId, {
       type: 'pair-approved',
       fromDeviceId: nexGrid.deviceId,
-      fromDeviceName: 'NexVault Desktop',
+      fromDeviceName: 'NextVault Desktop Mesh Node',
       publicKey: nexGrid.localKeyPairs.get(nexGrid.deviceId)?.publicKey
     });
     syncVaultToPeer(peer.deviceId);
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('peer-paired', { peerId: peer.deviceId, deviceName: peer.deviceName || 'Mobile' });
+      mainWindow.webContents.send('peer-paired', { peerId: peer.deviceId, deviceName: peer.deviceName || 'Mesh Peer' });
     }
   }
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -557,10 +569,16 @@ ipcMain.handle('start-nex-grid', async (event, customRelayUrl) => {
     if (token && token.publicKey) {
       if (customRelayUrl && typeof customRelayUrl === 'string' && customRelayUrl.trim()) {
         nexGrid.relayUrl = customRelayUrl.trim();
+        try { nexVaultSecurity.store.set('settings.relayUrl', customRelayUrl.trim()); } catch {}
+      } else {
+        const savedRelay = nexVaultSecurity.store.get('settings.relayUrl');
+        if (savedRelay && typeof savedRelay === 'string' && savedRelay.trim()) {
+          nexGrid.relayUrl = savedRelay.trim();
+        }
       }
-      nexGrid.deviceName = 'NexVault Desktop';
+      nexGrid.deviceName = 'NextVault Desktop Mesh Node';
       const peers = await nexGrid.discoverPeers(token);
-      return { success: true, peers, deviceId: nexGrid.deviceId };
+      return { success: true, peers, deviceId: nexGrid.deviceId, relayUrl: nexGrid.relayUrl };
     }
     return { success: false, error: 'No token available' };
   } catch (error) {
@@ -874,10 +892,56 @@ ipcMain.handle('approve-pair-request', async (event, peerId) => {
 ipcMain.handle('reject-pair-request', async (event, peerId) => {
   try {
     pendingPairingRequests.delete(peerId);
-    nexGrid.sendRelaySignal(peerId, { type: 'pair-rejected', reason: 'Declined by desktop user' });
+    nexGrid.sendRelaySignal(peerId, { type: 'pair-rejected', reason: 'Declined by mesh peer' });
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('pair-with-code', async (event, code) => {
+  try {
+    const token = nexVaultSecurity.getToken();
+    if (!token) throw new Error('No identity token found');
+    if (!code || typeof code !== 'string') throw new Error('Invalid code');
+    if (!nexGrid.relaySocket || nexGrid.relaySocket.readyState !== 1) {
+      throw new Error('NexGrid is not connected to relay. Start NexGrid first.');
+    }
+    const cleanCode = code.trim();
+    nexGrid.sendRelaySignal('*', {
+      type: 'pair-request',
+      code: cleanCode,
+      fromDeviceId: nexGrid.deviceId,
+      fromDeviceName: 'NextVault Desktop Mesh Node',
+      publicKey: nexGrid.localKeyPairs.get(nexGrid.deviceId)?.publicKey,
+      timestamp: Date.now()
+    });
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('get-relay-url', async () => {
+  try {
+    const saved = nexVaultSecurity.store.get('settings.relayUrl');
+    return { success: true, relayUrl: saved || nexGrid.relayUrl || 'ws://127.0.0.1:46123' };
+  } catch {
+    return { success: true, relayUrl: nexGrid.relayUrl || 'ws://127.0.0.1:46123' };
+  }
+});
+
+ipcMain.handle('set-relay-url', async (event, relayUrl) => {
+  try {
+    if (relayUrl && typeof relayUrl === 'string' && relayUrl.trim()) {
+      const url = relayUrl.trim();
+      nexVaultSecurity.store.set('settings.relayUrl', url);
+      if (nexGrid) nexGrid.relayUrl = url;
+      return { success: true, relayUrl: url };
+    }
+    return { success: false, error: 'Invalid URL' };
+  } catch (err) {
+    return { success: false, error: err.message };
   }
 });
 
@@ -1017,7 +1081,7 @@ ipcMain.handle('check-for-updates', async () => {
       publishedAt: release.published_at,
       message: hasUpdate
         ? `Update available: ${latestTag} (installed: v${CURRENT_VERSION})`
-        : `NexVault is up to date (v${CURRENT_VERSION})`
+        : `NextVault is up to date (v${CURRENT_VERSION})`
     };
   } catch (err) {
     return {
@@ -1217,6 +1281,10 @@ ipcMain.handle('open-external-url', async (event, url) => {
 
 ipcMain.handle('get-trusted-devices', async () => {
   return { success: true, devices: getTrustedDevices() };
+});
+
+ipcMain.handle('get-app-version', async () => {
+  return CURRENT_VERSION;
 });
 
 ipcMain.handle('remove-trusted-device', async (event, deviceId) => {

@@ -111,6 +111,7 @@ let activeSocket: WebSocket | null = null;
 let currentCallbacks: GridCallbacks | null = null;
 const remotePeerKeys = new Map<string, string>();
 const pendingIncomingRequests = new Map<string, { from: string; deviceName: string; publicKey: string; code?: string }>();
+let activeMobilePairingCode: { code: string; expiresAt: number } | null = null;
 
 export function getDefaultRelayUrl(): string {
   if (typeof window === 'undefined') return 'ws://127.0.0.1:46123';
@@ -120,6 +121,16 @@ export function getDefaultRelayUrl(): string {
     return 'ws://127.0.0.1:46123';
   }
   return `ws://${hostname}:46123`;
+}
+
+export function getSavedRelayUrl(): string {
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = localStorage.getItem('nexvault_relay_url');
+      if (saved && saved.trim()) return saved.trim();
+    } catch {}
+  }
+  return getDefaultRelayUrl();
 }
 
 async function deriveKey(password: string, salt: string): Promise<string> {
@@ -267,7 +278,7 @@ function handleIncomingMobileSignal(from: string, payload: any, state: MobileVau
     callbacks?.onPairApproved?.({ deviceId: from, deviceName: payload.fromDeviceName || payload.deviceName || from });
 
     // Request full vault synchronization from approved peer
-    callbacks?.onLog?.('Requesting initial vault sync from desktop...');
+    callbacks?.onLog?.('Requesting initial vault sync from mesh peer...');
     socket.send(JSON.stringify({
       type: 'signal',
       to: from,
@@ -277,6 +288,8 @@ function handleIncomingMobileSignal(from: string, payload: any, state: MobileVau
         publicKey: state.x25519PublicKey
       }
     }));
+    // Bidirectional sync: also send our vault entries to the peer
+    broadcastVaultToPeer(from, state, socket);
     return;
   }
 
@@ -291,6 +304,51 @@ function handleIncomingMobileSignal(from: string, payload: any, state: MobileVau
     if (payload.publicKey) {
       remotePeerKeys.set(from, payload.publicKey);
     }
+
+    // A. Check if the incoming request matches active pairing code generated on this mobile node
+    if (activeMobilePairingCode && activeMobilePairingCode.code && payload.code === activeMobilePairingCode.code) {
+      if (Date.now() < activeMobilePairingCode.expiresAt) {
+        activeMobilePairingCode = null;
+        callbacks?.onLog?.(`✨ Valid pairing code matched from "${payload.fromDeviceName || from}". Auto-approving & syncing.`);
+        saveTrustedDevice({
+          deviceId: from,
+          publicKey: payload.publicKey,
+          deviceName: payload.fromDeviceName || from
+        }, state);
+        socket.send(JSON.stringify({
+          type: 'signal',
+          to: from,
+          payload: {
+            type: 'pair-approved',
+            fromDeviceId: state.devicePublicKey,
+            fromDeviceName: 'NextVault Mobile Mesh Node',
+            publicKey: state.x25519PublicKey
+          }
+        }));
+        broadcastVaultToPeer(from, state, socket);
+        callbacks?.onStatusChange?.('paired');
+        callbacks?.onPairApproved?.({ deviceId: from, deviceName: payload.fromDeviceName || from, publicKey: payload.publicKey });
+        return;
+      }
+    }
+
+    // B. Check if peer is already trusted
+    if (isPeerTrusted(from, state)) {
+      callbacks?.onLog?.(`Mesh peer "${payload.fromDeviceName || from}" is already trusted. Auto-accepting.`);
+      socket.send(JSON.stringify({
+        type: 'signal',
+        to: from,
+        payload: {
+          type: 'pair-approved',
+          fromDeviceId: state.devicePublicKey,
+          fromDeviceName: 'NextVault Mobile Mesh Node',
+          publicKey: state.x25519PublicKey
+        }
+      }));
+      broadcastVaultToPeer(from, state, socket);
+      return;
+    }
+
     pendingIncomingRequests.set(from, {
       from,
       deviceName: payload.fromDeviceName || from,
@@ -531,8 +589,13 @@ export function initMobileVault() {
         return { success: true, peers: [] };
       }
 
-      const relayUrl = options?.relayUrl?.trim() || state.relayUrl || getDefaultRelayUrl();
+      const relayUrl = options?.relayUrl?.trim() || getSavedRelayUrl() || state.relayUrl || getDefaultRelayUrl();
       state.relayUrl = relayUrl;
+      try {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem('nexvault_relay_url', relayUrl);
+        }
+      } catch {}
       saveVault(state);
 
       callbacks?.onLog?.(`Connecting to relay: ${relayUrl}...`);
@@ -567,7 +630,7 @@ export function initMobileVault() {
               },
               deviceId: state.devicePublicKey,
               publicKey: state.x25519PublicKey,
-              deviceName: 'NexVault Mobile'
+              deviceName: 'NextVault Mobile Mesh Node'
             }));
           };
 
@@ -609,7 +672,7 @@ export function initMobileVault() {
                       payload: {
                         type: 'pair-request',
                         fromDeviceId: state.devicePublicKey,
-                        fromDeviceName: 'NexVault Mobile',
+                        fromDeviceName: 'NextVault Mobile Mesh Node',
                         publicKey: state.x25519PublicKey,
                         timestamp: Date.now()
                       }
@@ -644,7 +707,7 @@ export function initMobileVault() {
                     payload: {
                       type: 'pair-request',
                       fromDeviceId: state.devicePublicKey,
-                      fromDeviceName: 'NexVault Mobile',
+                      fromDeviceName: 'NextVault Mobile Mesh Node',
                       publicKey: state.x25519PublicKey,
                       timestamp: Date.now()
                     }
@@ -708,12 +771,23 @@ export function initMobileVault() {
           type: 'pair-request',
           code: code.trim(),
           fromDeviceId: state.devicePublicKey,
-          fromDeviceName: 'NexVault Mobile',
+          fromDeviceName: 'NextVault Mobile Mesh Node',
           publicKey: state.x25519PublicKey,
           timestamp: Date.now()
         }
       }));
       return { success: true };
+    },
+
+    async requestPairingCode() {
+      const state = loadVault();
+      if (!state) throw new Error('Vault is locked or uninitialized');
+      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      activeMobilePairingCode = {
+        code,
+        expiresAt: Date.now() + 5 * 60 * 1000
+      };
+      return { success: true, code, expiresAt: activeMobilePairingCode.expiresAt };
     },
 
     async approvePairRequest(peerId: string) {
@@ -732,7 +806,7 @@ export function initMobileVault() {
         payload: {
           type: 'pair-approved',
           fromDeviceId: state.devicePublicKey,
-          fromDeviceName: 'NexVault Mobile',
+          fromDeviceName: 'NextVault Mobile Mesh Node',
           publicKey: state.x25519PublicKey
         }
       }));
@@ -747,7 +821,7 @@ export function initMobileVault() {
         activeSocket.send(JSON.stringify({
           type: 'signal',
           to: peerId,
-          payload: { type: 'pair-rejected', reason: 'Declined by mobile user' }
+          payload: { type: 'pair-rejected', reason: 'Declined by mesh peer' }
         }));
       }
       pendingIncomingRequests.delete(peerId);
@@ -985,6 +1059,26 @@ export function initMobileVault() {
       if (!state) return { success: false };
       removeTrustedPeer(deviceId, state);
       return { success: true };
+    },
+
+    async getRelayUrl() {
+      return { success: true, relayUrl: getSavedRelayUrl() };
+    },
+
+    async setRelayUrl(url: string) {
+      if (url && url.trim()) {
+        const clean = url.trim();
+        try {
+          if (typeof localStorage !== 'undefined') localStorage.setItem('nexvault_relay_url', clean);
+          const state = loadVault();
+          if (state) {
+            state.relayUrl = clean;
+            saveVault(state);
+          }
+        } catch {}
+        return { success: true, relayUrl: clean };
+      }
+      return { success: false, error: 'Invalid URL' };
     }
   };
 }

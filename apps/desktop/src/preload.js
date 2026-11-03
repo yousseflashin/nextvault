@@ -69,5 +69,9 @@ contextBridge.exposeInMainWorld('nexVault', {
   getTrustedDevices: () => ipcRenderer.invoke('get-trusted-devices'),
   removeTrustedDevice: (deviceId) => ipcRenderer.invoke('remove-trusted-device', deviceId),
   setGithubToken: (token) => ipcRenderer.invoke('set-github-token', token),
-  getGithubToken: () => ipcRenderer.invoke('get-github-token')
+  getGithubToken: () => ipcRenderer.invoke('get-github-token'),
+  getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+  pairWithCode: (code) => ipcRenderer.invoke('pair-with-code', code),
+  getRelayUrl: () => ipcRenderer.invoke('get-relay-url'),
+  setRelayUrl: (url) => ipcRenderer.invoke('set-relay-url', url)
 });

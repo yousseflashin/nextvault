@@ -172,7 +172,7 @@ function sendVaultRequest(message) {
               finished = true;
               clearTimeout(timeout);
               ws?.removeEventListener('message', responseHandler);
-              resolve({ success: false, error: data.error || 'Desktop vault error' });
+              resolve({ success: false, error: data.error || 'Local vault node error' });
             }
           } catch {}
         };

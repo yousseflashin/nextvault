@@ -124,14 +124,14 @@ clearTokenBtn.addEventListener('click', () => {
   });
 });
 
-// Connect to Desktop Vault
+// Connect to Local Mesh Node
 async function triggerConnect() {
   setStatus('Connecting...');
   try {
     const response = await chrome.runtime.sendMessage({ action: 'connect' });
     if (chrome.runtime.lastError) {
-      setStatus('Desktop unreachable', false);
-      setResult('<span class="nv-dim">>> Start NexVault Desktop app first.</span>');
+      setStatus('Local node unreachable', false);
+      setResult('<span class="nv-dim">>> Start NextVault local node app first.</span>');
       return;
     }
     if (response && response.status === 'connected') {
@@ -198,6 +198,6 @@ chrome.runtime.sendMessage({ action: 'get-saved-token' }, (res) => {
     triggerConnect();
   } else {
     setStatus('No token configured', false);
-    setResult('<span class="nv-dim">>> Go to Settings tab to paste your desktop bootstrap token.</span>');
+    setResult('<span class="nv-dim">>> Go to Settings tab to paste your NextVault bootstrap token.</span>');
   }
 });

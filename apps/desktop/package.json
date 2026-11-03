@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.9",
   "license": "GPL-3.0-or-later",
-  "description": "Local-First Encrypted Vault & P2P Mesh",
+  "description": "Decentralized Encrypted P2P Mesh Vault",
   "author": "Youssef Lashin",
   "repository": {
     "type": "git",
@@ -48,7 +48,7 @@
       "syncDesktopName": true,
       "maintainer": "Youssef Lashin <youssef.mlashin.yml@gmail.com>",
       "synopsis": "Local-First Encrypted Vault & P2P Mesh",
-      "description": "NexVault is a local-first, zero-cloud encrypted password manager and OTP authenticator with peer-to-peer sync.",
+      "description": "NextVault is an encrypted peer-to-peer mesh vault and OTP authenticator with zero cloud servers.",
       "mimeTypes": [
         "x-scheme-handler/nexvault"
       ],

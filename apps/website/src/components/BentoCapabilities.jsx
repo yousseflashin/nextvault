@@ -44,7 +44,7 @@ export default function BentoCapabilities() {
                   D
                 </div>
                 <div>
-                  <span className="text-white font-bold block">Desktop Vault</span>
+                  <span className="text-white font-bold block">Mesh Node Alpha</span>
                   <span className="text-[10px] text-dw-dim">192.168.1.14:46123</span>
                 </div>
               </div>
@@ -59,7 +59,7 @@ export default function BentoCapabilities() {
 
               <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
                 <div className="text-right">
-                  <span className="text-white font-bold block">Mobile Device</span>
+                  <span className="text-white font-bold block">Mesh Node Beta</span>
                   <span className="text-[10px] text-dw-dim">X25519 Sealed Box</span>
                 </div>
                 <div className="w-8 h-8 rounded-lg bg-dw-surface flex items-center justify-center text-dw-cyan font-bold border border-dw-border">

@@ -235,14 +235,14 @@
 
     <!-- Page 1: Vault View -->
     <div id="view-vault" class="popup-view active">
-      <button class="nv-popup-btn" id="connect" type="button">Connect to Desktop</button>
+      <button class="nv-popup-btn" id="connect" type="button">Connect to Local Node</button>
       <button class="nv-popup-btn ghost" id="fill-current" type="button" disabled>Autofill Current Page</button>
 
       <div class="nv-popup-divider"></div>
 
       <input class="nv-popup-input" id="search" type="text" placeholder="Search vault credentials..." disabled>
       <div class="nv-popup-result" id="result">
-        <span class="nv-dim">>> Connect to the desktop vault to search</span>
+        <span class="nv-dim">&gt;&gt; Connect to local NextVault node to search</span>
       </div>
     </div>
 
@@ -264,14 +264,14 @@
     <!-- Page 3: Settings View -->
     <div id="view-settings" class="popup-view">
       <label style="font-size: 0.72rem; color: var(--nv-muted); margin-bottom: 4px; display: block;">
-        Desktop Bootstrap Token (JSON):
+        Account Bootstrap Token (JSON):
       </label>
       <textarea class="nv-popup-textarea" id="token-input" placeholder='{"tokenId":"...","publicKey":"...","signature":"...","expiresAt":"..."}'></textarea>
       <button class="nv-popup-btn" id="save-token" type="button">Save Token</button>
       <button class="nv-popup-btn danger" id="clear-token" type="button">Clear Saved Token</button>
     </div>
 
-    <div class="nv-popup-hint">Local-first encrypted · Zero cloud middlemen</div>
+    <div class="nv-popup-hint">Decentralized P2P Mesh · Zero cloud middlemen</div>
   </div>
 
   <script src="popup.js"></script>

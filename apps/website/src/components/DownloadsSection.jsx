@@ -8,7 +8,7 @@ export default function DownloadsSection() {
   const releaseInfo = useReleaseInfo();
   const [copiedKey, setCopiedKey] = useState(null);
 
-  const releaseTag = releaseInfo.tag || `v${releaseInfo.version || '0.1.7'}`;
+  const releaseTag = releaseInfo.tag || `v${releaseInfo.version || '0.1.9'}`;
   const desktopUrl = releaseInfo.desktop?.url || `https://github.com/${GITHUB_REPO}/releases/download/${releaseTag}/${releaseInfo.desktop?.filename || `NexVault-${releaseInfo.version}.AppImage`}`;
   const desktopSize = `(${releaseInfo.desktop?.size || '125.4 MB'})`;
 
@@ -45,13 +45,13 @@ export default function DownloadsSection() {
             <div>
               <div className="flex items-center justify-between mb-4">
                 <span className="text-xs font-mono uppercase tracking-wider text-dw-green px-2.5 py-1 rounded bg-dw-green/10 border border-dw-green/20">
-                  PRIMARY ENCLAVE
+                  DESKTOP MESH NODE
                 </span>
                 <span className="text-xs text-dw-muted font-mono">Linux · x86_64 AppImage</span>
               </div>
-              <h3 className="text-2xl font-bold text-white mb-2">Desktop Vault</h3>
+              <h3 className="text-2xl font-bold text-white mb-2">Desktop Node (Linux)</h3>
               <p className="text-sm text-dw-muted mb-6 leading-relaxed">
-                Central command vault: full password management, live TOTP authenticator, WebRTC mesh peer discovery, and local IPC bridge for the browser autofill extension.
+                Autonomous workstation mesh node: full encrypted vault, live TOTP authenticator, peer-to-peer WebRTC mesh sync, and local IPC bridge for browser autofill.
               </p>
             </div>
 
@@ -65,7 +65,7 @@ export default function DownloadsSection() {
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                 </svg>
-                <span>Download Desktop AppImage {desktopSize}</span>
+                <span>Download Desktop Node {desktopSize}</span>
               </a>
 
               <div className="p-2.5 rounded bg-black/60 border border-dw-border font-mono text-[11px] flex items-center justify-between gap-2">
@@ -97,13 +97,13 @@ export default function DownloadsSection() {
             <div>
               <div className="flex items-center justify-between mb-4">
                 <span className="text-xs font-mono uppercase tracking-wider text-dw-cyan px-2.5 py-1 rounded bg-dw-cyan/10 border border-dw-cyan/20">
-                  COMPANION ENCLAVE
+                  MOBILE MESH NODE
                 </span>
                 <span className="text-xs text-dw-muted font-mono">Android · APK</span>
               </div>
-              <h3 className="text-2xl font-bold text-white mb-2">Mobile Vault</h3>
+              <h3 className="text-2xl font-bold text-white mb-2">Mobile Node (Android)</h3>
               <p className="text-sm text-dw-muted mb-6 leading-relaxed">
-                Carry your encrypted keys anywhere. Pairs with your primary desktop vault over encrypted peer-to-peer WebRTC channels without any intermediary cloud servers.
+                Autonomous mobile mesh node: carry your encrypted keys anywhere. Directly syncs across your device mesh over encrypted peer-to-peer WebRTC channels without any centralized servers or desktop reliance.
               </p>
             </div>
 
@@ -117,7 +117,7 @@ export default function DownloadsSection() {
                 <svg className="w-4 h-4 text-dw-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
                 </svg>
-                <span>Download Android APK {mobileSize}</span>
+                <span>Download Mobile Node APK {mobileSize}</span>
               </a>
 
               <div className="p-2.5 rounded bg-black/60 border border-dw-border font-mono text-[11px] flex items-center justify-between gap-2">

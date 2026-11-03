@@ -118,8 +118,8 @@ export default function DeepWebHero() {
             </h1>
 
             <p className="text-base sm:text-lg text-dw-muted mb-8 leading-relaxed max-w-xl">
-              NexVault secures your credentials inside an air-gapped, SQLCipher-encrypted vault directly on your physical hardware.
-              Syncs between your personal devices over authenticated peer-to-peer WebSockets & WebRTC mesh without any central database.
+              NextVault secures your credentials inside an encrypted, decentralized P2P mesh vault directly on your physical hardware.
+              Syncs between your personal devices over authenticated WebRTC &amp; WebSockets mesh without any centralized cloud database.
             </p>
 
             {/* Quick Actions & One-Click Terminal Install */}
@@ -263,12 +263,12 @@ export default function DeepWebHero() {
                         <div className="flex items-center gap-2.5">
                           <span className="w-2 h-2 rounded-full bg-dw-green"></span>
                           <div>
-                            <span className="text-white font-bold block">Node Alpha (Linux Desktop)</span>
-                            <span className="text-[10px] text-dw-dim">X25519: 9e4f..88b1 · Primary Vault Enclave</span>
+                            <span className="text-white font-bold block">Node Alpha (Linux Workstation)</span>
+                            <span className="text-[10px] text-dw-dim">X25519: 9e4f..88b1 · Autonomous Mesh Peer</span>
                           </div>
                         </div>
                         <span className="text-[10px] text-dw-green px-2 py-0.5 rounded bg-dw-green/10 border border-dw-green/20">
-                          MASTER
+                          PEER
                         </span>
                       </div>
 
@@ -277,11 +277,11 @@ export default function DeepWebHero() {
                           <span className="w-2 h-2 rounded-full bg-dw-cyan"></span>
                           <div>
                             <span className="text-white font-bold block">Node Beta (Android Mobile)</span>
-                            <span className="text-[10px] text-dw-dim">X25519: 3a1c..e092 · P2P WebRTC Direct</span>
+                            <span className="text-[10px] text-dw-dim">X25519: 3a1c..e092 · Autonomous Mesh Peer</span>
                           </div>
                         </div>
                         <span className="text-[10px] text-dw-cyan px-2 py-0.5 rounded bg-dw-cyan/10 border border-dw-cyan/20">
-                          SYNCED
+                          PEER
                         </span>
                       </div>
 
