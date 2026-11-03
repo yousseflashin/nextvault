@@ -7,315 +7,738 @@
   <link rel="stylesheet" href="cyber/cyber.css">
   <style>
     * { box-sizing: border-box; }
-    html, body { height: 100%; margin: 0; background: var(--nv-bg); color: var(--nv-text); font-family: var(--nv-font-sans); }
-    .nv-canvas {
-      position: fixed;
-      inset: 0;
-      width: 100%;
+    html, body {
       height: 100%;
-      z-index: 0;
-      pointer-events: none !important;
+      margin: 0;
+      padding: 0;
+      background: var(--nv-bg);
+      color: var(--nv-text);
+      font-family: var(--nv-font-sans);
+      overflow: hidden;
     }
-    .nv-scanlines::before {
-      pointer-events: none !important;
+
+    /* Layout structure */
+    .app-container {
+      display: flex;
+      height: 100vh;
+      width: 100vw;
+      background: var(--nv-bg);
     }
-    .nv-root {
-      position: relative;
-      z-index: 10;
-      pointer-events: auto;
+
+    /* Sidebar Navigation */
+    .app-sidebar {
+      width: 250px;
+      min-width: 250px;
+      background: var(--nv-bg-2);
+      border-right: 1px solid var(--nv-border);
       display: flex;
       flex-direction: column;
-      min-height: 100vh;
+      user-select: none;
     }
-    .nv-header {
-      position: relative;
-      z-index: 10;
-      pointer-events: auto;
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 1rem 1.5rem;
+
+    .sidebar-header {
+      padding: 1.25rem 1.25rem 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
       border-bottom: 1px solid var(--nv-border);
-      background: linear-gradient(180deg, var(--nv-bg-2), transparent);
     }
-    .nv-brand { display: flex; align-items: center; gap: 0.75rem; text-decoration: none; color: white; }
-    .nv-brand .nv-shield { width: 42px; height: 48px; }
-    .nv-brand span { font-family: var(--nv-font-mono); font-weight: 800; font-size: 1.1rem; }
-    .nv-brand .nv-gradient-text { font-size: 1.1rem; }
-    .nv-status {
-      display: flex; align-items: center; gap: 0.75rem;
-      font-family: var(--nv-font-mono); font-size: 0.75rem; text-transform: uppercase;
-      color: var(--nv-primary); letter-spacing: 0.08em;
+
+    .brand-title {
+      font-weight: 700;
+      font-size: 1.05rem;
+      letter-spacing: -0.01em;
+      color: #fff;
     }
-    .nv-status .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--nv-primary); box-shadow: 0 0 10px var(--nv-primary); animation: nv-pulse 1.6s ease-in-out infinite; }
-    .nv-main { flex: 1; display: flex; flex-direction: column; padding: 2rem 1.5rem 3rem; max-width: 1100px; margin: 0 auto; width: 100%; z-index: 10; position: relative; pointer-events: auto; }
-    .nv-section { width: 100%; margin-bottom: 1.5rem; }
-    .nv-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; }
-    .nv-panel { display: flex; flex-direction: column; gap: 1rem; }
-    .nv-panel-header { display: flex; align-items: center; justify-content: space-between; }
-    .nv-panel-title { font-family: var(--nv-font-mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.15em; color: var(--nv-primary); font-weight: 700; }
-    .nv-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
-    @media (max-width: 520px) { .nv-form-row { grid-template-columns: 1fr; } }
-    .nv-input-group { display: flex; flex-direction: column; gap: 0.35rem; }
-    .nv-label { font-family: var(--nv-font-mono); font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--nv-muted); }
-    .nv-terminal { font-family: var(--nv-font-mono); font-size: 0.75rem; line-height: 1.5; background: rgba(2,4,8,0.85); border: 1px solid var(--nv-border); border-radius: 8px; padding: 0.75rem 1rem; color: var(--nv-primary); white-space: pre-wrap; word-break: break-word; min-height: 120px; max-height: 240px; overflow-y: auto; box-shadow: inset 0 0 30px rgba(0,255,157,0.04); }
-    .nv-terminal .nv-dim { color: var(--nv-muted); }
-    .nv-btn-row { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-    .nv-card.nv-scroll { max-height: 360px; overflow-y: auto; padding: 1rem; }
-    .nv-vault-item { display: flex; align-items: center; justify-content: space-between; padding: 0.75rem; background: rgba(0,255,157,0.03); border: 1px solid var(--nv-border); border-radius: 8px; margin-bottom: 0.5rem; transition: border-color .2s, background .2s; }
-    .nv-vault-item:hover { border-color: var(--nv-border-strong); background: rgba(0,255,157,0.06); }
-    .nv-vault-info { display: flex; flex-direction: column; gap: 0.2rem; }
-    .nv-vault-service { font-family: var(--nv-font-mono); font-size: 0.85rem; font-weight: 600; color: var(--nv-text); }
-    .nv-vault-meta { font-family: var(--nv-font-mono); font-size: 0.65rem; color: var(--nv-muted); }
-    .nv-vault-actions { display: flex; gap: 0.35rem; }
-    .nv-vault-btn { padding: 0.35rem 0.65rem; font-family: var(--nv-font-mono); font-size: 0.65rem; border-radius: 6px; border: 1px solid var(--nv-border); background: var(--nv-surface); color: var(--nv-primary); cursor: pointer; transition: all .15s; }
-    .nv-vault-btn:hover { border-color: var(--nv-primary); background: rgba(0,255,157,0.1); }
-    .nv-vault-btn.delete { color: var(--nv-danger); border-color: rgba(255,59,107,0.3); }
-    .nv-vault-btn.delete:hover { border-color: var(--nv-danger); background: rgba(255,59,107,0.1); }
-    .nv-empty { text-align: center; padding: 2rem; color: var(--nv-muted); font-size: 0.85rem; }
-    .nv-tabs { display: flex; gap: 0.25rem; margin-bottom: 1rem; border-bottom: 1px solid var(--nv-border); padding-bottom: 0.5rem; }
-    .nv-tab { font-family: var(--nv-font-mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--nv-muted); background: none; border: none; padding: 0.5rem 1rem; cursor: pointer; border-radius: 6px; transition: all .15s; }
-    .nv-tab.active { color: var(--nv-primary); background: rgba(0,255,157,0.08); border: 1px solid var(--nv-border); }
-    .nv-tab:hover:not(.active) { color: var(--nv-text); background: rgba(0,255,157,0.04); }
-    .nv-tab-content { display: none; }
-    .nv-tab-content.active { display: block; animation: nv-fade-in 0.2s ease; }
-    @keyframes nv-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
-    .nv-grid.nv-compact { grid-template-columns: 1fr; }
+
+    .brand-title span {
+      color: var(--nv-primary);
+    }
+
+    .sidebar-nav {
+      flex: 1;
+      padding: 1rem 0.75rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+      overflow-y: auto;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.65rem 0.85rem;
+      border-radius: var(--nv-radius-sm);
+      color: var(--nv-muted);
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      background: transparent;
+      border: 1px solid transparent;
+      transition: all 0.15s ease;
+      text-decoration: none;
+    }
+
+    .nav-item:hover {
+      color: var(--nv-text);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .nav-item.active {
+      color: #fff;
+      background: var(--nv-surface);
+      border-color: var(--nv-border);
+      font-weight: 600;
+    }
+
+    .nav-icon {
+      font-size: 1.1rem;
+      width: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .sidebar-footer {
+      padding: 1rem;
+      border-top: 1px solid var(--nv-border);
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      background: rgba(0, 0, 0, 0.15);
+    }
+
+    .user-profile-badge {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      color: var(--nv-muted);
+    }
+
+    /* Main Content Area */
+    .app-main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+      background: var(--nv-bg);
+    }
+
+    .top-header {
+      padding: 1rem 1.75rem;
+      border-bottom: 1px solid var(--nv-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--nv-bg);
+      min-height: 64px;
+    }
+
+    .header-left {
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+    }
+
+    .page-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #fff;
+      margin: 0;
+    }
+
+    .page-subtitle {
+      font-size: 0.75rem;
+      color: var(--nv-muted);
+      margin: 0;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .content-body {
+      flex: 1;
+      padding: 1.75rem;
+      overflow-y: auto;
+    }
+
+    /* Views / Pages */
+    .app-page {
+      display: none;
+      max-width: 960px;
+      margin: 0 auto;
+    }
+
+    .app-page.active {
+      display: block;
+    }
+
+    /* Auth screen modal / container */
+    #auth-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      width: 100vw;
+      background: var(--nv-bg);
+      padding: 1.5rem;
+    }
+
+    .auth-card {
+      width: 100%;
+      max-width: 440px;
+      background: var(--nv-surface);
+      border: 1px solid var(--nv-border);
+      border-radius: var(--nv-radius-lg);
+      padding: 2rem;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+    }
+
+    .auth-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 1.5rem;
+    }
+
+    /* Vault list cards */
+    .vault-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.85rem 1.1rem;
+      background: var(--nv-surface);
+      border: 1px solid var(--nv-border);
+      border-radius: var(--nv-radius-sm);
+      margin-bottom: 0.5rem;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+
+    .vault-item:hover {
+      border-color: rgba(255, 255, 255, 0.15);
+      background: var(--nv-surface-hover);
+    }
+
+    .vault-item-info {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .vault-service {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .vault-meta {
+      font-size: 0.75rem;
+      color: var(--nv-muted);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .vault-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    /* Form rows */
+    .form-grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.85rem;
+    }
+
+    @media (max-width: 680px) {
+      .form-grid-2 { grid-template-columns: 1fr; }
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      margin-bottom: 0.85rem;
+    }
+
+    /* Search bar */
+    .search-box {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--nv-bg-2);
+      border: 1px solid var(--nv-border);
+      border-radius: var(--nv-radius-sm);
+      padding: 0.5rem 0.85rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .search-box input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--nv-text);
+      font-size: 0.85rem;
+      outline: none;
+    }
+
+    /* Notification banner */
+    .update-banner {
+      background: rgba(14, 165, 233, 0.12);
+      border: 1px solid var(--nv-accent);
+      border-radius: var(--nv-radius-sm);
+      padding: 0.75rem 1rem;
+      margin-bottom: 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
   </style>
 </head>
-<body class="nv-scanlines nv-grid">
+<body>
 
-  <canvas class="nv-canvas" data-nv-binary-shield></canvas>
-
-  <div class="nv-root nv-layer">
-    <header class="nv-header">
-      <a href="#" class="nv-brand">
-        <span class="nv-shield" aria-hidden="true">
+  <!-- AUTHENTICATION SCREEN (When locked) -->
+  <div id="auth-container">
+    <div class="auth-card">
+      <div class="auth-brand">
+        <span class="nv-shield">
           <svg viewBox="0 0 64 74" fill="none">
-            <path d="M32 2 60 14v22c0 18-12.6 30.4-28 36C16.6 66.4 4 54 4 36V14L32 2z" stroke="#00ff9d" stroke-width="2" fill="rgba(0,255,157,0.06)"/>
-            <path d="M22 36l7 7 14-15" stroke="#00d4ff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M32 2 60 14v22c0 18-12.6 30.4-28 36C16.6 66.4 4 54 4 36V14L32 2z" stroke="#10b981" stroke-width="2.5" fill="rgba(16,185,129,0.1)"/>
+            <path d="M22 36l7 7 14-15" stroke="#0ea5e9" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </span>
-        <span>NEX<span class="nv-gradient-text">VAULT</span></span>
-      </a>
-      <div style="display: flex; align-items: center; gap: 0.75rem;">
-        <span class="nv-badge" style="cursor: pointer; border-color: rgba(0,255,157,0.3);" onclick="checkForUpdates(true)" title="NexVault Desktop v0.1.7">v0.1.7</span>
-        <button class="nv-btn nv-btn-ghost" style="padding: 0.25rem 0.6rem; font-size: 0.7rem;" onclick="checkForUpdates(true)">Check Updates</button>
-        <div class="nv-status" id="header-status">
-          <span class="dot"></span>
-          <span id="status-text">Initializing...</span>
-        </div>
-      </div>
-    </header>
-
-    <main class="nv-main">
-      <!-- Update notification banner -->
-      <div id="update-banner" style="display: none; padding: 0.75rem 1rem; margin-bottom: 1rem; background: rgba(0, 212, 255, 0.12); border: 1px solid var(--nv-accent); border-radius: 8px; justify-content: space-between; align-items: center; animation: nv-fade-in 0.2s ease;">
         <div>
-          <div style="font-weight: bold; color: #fff;" id="update-title">🚀 Update Available: <span id="update-version"></span></div>
-          <div style="font-size: 0.75rem; color: var(--nv-muted);" id="update-desc">A newer version is ready for download.</div>
-        </div>
-        <div style="display: flex; gap: 0.5rem; align-items: center;">
-          <button class="nv-btn nv-btn-cyan" style="padding: 0.35rem 0.75rem; font-size: 0.75rem;" id="update-action-btn" onclick="openUpdateLink()">Download AppImage</button>
-          <button class="nv-btn nv-btn-ghost" style="padding: 0.35rem 0.75rem; font-size: 0.75rem;" onclick="dismissUpdate()">Dismiss</button>
+          <div class="brand-title">NEX<span>VAULT</span></div>
+          <div style="font-size: 0.75rem; color: var(--nv-muted);">Local-First Encrypted Enclave</div>
         </div>
       </div>
-      <!-- Auth section -->
-      <section class="nv-section nv-panel nv-card" id="auth-section">
-        <div class="nv-panel-header">
-          <span class="nv-panel-title">bootstrap</span>
-          <span class="nv-badge"><span class="dot"></span>offline</span>
+
+      <div class="nv-tabs" id="auth-tabs" style="margin-bottom: 1.25rem;">
+        <button class="nv-tab active" data-tab="unlock" onclick="switchAuthTab('unlock')">Unlock Vault</button>
+        <button class="nv-tab" data-tab="create" onclick="switchAuthTab('create')">New Vault</button>
+      </div>
+
+      <!-- Unlock Tab -->
+      <div class="nv-tab-content active" id="tab-unlock">
+        <div class="form-group">
+          <label class="nv-label">Master Password</label>
+          <input type="password" class="nv-input" id="existing-password" placeholder="Enter master password to unlock" autocomplete="current-password">
+        </div>
+        <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+          <button class="nv-btn" style="flex: 1;" onclick="handleExistingUser()">Unlock</button>
+          <button class="nv-btn nv-btn-ghost" type="button" onclick="toggleTokenView()" id="toggle-token-btn">Token JSON</button>
+        </div>
+        <div class="form-group" id="token-container" style="display: none; margin-top: 1rem;">
+          <label class="nv-label">Bootstrap Token (JSON)</label>
+          <textarea class="nv-textarea nv-mono" id="existing-token" placeholder='{"tokenId":"...","publicKey":"...","signature":"...","expiresAt":...}' rows="4"></textarea>
+        </div>
+      </div>
+
+      <!-- Create New Vault Tab -->
+      <div class="nv-tab-content" id="tab-create">
+        <div class="form-group">
+          <label class="nv-label">Username</label>
+          <input type="text" class="nv-input" id="new-username" placeholder="Choose a username" autocomplete="username">
+        </div>
+        <div class="form-group">
+          <label class="nv-label">Master Password</label>
+          <input type="password" class="nv-input" id="new-password" placeholder="Choose master password" autocomplete="new-password">
+        </div>
+        <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+          <button class="nv-btn" style="flex: 1;" onclick="handleNewUser()">Create Vault</button>
+        </div>
+      </div>
+
+      <div style="margin-top: 1.25rem; font-size: 0.75rem; color: var(--nv-muted); text-align: center;" id="auth-status">
+        Ready
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN APP WORKSPACE (When unlocked) -->
+  <div class="app-container" id="main-workspace" style="display: none;">
+    
+    <!-- Left Navigation Sidebar -->
+    <aside class="app-sidebar">
+      <div class="sidebar-header">
+        <span class="nv-shield" style="width: 24px; height: 24px;">
+          <svg viewBox="0 0 64 74" fill="none">
+            <path d="M32 2 60 14v22c0 18-12.6 30.4-28 36C16.6 66.4 4 54 4 36V14L32 2z" stroke="#10b981" stroke-width="2.5" fill="rgba(16,185,129,0.1)"/>
+            <path d="M22 36l7 7 14-15" stroke="#0ea5e9" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <div class="brand-title">NEX<span>VAULT</span></div>
+        <span class="nv-badge" style="font-size: 0.65rem; margin-left: auto;">v0.1.7</span>
+      </div>
+
+      <nav class="sidebar-nav">
+        <a class="nav-item active" data-page="vault" onclick="navigateTo('vault')">
+          <span class="nav-icon">🔑</span>
+          <span>Vault</span>
+        </a>
+        <a class="nav-item" data-page="otp" onclick="navigateTo('otp')">
+          <span class="nav-icon">⏱️</span>
+          <span>Authenticator</span>
+        </a>
+        <a class="nav-item" data-page="grid" onclick="navigateTo('grid')">
+          <span class="nav-icon">🌐</span>
+          <span>NexGrid Sync</span>
+        </a>
+        <a class="nav-item" data-page="security" onclick="navigateTo('security')">
+          <span class="nav-icon">🛡️</span>
+          <span>Security</span>
+        </a>
+        <a class="nav-item" data-page="settings" onclick="navigateTo('settings')">
+          <span class="nav-icon">⚙️</span>
+          <span>Settings</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="user-profile-badge">
+          <span id="sidebar-user">user</span>
+          <span class="nv-badge success" id="grid-status-pill">Local</span>
+        </div>
+        <button class="nv-btn nv-btn-ghost nv-btn-sm" onclick="lockVault()" style="width: 100%;">
+          Lock Vault
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Workspace Content -->
+    <main class="app-main">
+      <header class="top-header">
+        <div class="header-left">
+          <h1 class="page-title" id="page-header-title">Vault Credentials</h1>
+          <p class="page-subtitle" id="page-header-subtitle">Encrypted passwords and logins</p>
+        </div>
+        <div class="header-actions">
+          <button class="nv-btn nv-btn-ghost nv-btn-sm" onclick="syncAndRefreshVault()">
+            Sync &amp; Refresh
+          </button>
+          <div class="nv-badge" id="top-status-badge">
+            <span class="dot"></span>
+            <span id="status-text">Ready</span>
+          </div>
+        </div>
+      </header>
+
+      <div class="content-body">
+
+        <!-- Update Notification Banner -->
+        <div id="update-banner" class="update-banner" style="display: none;">
+          <div>
+            <div style="font-weight: 600; color: #fff;" id="update-title">Update Available: <span id="update-version"></span></div>
+            <div style="font-size: 0.75rem; color: var(--nv-muted);" id="update-desc">A newer version is ready.</div>
+          </div>
+          <div style="display: flex; gap: 0.5rem;">
+            <button class="nv-btn nv-btn-accent nv-btn-sm" id="update-action-btn" onclick="openUpdateLink()">Download AppImage</button>
+            <button class="nv-btn nv-btn-ghost nv-btn-sm" onclick="dismissUpdate()">Dismiss</button>
+          </div>
         </div>
 
-        <div class="nv-tabs" id="auth-tabs">
-          <button class="nv-tab active" data-tab="new-user">New User</button>
-          <button class="nv-tab" data-tab="existing-user">Existing User</button>
-        </div>
-
-        <div class="nv-tab-content active" id="tab-new-user">
-          <div class="nv-form-row">
-            <div class="nv-input-group">
-              <label class="nv-label">Username</label>
-              <input type="text" class="nv-input" id="new-username" placeholder="choose a username" autocomplete="username">
+        <!-- ==================== PAGE 1: VAULT ==================== -->
+        <div class="app-page active" id="page-vault">
+          
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <div class="search-box" style="flex: 1; max-width: 400px; margin-bottom: 0;">
+              <span>🔍</span>
+              <input type="text" id="vault-search-input" placeholder="Search passwords..." oninput="filterVaultEntries()">
             </div>
-            <div class="nv-input-group">
-              <label class="nv-label">Master Password</label>
-              <input type="password" class="nv-input" id="new-password" placeholder="master password" autocomplete="new-password">
+            <button class="nv-btn" onclick="toggleAddCredentialForm()">
+              <span id="add-cred-btn-text">+ Add Credential</span>
+            </button>
+          </div>
+
+          <!-- Add Credential Card (Collapsible) -->
+          <div class="nv-card" id="add-credential-card" style="display: none; margin-bottom: 1.25rem;">
+            <div style="font-weight: 600; margin-bottom: 1rem; color: #fff;">New Credential</div>
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label class="nv-label">Service / Website</label>
+                <input type="text" class="nv-input" id="service" placeholder="e.g. github.com">
+              </div>
+              <div class="form-group">
+                <label class="nv-label">Username / Email</label>
+                <input type="text" class="nv-input" id="vault-username" placeholder="user@example.com">
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="nv-label">Password</label>
+              <div style="display: flex; gap: 0.5rem;">
+                <input type="text" class="nv-input" id="vault-password" placeholder="Credential password">
+                <button class="nv-btn nv-btn-ghost" type="button" onclick="generateRandomPassword()" style="white-space: nowrap;">Generate</button>
+              </div>
+            </div>
+            <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+              <button class="nv-btn nv-btn-ghost" type="button" onclick="toggleAddCredentialForm()">Cancel</button>
+              <button class="nv-btn" type="button" onclick="savePassword()">Save Credential</button>
             </div>
           </div>
-          <div class="nv-btn-row">
-            <button class="nv-btn" onclick="handleNewUser()">Generate Bootstrap Token</button>
-            <button class="nv-btn nv-btn-ghost" onclick="copyToken()">Copy Token JSON</button>
+
+          <!-- Credentials List -->
+          <div id="vault-list">
+            <div class="nv-empty">No credentials stored yet.</div>
           </div>
         </div>
 
-        <div class="nv-tab-content" id="tab-existing-user">
-          <div class="nv-form-row">
-            <div class="nv-input-group">
-              <label class="nv-label">Master Password</label>
-              <input type="password" class="nv-input" id="existing-password" placeholder="Enter master password to unlock" autocomplete="current-password">
-            </div>
-          </div>
-          <div class="nv-btn-row" style="margin-top: 0.5rem; margin-bottom: 0.75rem;">
-            <button class="nv-btn" onclick="handleExistingUser()">Unlock Vault</button>
-            <button class="nv-btn nv-btn-ghost" type="button" onclick="toggleTokenView()" id="toggle-token-btn">Show Token JSON</button>
-            <button class="nv-btn nv-btn-ghost" type="button" onclick="copyToken()">Copy Token</button>
-          </div>
-          <div class="nv-input-group" id="token-container" style="display: none; margin-top: 0.5rem;">
-            <label class="nv-label">Bootstrap Token (JSON)</label>
-            <textarea class="nv-textarea" id="existing-token" placeholder='{"tokenId":"...","publicKey":"...","signature":"...","expiresAt":...}' rows="4"></textarea>
-          </div>
-        </div>
-      </section>
-
-      <!-- Grid section -->
-      <section class="nv-section nv-panel nv-card" id="grid-section" style="display:none">
-        <div class="nv-panel-header">
-          <span class="nv-panel-title">nexgrid</span>
-          <span class="nv-badge" id="grid-badge"><span class="dot"></span>stopped</span>
-        </div>
-        <div style="margin-bottom: 0.75rem;">
-          <label class="nv-label">Relay Server URL</label>
-          <input type="text" class="nv-input" id="grid-relay-url" value="ws://127.0.0.1:46123" placeholder="ws://127.0.0.1:46123" style="font-size: 0.8rem;">
-        </div>
-        <div class="nv-btn-row">
-          <button class="nv-btn" onclick="startGrid()">Start NexGrid</button>
-          <button class="nv-btn nv-btn-ghost" onclick="stopGrid()">Stop</button>
-          <button class="nv-btn nv-btn-cyan" onclick="requestPair()">Pair New Device</button>
-        </div>
-
-        <!-- Dynamic Pairing Code Banner -->
-        <div id="pair-code-box" style="display:none;margin-top:0.75rem;padding:0.75rem;border-radius:8px;background:rgba(0,255,157,0.08);border:1px solid rgba(0,255,157,0.3);">
-          <div style="font-size:0.75rem;color:var(--nv-muted);text-transform:uppercase;letter-spacing:1px;">Active Pairing Code (Enter on Mobile):</div>
-          <div style="font-size:1.8rem;font-weight:bold;color:var(--nv-primary);letter-spacing:6px;margin:0.25rem 0;" id="pair-code-val">------</div>
-          <div style="font-size:0.7rem;color:var(--nv-muted);">Valid for 5 minutes. Mobile devices on this token can pair instantly.</div>
-        </div>
-
-        <!-- Dynamic Incoming Pairing Request Banner -->
-        <div id="pair-approval-box" style="display:none;margin-top:0.75rem;padding:0.85rem;border-radius:8px;background:rgba(0,212,255,0.12);border:1px solid var(--nv-accent);">
-          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.75rem;">
+        <!-- ==================== PAGE 2: AUTHENTICATOR (OTP) ==================== -->
+        <div class="app-page" id="page-otp">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
             <div>
-              <div style="font-size:0.75rem;color:var(--nv-accent);text-transform:uppercase;font-weight:bold;letter-spacing:1px;">🔔 Incoming Pairing Request</div>
-              <div style="font-size:0.85rem;color:#fff;margin-top:0.15rem;" id="pair-req-desc">A device wants to join your network.</div>
+              <span class="nv-badge" id="otp-timer-badge">Auto-refresh: 30s</span>
             </div>
-            <div style="display:flex;gap:0.5rem;">
-              <button class="nv-btn" style="padding:0.4rem 0.85rem;font-size:0.75rem;" onclick="approvePair()">Approve &amp; Sync</button>
-              <button class="nv-btn nv-btn-ghost" style="padding:0.4rem 0.85rem;font-size:0.75rem;" onclick="rejectPair()">Reject</button>
+            <button class="nv-btn" onclick="toggleAddOtpForm()">
+              <span id="add-otp-btn-text">+ Add Authenticator</span>
+            </button>
+          </div>
+
+          <!-- Add OTP Form Card -->
+          <div class="nv-card" id="add-otp-card" style="display: none; margin-bottom: 1.25rem;">
+            <div style="font-weight: 600; margin-bottom: 1rem; color: #fff;">Add TOTP Service</div>
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label class="nv-label">Service Name</label>
+                <input type="text" class="nv-input" id="otp-service" placeholder="e.g. GitHub, AWS">
+              </div>
+              <div class="form-group">
+                <label class="nv-label">Secret Key (Base32)</label>
+                <input type="text" class="nv-input nv-mono" id="otp-secret" placeholder="JBSWY3DPEHPK3PXP">
+              </div>
+            </div>
+            <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+              <button class="nv-btn nv-btn-ghost" type="button" onclick="toggleAddOtpForm()">Cancel</button>
+              <button class="nv-btn" type="button" onclick="saveOTP()">Save TOTP</button>
+            </div>
+          </div>
+
+          <!-- OTP List -->
+          <div id="otp-list">
+            <div class="nv-empty">No TOTP entries yet.</div>
+          </div>
+        </div>
+
+        <!-- ==================== PAGE 3: NEXGRID SYNC ==================== -->
+        <div class="app-page" id="page-grid">
+          
+          <!-- Relay Connection Card -->
+          <div class="nv-card" style="margin-bottom: 1.25rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+              <div style="font-weight: 600; color: #fff;">NexGrid P2P Mesh</div>
+              <span class="nv-badge" id="grid-badge"><span class="dot"></span>stopped</span>
+            </div>
+            <div class="form-group">
+              <label class="nv-label">Relay Server URL</label>
+              <input type="text" class="nv-input nv-mono" id="grid-relay-url" value="ws://127.0.0.1:46123">
+            </div>
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+              <button class="nv-btn" onclick="startGrid()">Start NexGrid</button>
+              <button class="nv-btn nv-btn-ghost" onclick="stopGrid()">Stop</button>
+              <button class="nv-btn nv-btn-accent" onclick="requestPair()">Generate Pairing Code</button>
+            </div>
+
+            <!-- Active Pairing Code Banner -->
+            <div id="pair-code-box" style="display: none; margin-top: 1rem; padding: 1rem; border-radius: var(--nv-radius-sm); background: var(--nv-primary-light); border: 1px solid var(--nv-border-strong);">
+              <div style="font-size: 0.75rem; color: var(--nv-text-secondary); text-transform: uppercase;">Active Pairing Code (Enter on Mobile):</div>
+              <div style="font-size: 1.8rem; font-weight: 700; color: var(--nv-primary); letter-spacing: 6px; margin: 0.35rem 0;" id="pair-code-val">------</div>
+              <div style="font-size: 0.72rem; color: var(--nv-muted);">Valid for 5 minutes. Enter this 6-digit code on the mobile app to link devices.</div>
+            </div>
+
+            <!-- Incoming Pairing Request Banner -->
+            <div id="pair-approval-box" style="display: none; margin-top: 1rem; padding: 1rem; border-radius: var(--nv-radius-sm); background: var(--nv-accent-light); border: 1px solid var(--nv-border-accent);">
+              <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
+                <div>
+                  <div style="font-weight: 600; color: #fff;">Incoming Pairing Request</div>
+                  <div style="font-size: 0.8rem; color: var(--nv-text-secondary);" id="pair-req-desc">A device wants to link with this vault.</div>
+                </div>
+                <div style="display: flex; gap: 0.5rem;">
+                  <button class="nv-btn nv-btn-sm" onclick="approvePair()">Approve &amp; Sync</button>
+                  <button class="nv-btn nv-btn-ghost nv-btn-sm" onclick="rejectPair()">Reject</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Trusted Network Devices List -->
+          <div class="nv-card" style="margin-bottom: 1.25rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem;">
+              <div style="font-weight: 600; color: #fff;">Trusted Devices</div>
+              <button class="nv-btn nv-btn-ghost nv-btn-sm" onclick="loadTrustedDevicesUI()">Refresh</button>
+            </div>
+            <div id="trusted-devices-list">
+              <div class="nv-empty" style="padding: 1rem;">No paired devices yet.</div>
+            </div>
+          </div>
+
+          <!-- Network Event Log -->
+          <div class="nv-card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.65rem;">
+              <div style="font-size: 0.8rem; font-weight: 600; color: var(--nv-muted);">Network Activity Log</div>
+              <button class="nv-btn nv-btn-ghost nv-btn-sm" onclick="$('grid-log').textContent = '>> Log cleared.'">Clear</button>
+            </div>
+            <div class="nv-terminal" id="grid-log" style="max-height: 180px; overflow-y: auto;">
+>> NexGrid ready.
             </div>
           </div>
         </div>
 
-        <!-- Persistent Trusted Devices List -->
-        <div style="margin-top: 1rem; border-top: 1px solid var(--nv-border); padding-top: 0.75rem;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-            <span class="nv-label" style="margin: 0; color: var(--nv-primary); font-weight: bold;">Trusted Network Devices (Persistent)</span>
-            <button class="nv-btn nv-btn-ghost" style="padding: 0.2rem 0.5rem; font-size: 0.65rem;" onclick="loadTrustedDevicesUI()">Reload</button>
+        <!-- ==================== PAGE 4: SECURITY TOOLS ==================== -->
+        <div class="app-page" id="page-security">
+          <div class="nv-card" style="margin-bottom: 1.25rem;">
+            <div style="font-weight: 600; color: #fff; margin-bottom: 0.5rem;">Cryptographic Security &amp; Integrity</div>
+            <p style="font-size: 0.8rem; color: var(--nv-muted); margin-bottom: 1.25rem;">
+              Verify cryptographic hash chains, tamper detection monitors, and hardware-bound secret state.
+            </p>
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+              <button class="nv-btn" onclick="runIntegrityCheck()">Run Integrity Check</button>
+              <button class="nv-btn nv-btn-ghost" onclick="runTamperMonitor()">Start Tamper Monitor</button>
+              <button class="nv-btn nv-btn-danger" onclick="triggerNuke()">Emergency Nuke</button>
+            </div>
           </div>
-          <div id="trusted-devices-list" style="display: flex; flex-direction: column; gap: 0.4rem;">
-            <div class="nv-empty" style="padding: 0.5rem; font-size: 0.75rem;">No paired devices yet. Mobile devices will appear here once paired.</div>
-          </div>
-        </div>
 
-        <div class="nv-terminal nv-dim" id="grid-log" style="margin-top:0.75rem;">
->> Awaiting NexGrid start...
-        </div>
-      </section>
-
-      <!-- Vault section -->
-      <section class="nv-section nv-panel nv-card" id="vault-section" style="display:none">
-        <div class="nv-panel-header">
-          <span class="nv-panel-title">vault credentials</span>
-          <span class="nv-badge"><span class="dot"></span>unlocked</span>
-        </div>
-        <div class="nv-form-row">
-          <div class="nv-input-group">
-            <label class="nv-label">Service / Website</label>
-            <input type="text" class="nv-input" id="service" placeholder="github.com">
-          </div>
-          <div class="nv-input-group">
-            <label class="nv-label">Username / Email / Phone</label>
-            <input type="text" class="nv-input" id="vault-username" placeholder="user@example.com">
-          </div>
-        </div>
-        <div class="nv-form-row" style="margin-top: 0.5rem;">
-          <div class="nv-input-group" style="grid-column: 1 / -1;">
-            <label class="nv-label">Credential / Password</label>
-            <input type="text" class="nv-input" id="vault-password" placeholder="your password">
-          </div>
-        </div>
-        <div class="nv-btn-row">
-          <button class="nv-btn" onclick="savePassword()">Save Credential</button>
-          <button class="nv-btn nv-btn-cyan" onclick="syncAndRefreshVault()">Sync &amp; Refresh</button>
-          <button class="nv-btn nv-btn-ghost" onclick="listPasswords()">List All</button>
-        </div>
-        <div class="nv-card nv-scroll" id="vault-list">
-          <div class="nv-empty">No credentials stored yet.</div>
-        </div>
-      </section>
-
-      <!-- OTP section -->
-      <section class="nv-section nv-panel nv-card" id="otp-section" style="display:none">
-        <div class="nv-panel-header">
-          <span class="nv-panel-title">otp / totp</span>
-        </div>
-        <div class="nv-form-row">
-          <div class="nv-input-group">
-            <label class="nv-label">Service</label>
-            <input type="text" class="nv-input" id="otp-service" placeholder="github.com">
-          </div>
-          <div class="nv-input-group">
-            <label class="nv-label">Secret (base32)</label>
-            <input type="text" class="nv-input" id="otp-secret" placeholder="JBSWY3DPEHPK3PXP">
-          </div>
-        </div>
-        <div class="nv-btn-row">
-          <button class="nv-btn" onclick="saveOTP()">Add TOTP</button>
-          <button class="nv-btn nv-btn-cyan" onclick="syncAndRefreshVault()">Sync &amp; Refresh</button>
-          <button class="nv-btn nv-btn-ghost" onclick="listOTPs()">List All</button>
-        </div>
-        <div class="nv-card nv-scroll" id="otp-list">
-          <div class="nv-empty">No TOTP entries yet.</div>
-        </div>
-      </section>
-
-      <!-- Security section -->
-      <section class="nv-section nv-panel nv-card nv-grid nv-compact" id="security-section" style="display:none">
-        <div class="nv-panel-header">
-          <span class="nv-panel-title">security</span>
-        </div>
-        <div class="nv-btn-row">
-          <button class="nv-btn nv-btn-ghost" onclick="runIntegrityCheck()">Integrity Check</button>
-          <button class="nv-btn nv-btn-ghost" onclick="runTamperMonitor()">Tamper Monitor</button>
-          <button class="nv-btn nv-btn-ghost" onclick="triggerNuke()">Emergency Nuke</button>
-        </div>
-        <div class="nv-terminal nv-dim" id="security-log">
+          <div class="nv-card">
+            <div style="font-size: 0.8rem; font-weight: 600; color: var(--nv-muted); margin-bottom: 0.65rem;">Security Diagnostics Log</div>
+            <div class="nv-terminal" id="security-log" style="max-height: 240px; overflow-y: auto;">
 >> Security tools ready.
+            </div>
+          </div>
         </div>
-      </section>
+
+        <!-- ==================== PAGE 5: SETTINGS ==================== -->
+        <div class="app-page" id="page-settings">
+          
+          <!-- Identity & Token Card -->
+          <div class="nv-card" style="margin-bottom: 1.25rem;">
+            <div style="font-weight: 600; color: #fff; margin-bottom: 0.25rem;">Vault Identity &amp; Bootstrap Token</div>
+            <p style="font-size: 0.8rem; color: var(--nv-muted); margin-bottom: 1rem;">
+              Your identity token is used to pair mobile and extension apps to this vault without exposing master secrets.
+            </p>
+            <div class="form-group">
+              <label class="nv-label">Active Bootstrap Token</label>
+              <textarea class="nv-textarea nv-mono" id="settings-token-display" rows="4" readonly></textarea>
+            </div>
+            <div style="display: flex; gap: 0.5rem;">
+              <button class="nv-btn" onclick="copyTokenFromSettings()">Copy Token JSON</button>
+            </div>
+          </div>
+
+          <!-- Software Updates Card -->
+          <div class="nv-card" style="margin-bottom: 1.25rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+              <div style="font-weight: 600; color: #fff;">Application Updates</div>
+              <span class="nv-badge">Current: v0.1.7</span>
+            </div>
+            <p style="font-size: 0.8rem; color: var(--nv-muted); margin-bottom: 1rem;">
+              Check the official GitHub repository releases for signed AppImages and updates.
+            </p>
+            <button class="nv-btn nv-btn-ghost" onclick="checkForUpdates(true)">Check for Updates Now</button>
+          </div>
+
+          <!-- Session & Danger Zone -->
+          <div class="nv-card" style="border-color: rgba(239, 68, 68, 0.25);">
+            <div style="font-weight: 600; color: var(--nv-danger); margin-bottom: 0.5rem;">Session Control</div>
+            <p style="font-size: 0.8rem; color: var(--nv-muted); margin-bottom: 1rem;">
+              Lock your vault immediately to encrypt secrets in memory.
+            </p>
+            <button class="nv-btn nv-btn-danger" onclick="lockVault()">Lock Vault</button>
+          </div>
+
+        </div>
+
+      </div>
     </main>
   </div>
 
-  <script src="cyber/binary-shield.js"></script>
   <script>
-    // window.nexVault is exposed via contextBridge in preload.js
-    let currentTab = 'new-user';
+    let currentAuthTab = 'unlock';
+    let activePage = 'vault';
+    let cachedVaultEntries = [];
+    let cachedOTPEntries = [];
+    let otpTimer = null;
+    let latestUpdateInfo = null;
+    let currentPendingPairPeerId = null;
 
     function $(id) { return document.getElementById(id); }
-    function log(msg, el = $('security-log')) { 
-      el.textContent += '\n>> ' + msg; 
-      el.scrollTop = el.scrollHeight; 
+
+    function log(msg, el = $('security-log')) {
+      if (!el) return;
+      el.textContent += '\n>> ' + msg;
+      el.scrollTop = el.scrollHeight;
     }
+
     function gridLog(msg) { log(msg, $('grid-log')); }
-    function setStatus(txt) { $('status-text').textContent = txt; }
+    function setStatus(txt) {
+      if ($('status-text')) $('status-text').textContent = txt;
+      if ($('auth-status')) $('auth-status').textContent = txt;
+    }
 
-    // Tab switching
-    document.querySelectorAll('.nv-tab').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('.nv-tab').forEach(b => b.classList.remove('active'));
-        document.querySelectorAll('.nv-tab-content').forEach(c => c.classList.remove('active'));
-        btn.classList.add('active');
-        $(`tab-${btn.dataset.tab}`).classList.add('active');
+    // Page Navigation
+    const PAGE_METADATA = {
+      vault: { title: 'Vault Credentials', subtitle: 'Manage stored logins and credentials' },
+      otp: { title: 'Authenticator', subtitle: 'Two-factor TOTP codes and secrets' },
+      grid: { title: 'NexGrid Sync', subtitle: 'Peer-to-peer sync and trusted devices' },
+      security: { title: 'Security & Integrity', subtitle: 'Cryptographic checks and tamper diagnostics' },
+      settings: { title: 'Settings', subtitle: 'Vault identity, updates, and configuration' }
+    };
+
+    function navigateTo(pageId) {
+      activePage = pageId;
+      document.querySelectorAll('.app-page').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+
+      const targetPage = $(`page-${pageId}`);
+      if (targetPage) targetPage.classList.add('active');
+
+      const targetNav = document.querySelector(`.nav-item[data-page="${pageId}"]`);
+      if (targetNav) targetNav.classList.add('active');
+
+      const meta = PAGE_METADATA[pageId] || { title: pageId, subtitle: '' };
+      $('page-header-title').textContent = meta.title;
+      $('page-header-subtitle').textContent = meta.subtitle;
+
+      if (pageId === 'vault') listPasswords();
+      if (pageId === 'otp') listOTPs();
+      if (pageId === 'grid') loadTrustedDevicesUI();
+    }
+
+    // Auth Tab switching
+    function switchAuthTab(tab) {
+      currentAuthTab = tab;
+      document.querySelectorAll('#auth-tabs .nv-tab').forEach(b => {
+        b.classList.toggle('active', b.dataset.tab === tab);
       });
-    });
+      document.querySelectorAll('#auth-container .nv-tab-content').forEach(c => {
+        c.classList.remove('active');
+      });
+      $(`tab-${tab}`).classList.add('active');
+    }
 
+    function toggleTokenView() {
+      const container = $('token-container');
+      const btn = $('toggle-token-btn');
+      if (!container) return;
+      const isHidden = container.style.display === 'none';
+      container.style.display = isHidden ? 'block' : 'none';
+      if (btn) btn.textContent = isHidden ? 'Hide Token' : 'Token JSON';
+    }
+
+    // Lock Vault
+    function lockVault() {
+      $('main-workspace').style.display = 'none';
+      $('auth-container').style.display = 'flex';
+      $('existing-password').value = '';
+      setStatus('Vault locked');
+    }
+
+    // Authentication Handlers
     async function handleNewUser() {
       const u = $('new-username').value.trim();
       const p = $('new-password').value;
@@ -324,26 +747,14 @@
       try {
         const r = await window.nexVault.initializeNewUser(u, p);
         if (!r.success) throw new Error(r.error);
-        setStatus('Bootstrap token generated: ' + r.tokenId);
+        setStatus('Identity created: ' + r.tokenId);
         $('existing-token').value = JSON.stringify(r.bootstrapToken, null, 2);
-        gridLog('New identity created: ' + r.tokenId);
-        switchTab('existing-user');
+        $('settings-token-display').value = JSON.stringify(r.bootstrapToken, null, 2);
+        $('sidebar-user').textContent = u;
+        switchAuthTab('unlock');
+        $('existing-password').value = p;
+        await handleExistingUser();
       } catch (e) { setStatus('Error: ' + e.message); }
-    }
-
-    function copyToken() {
-      const t = $('existing-token').value;
-      if (!t) return;
-      navigator.clipboard.writeText(t);
-      setStatus('Token copied to clipboard');
-    }
-
-    function switchTab(tab) {
-      document.querySelectorAll('.nv-tab').forEach(b => { 
-        b.classList.toggle('active', b.dataset.tab === tab); 
-      });
-      document.querySelectorAll('.nv-tab-content').forEach(c => c.classList.remove('active'));
-      $(`tab-${tab}`).classList.add('active');
     }
 
     async function handleExistingUser() {
@@ -356,93 +767,51 @@
         const r = await window.nexVault.initializeExistingUser(t.tokenId, t.publicKey, t.signature, p, t.expiresAt);
         if (!r.success) throw new Error(r.error);
         setStatus('Unlocked: ' + r.tokenId);
-        gridLog('Identity restored: ' + r.tokenId);
-        showPostAuth();
+        $('settings-token-display').value = JSON.stringify(t, null, 2);
+        $('sidebar-user').textContent = r.tokenId ? (r.tokenId.slice(0, 12) + '...') : 'Vault';
+        showWorkspace();
       } catch (e) { setStatus('Error: ' + e.message); }
     }
 
-    function toggleTokenView() {
-      const container = $('token-container');
-      const btn = $('toggle-token-btn');
-      if (!container) return;
-      const isHidden = container.style.display === 'none';
-      container.style.display = isHidden ? 'block' : 'none';
-      if (btn) btn.textContent = isHidden ? 'Hide Token JSON' : 'Show Token JSON';
-    }
-
-    function showPostAuth() {
-      $('auth-section').style.display = 'none';
-      $('grid-section').style.display = 'block';
-      $('vault-section').style.display = 'block';
-      $('otp-section').style.display = 'block';
-      $('security-section').style.display = 'block';
+    function showWorkspace() {
+      $('auth-container').style.display = 'none';
+      $('main-workspace').style.display = 'flex';
+      navigateTo('vault');
       listPasswords();
       listOTPs();
+      loadTrustedDevicesUI();
     }
 
-    let currentPendingPairPeerId = null;
-
-    async function startGrid() {
-      gridLog('Starting NexGrid...');
-      try {
-        const relayUrl = $('grid-relay-url').value.trim();
-        const r = await window.nexVault.startNexGrid(relayUrl);
-        gridLog(r.success ? 'NexGrid started — waiting for peers...' : 'Error: ' + r.error);
-        if (r.success) {
-          $('grid-badge').innerHTML = '<span class="dot"></span>running';
-          if (r.peers && r.peers.length) {
-            gridLog('Discovered ' + r.peers.length + ' peer(s): ' + r.peers.map(p => p.deviceName || p.deviceId).join(', '));
-          }
-        }
-      } catch (e) { gridLog('Exception: ' + e.message); }
+    function copyToken() {
+      const t = $('existing-token').value;
+      if (!t) return;
+      navigator.clipboard.writeText(t);
+      setStatus('Token copied');
     }
 
-    async function stopGrid() {
-      gridLog('Stopping...');
-      try {
-        await window.nexVault.stopNexGrid();
-        gridLog('Stopped.');
-        $('grid-badge').innerHTML = '<span class="dot"></span>stopped';
-        $('pair-code-box').style.display = 'none';
-        $('pair-approval-box').style.display = 'none';
-      } catch (e) { gridLog('Error: ' + e.message); }
+    function copyTokenFromSettings() {
+      const t = $('settings-token-display').value;
+      if (!t) return;
+      navigator.clipboard.writeText(t);
+      setStatus('Token copied to clipboard');
     }
 
-    async function requestPair() {
-      gridLog('Generating pairing code...');
-      try {
-        const r = await window.nexVault.requestPairingCode();
-        if (r.success) {
-          gridLog('Pairing code generated: ' + r.code + ' (valid for 5 minutes)');
-          $('pair-code-val').innerText = r.code;
-          $('pair-code-box').style.display = 'block';
-        } else gridLog('Error: ' + r.error);
-      } catch (e) { gridLog('Error: ' + e.message); }
+    // Vault Credentials Management
+    function toggleAddCredentialForm() {
+      const card = $('add-credential-card');
+      const isHidden = card.style.display === 'none';
+      card.style.display = isHidden ? 'block' : 'none';
+      $('add-cred-btn-text').textContent = isHidden ? '✕ Close' : '+ Add Credential';
+      if (isHidden) $('service').focus();
     }
 
-    async function approvePair() {
-      if (!currentPendingPairPeerId) return;
-      gridLog('Approving pair request from ' + currentPendingPairPeerId + '...');
-      try {
-        const r = await window.nexVault.approvePairRequest(currentPendingPairPeerId);
-        if (r.success) {
-          gridLog('✅ Approved! Synchronizing vault to peer...');
-          $('pair-approval-box').style.display = 'none';
-          currentPendingPairPeerId = null;
-        } else {
-          gridLog('Error: ' + r.error);
-        }
-      } catch (e) { gridLog('Error: ' + e.message); }
-    }
-
-    async function rejectPair() {
-      if (!currentPendingPairPeerId) return;
-      gridLog('Declining pair request from ' + currentPendingPairPeerId);
-      try {
-        await window.nexVault.rejectPairRequest(currentPendingPairPeerId);
-        $('pair-approval-box').style.display = 'none';
-        currentPendingPairPeerId = null;
-      } catch (e) { gridLog('Error: ' + e.message); }
+    function generateRandomPassword() {
+      const chars = 'abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%^&*-_+=';
+      let res = '';
+      const array = new Uint32Array(20);
+      window.crypto.getRandomValues(array);
+      for (let i = 0; i < 20; i++) res += chars[array[i] % chars.length];
+      $('vault-password').value = res;
     }
 
     async function savePassword() {
@@ -453,59 +822,110 @@
       try {
         const r = await window.nexVault.addPassword(s, p, u);
         if (r.success) {
-          setStatus('Saved');
+          setStatus('Credential saved');
           $('service').value = '';
           $('vault-username').value = '';
           $('vault-password').value = '';
+          toggleAddCredentialForm();
           listPasswords();
         } else throw new Error(r.error);
       } catch (e) { setStatus('Error: ' + e.message); }
     }
 
     async function listPasswords() {
-      try { const r = await window.nexVault.listPasswords(); renderVaultList(r.entries || []); } catch (e) { setStatus('Error: ' + e.message); }
+      try {
+        const r = await window.nexVault.listPasswords();
+        cachedVaultEntries = r.entries || [];
+        filterVaultEntries();
+      } catch (e) { setStatus('Error: ' + e.message); }
+    }
+
+    function filterVaultEntries() {
+      const q = ($('vault-search-input')?.value || '').toLowerCase().trim();
+      const filtered = cachedVaultEntries.filter(e => {
+        if (!q) return true;
+        return (e.service && e.service.toLowerCase().includes(q)) ||
+               (e.username && e.username.toLowerCase().includes(q));
+      });
+      renderVaultList(filtered);
     }
 
     function renderVaultList(entries) {
       const el = $('vault-list');
-      if (!entries.length) { el.innerHTML = '<div class="nv-empty">No credentials stored yet.</div>'; return; }
+      if (!entries.length) {
+        el.innerHTML = '<div class="nv-empty">No credentials found.</div>';
+        return;
+      }
       el.innerHTML = entries.map(e => `
-        <div class="nv-vault-item">
-          <div class="nv-vault-info">
-            <span class="nv-vault-service">${escapeHtml(e.service)}${e.username ? ' <span style="color:var(--nv-accent);font-size:0.75rem;">(' + escapeHtml(e.username) + ')</span>' : ''}</span>
-            <span class="nv-vault-meta">Created: ${new Date(e.createdAt).toLocaleString()}</span>
+        <div class="vault-item">
+          <div class="vault-item-info">
+            <div class="vault-service">${escapeHtml(e.service)}</div>
+            <div class="vault-meta">
+              ${e.username ? `<span>👤 ${escapeHtml(e.username)}</span>` : ''}
+              <span>Added: ${new Date(e.createdAt).toLocaleDateString()}</span>
+            </div>
           </div>
-          <div class="nv-vault-actions">
-            <button class="nv-vault-btn" onclick="copyPassword('${escapeHtml(e.service)}')">Copy Pass</button>
-            ${e.username ? `<button class="nv-vault-btn" onclick="copyUsername('${escapeHtml(e.username)}')">Copy User</button>` : ''}
-            <button class="nv-vault-btn delete" onclick="deletePassword('${escapeHtml(e.service)}')">Delete</button>
+          <div class="vault-actions">
+            <button class="nv-btn nv-btn-ghost nv-btn-sm" onclick="copyPassword('${escapeHtml(e.service)}')">Copy Pass</button>
+            ${e.username ? `<button class="nv-btn nv-btn-ghost nv-btn-sm" onclick="copyUsername('${escapeHtml(e.username)}')">Copy User</button>` : ''}
+            <button class="nv-btn nv-btn-ghost nv-btn-sm" style="color: var(--nv-danger);" onclick="deletePassword('${escapeHtml(e.service)}')">Delete</button>
           </div>
         </div>
       `).join('');
     }
 
     async function copyUsername(user) {
-      try { await navigator.clipboard.writeText(user); setStatus('Username copied: ' + user); } catch (e) { setStatus('Error: ' + e.message); }
+      try {
+        await navigator.clipboard.writeText(user);
+        setStatus('Username copied');
+      } catch (e) { setStatus('Error: ' + e.message); }
     }
 
     async function copyPassword(service) {
-      try { const r = await window.nexVault.getPassword(service); if (r.success) { await navigator.clipboard.writeText(r.password); setStatus('Copied!'); } else throw new Error(r.error); } catch (e) { setStatus('Error: ' + e.message); }
+      try {
+        const r = await window.nexVault.getPassword(service);
+        if (r.success) {
+          await navigator.clipboard.writeText(r.password);
+          setStatus('Password copied for ' + service);
+        } else throw new Error(r.error);
+      } catch (e) { setStatus('Error: ' + e.message); }
     }
 
     async function deletePassword(service) {
       if (!confirm('Delete credential for ' + service + '?')) return;
-      try { const r = await window.nexVault.deletePassword(service); if (r.success) { setStatus('Deleted'); listPasswords(); } else throw new Error(r.error); } catch (e) { setStatus('Error: ' + e.message); }
+      try {
+        const r = await window.nexVault.deletePassword(service);
+        if (r.success) {
+          setStatus('Deleted ' + service);
+          listPasswords();
+        } else throw new Error(r.error);
+      } catch (e) { setStatus('Error: ' + e.message); }
+    }
+
+    // Authenticator (TOTP) Management
+    function toggleAddOtpForm() {
+      const card = $('add-otp-card');
+      const isHidden = card.style.display === 'none';
+      card.style.display = isHidden ? 'block' : 'none';
+      $('add-otp-btn-text').textContent = isHidden ? '✕ Close' : '+ Add Authenticator';
+      if (isHidden) $('otp-service').focus();
     }
 
     async function saveOTP() {
       const s = $('otp-service').value.trim();
       const sec = $('otp-secret').value.trim().toUpperCase().replace(/\s/g, '');
-      if (!s || !sec) return setStatus('Enter service and secret');
-      try { const r = await window.nexVault.addOTP(s, sec); if (r.success) { setStatus('TOTP added'); $('otp-service').value = ''; $('otp-secret').value = ''; listOTPs(); } else throw new Error(r.error); } catch (e) { setStatus('Error: ' + e.message); }
+      if (!s || !sec) return setStatus('Enter service and secret key');
+      try {
+        const r = await window.nexVault.addOTP(s, sec);
+        if (r.success) {
+          setStatus('Authenticator added');
+          $('otp-service').value = '';
+          $('otp-secret').value = '';
+          toggleAddOtpForm();
+          listOTPs();
+        } else throw new Error(r.error);
+      } catch (e) { setStatus('Error: ' + e.message); }
     }
-
-    let cachedOTPEntries = [];
-    let otpTimer = null;
 
     async function listOTPs() {
       try {
@@ -515,9 +935,7 @@
         if (!otpTimer) {
           otpTimer = setInterval(updateOTPCountdowns, 1000);
         }
-      } catch (e) {
-        setStatus('Error: ' + e.message);
-      }
+      } catch (e) { setStatus('Error: ' + e.message); }
     }
 
     function renderOTPList() {
@@ -526,17 +944,16 @@
         el.innerHTML = '<div class="nv-empty">No TOTP entries yet.</div>';
         return;
       }
-      const now = Date.now();
-      const remaining = 30 - (Math.floor(now / 1000) % 30);
+      const remaining = 30 - (Math.floor(Date.now() / 1000) % 30);
       el.innerHTML = cachedOTPEntries.map(e => `
-        <div class="nv-vault-item">
-          <div class="nv-vault-info">
-            <span class="nv-vault-service">${escapeHtml(e.service)}</span>
-            <span class="nv-vault-meta otp-countdown">Code refreshes in ${remaining}s</span>
+        <div class="vault-item">
+          <div class="vault-item-info">
+            <div class="vault-service">${escapeHtml(e.service)}</div>
+            <div class="vault-meta otp-countdown">Refreshes in ${remaining}s</div>
           </div>
-          <div class="nv-vault-actions">
-            <button class="nv-vault-btn" onclick="copyOTP('${escapeHtml(e.service)}')">Copy Code</button>
-            <button class="nv-vault-btn delete" onclick="deleteOTP('${escapeHtml(e.service)}')">Delete</button>
+          <div class="vault-actions">
+            <button class="nv-btn nv-btn-accent nv-btn-sm" onclick="copyOTP('${escapeHtml(e.service)}')">Copy 6-Digit Code</button>
+            <button class="nv-btn nv-btn-ghost nv-btn-sm" style="color: var(--nv-danger);" onclick="deleteOTP('${escapeHtml(e.service)}')">Delete</button>
           </div>
         </div>
       `).join('');
@@ -544,23 +961,204 @@
 
     function updateOTPCountdowns() {
       const remaining = 30 - (Math.floor(Date.now() / 1000) % 30);
+      if ($('otp-timer-badge')) $('otp-timer-badge').textContent = `Auto-refresh: ${remaining}s`;
       document.querySelectorAll('.otp-countdown').forEach(el => {
-        el.textContent = `Code refreshes in ${remaining}s`;
+        el.textContent = `Refreshes in ${remaining}s`;
       });
     }
 
     async function copyOTP(service) {
-      try { const r = await window.nexVault.getOTP(service); if (r.success) { await navigator.clipboard.writeText(r.code); setStatus('OTP copied: ' + r.code); } else throw new Error(r.error); } catch (e) { setStatus('Error: ' + e.message); }
+      try {
+        const r = await window.nexVault.getOTP(service);
+        if (r.success) {
+          await navigator.clipboard.writeText(r.code);
+          setStatus('Copied OTP: ' + r.code);
+        } else throw new Error(r.error);
+      } catch (e) { setStatus('Error: ' + e.message); }
     }
 
     async function deleteOTP(service) {
       if (!confirm('Delete TOTP for ' + service + '?')) return;
-      try { const r = await window.nexVault.deleteOTP(service); if (r.success) { setStatus('Deleted'); listOTPs(); } else throw new Error(r.error); } catch (e) { setStatus('Error: ' + e.message); }
+      try {
+        const r = await window.nexVault.deleteOTP(service);
+        if (r.success) {
+          setStatus('Deleted TOTP ' + service);
+          listOTPs();
+        } else throw new Error(r.error);
+      } catch (e) { setStatus('Error: ' + e.message); }
     }
 
-    async function runIntegrityCheck() { log('Running integrity check...'); try { const r = await window.nexVault.runIntegrityCheck(); log(r.success ? 'OK: ' + JSON.stringify(r.result) : 'Error: ' + r.error); } catch (e) { log('Exception: ' + e.message); } }
-    async function runTamperMonitor() { log('Starting tamper monitor...'); try { const r = await window.nexVault.startTamperMonitor(); log(r.success ? 'Monitor active' : 'Error: ' + r.error); } catch (e) { log('Exception: ' + e.message); } }
-    async function triggerNuke() { if (!confirm('EMERGENCY: This wipes all local keys. Proceed?')) return; log('NUKING...'); try { const r = await window.nexVault.triggerEmergencyNuke(); log(r.success ? 'Wiped.' : 'Error: ' + r.error); } catch (e) { log('Exception: ' + e.message); } }
+    // NexGrid & P2P Synchronization
+    async function startGrid() {
+      gridLog('Starting NexGrid...');
+      try {
+        const relayUrl = $('grid-relay-url').value.trim();
+        const r = await window.nexVault.startNexGrid(relayUrl);
+        if (r.success) {
+          $('grid-badge').innerHTML = '<span class="dot"></span>connected';
+          $('grid-status-pill').textContent = 'Connected';
+          gridLog('NexGrid connected to ' + relayUrl);
+          if (r.peers && r.peers.length) {
+            gridLog('Active peers: ' + r.peers.map(p => p.deviceName || p.deviceId).join(', '));
+          }
+        } else {
+          gridLog('Error: ' + r.error);
+        }
+      } catch (e) { gridLog('Exception: ' + e.message); }
+    }
+
+    async function stopGrid() {
+      gridLog('Stopping NexGrid...');
+      try {
+        await window.nexVault.stopNexGrid();
+        $('grid-badge').innerHTML = '<span class="dot"></span>stopped';
+        $('grid-status-pill').textContent = 'Local';
+        $('pair-code-box').style.display = 'none';
+        $('pair-approval-box').style.display = 'none';
+        gridLog('NexGrid stopped.');
+      } catch (e) { gridLog('Error: ' + e.message); }
+    }
+
+    async function requestPair() {
+      gridLog('Generating pairing code...');
+      try {
+        const r = await window.nexVault.requestPairingCode();
+        if (r.success) {
+          gridLog('Pairing code generated: ' + r.code);
+          $('pair-code-val').innerText = r.code;
+          $('pair-code-box').style.display = 'block';
+        } else gridLog('Error: ' + r.error);
+      } catch (e) { gridLog('Error: ' + e.message); }
+    }
+
+    async function approvePair() {
+      if (!currentPendingPairPeerId) return;
+      gridLog('Approving pairing with ' + currentPendingPairPeerId + '...');
+      try {
+        const r = await window.nexVault.approvePairRequest(currentPendingPairPeerId);
+        if (r.success) {
+          gridLog('Approved! Synced vault.');
+          $('pair-approval-box').style.display = 'none';
+          currentPendingPairPeerId = null;
+        } else gridLog('Error: ' + r.error);
+      } catch (e) { gridLog('Error: ' + e.message); }
+    }
+
+    async function rejectPair() {
+      if (!currentPendingPairPeerId) return;
+      gridLog('Rejecting pair request');
+      try {
+        await window.nexVault.rejectPairRequest(currentPendingPairPeerId);
+        $('pair-approval-box').style.display = 'none';
+        currentPendingPairPeerId = null;
+      } catch (e) { gridLog('Error: ' + e.message); }
+    }
+
+    async function syncAndRefreshVault() {
+      setStatus('Syncing with peers...');
+      try {
+        await window.nexVault.syncVaultToPeers();
+        await listPasswords();
+        await listOTPs();
+        await loadTrustedDevicesUI();
+        const timeStr = new Date().toLocaleTimeString();
+        setStatus(`Refreshed at ${timeStr}`);
+      } catch (err) {
+        setStatus('Sync notice: ' + err.message);
+      }
+    }
+
+    async function loadTrustedDevicesUI() {
+      const container = $('trusted-devices-list');
+      if (!container || !window.nexVault?.getTrustedDevices) return;
+      try {
+        const res = await window.nexVault.getTrustedDevices();
+        const devices = res.devices || [];
+        if (!devices.length) {
+          container.innerHTML = '<div class="nv-empty" style="padding: 1rem;">No paired devices yet. Mobile devices will appear here once linked.</div>';
+          return;
+        }
+        container.innerHTML = devices.map(d => `
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.65rem 0.85rem; background: var(--nv-bg-2); border: 1px solid var(--nv-border); border-radius: var(--nv-radius-sm); margin-bottom: 0.5rem;">
+            <div>
+              <div style="font-weight: 600; color: #fff;">${escapeHtml(d.deviceName || 'Device')}</div>
+              <div style="font-size: 0.72rem; color: var(--nv-muted); font-family: var(--nv-font-mono);">${escapeHtml(d.deviceId)}</div>
+            </div>
+            <button class="nv-btn nv-btn-ghost nv-btn-sm" style="color: var(--nv-danger);" onclick="removeTrustedDeviceUI('${escapeHtml(d.deviceId)}')">Revoke</button>
+          </div>
+        `).join('');
+      } catch (err) {
+        console.error('Failed to load trusted devices:', err);
+      }
+    }
+
+    async function removeTrustedDeviceUI(deviceId) {
+      if (!confirm('Revoke trust for this device?')) return;
+      try {
+        await window.nexVault.removeTrustedDevice(deviceId);
+        loadTrustedDevicesUI();
+        gridLog('Revoked device ' + deviceId);
+      } catch (err) { gridLog('Error: ' + err.message); }
+    }
+
+    // Security Diagnostics
+    async function runIntegrityCheck() {
+      log('Running integrity check...');
+      try {
+        const r = await window.nexVault.runIntegrityCheck();
+        log(r.success ? 'Integrity verified: OK' : 'Error: ' + r.error);
+      } catch (e) { log('Exception: ' + e.message); }
+    }
+
+    async function runTamperMonitor() {
+      log('Starting tamper monitor...');
+      try {
+        const r = await window.nexVault.startTamperMonitor();
+        log(r.success ? 'Tamper monitor active.' : 'Error: ' + r.error);
+      } catch (e) { log('Exception: ' + e.message); }
+    }
+
+    async function triggerNuke() {
+      if (!confirm('EMERGENCY: This will wipe all keys from local storage. Proceed?')) return;
+      log('Nuking local keystore...');
+      try {
+        const r = await window.nexVault.triggerEmergencyNuke();
+        log(r.success ? 'Keystore wiped.' : 'Error: ' + r.error);
+        lockVault();
+      } catch (e) { log('Exception: ' + e.message); }
+    }
+
+    // App Updates Check
+    async function checkForUpdates(manual = false) {
+      if (manual) setStatus('Checking GitHub for updates...');
+      try {
+        const info = await window.nexVault.checkForUpdates();
+        if (info && info.hasUpdate) {
+          latestUpdateInfo = info;
+          $('update-version').textContent = info.latestVersion;
+          $('update-desc').textContent = `${info.releaseName || 'v' + info.latestVersion} is available on GitHub.`;
+          $('update-action-btn').style.display = 'inline-flex';
+          $('update-banner').style.display = 'flex';
+          setStatus(`Update available: ${info.latestVersion}`);
+        } else if (info && info.success) {
+          if (manual) setStatus(`Up to date: v${info.currentVersion}`);
+        }
+      } catch (err) {
+        if (manual) setStatus('Update check notice: ' + err.message);
+      }
+    }
+
+    function openUpdateLink() {
+      if (latestUpdateInfo?.downloadUrl) {
+        window.nexVault.openExternalUrl(latestUpdateInfo.downloadUrl);
+      } else if (latestUpdateInfo?.releaseUrl) {
+        window.nexVault.openExternalUrl(latestUpdateInfo.releaseUrl);
+      }
+    }
+
+    function dismissUpdate() {
+      $('update-banner').style.display = 'none';
+    }
 
     function escapeHtml(s) {
       if (!s) return '';
@@ -576,133 +1174,25 @@
       });
     }
 
-    let latestUpdateInfo = null;
-
-    async function checkForUpdates(manual = false) {
-      if (manual) setStatus('Checking GitHub for updates...');
-      try {
-        const info = await window.nexVault.checkForUpdates();
-        if (info && info.hasUpdate) {
-          latestUpdateInfo = info;
-          $('update-version').textContent = info.latestVersion;
-          $('update-desc').textContent = `${info.releaseName || 'Version ' + info.latestVersion} is available. Click below to download the latest Linux AppImage.`;
-          $('update-action-btn').style.display = 'inline-block';
-          $('update-banner').style.display = 'flex';
-          setStatus(`Update available: ${info.latestVersion}`);
-        } else if (info && info.success) {
-          if (manual) {
-            $('update-version').textContent = `v${info.currentVersion} (Latest)`;
-            $('update-desc').textContent = `✓ NexVault Desktop is up to date! Running version v${info.currentVersion}. (GitHub latest: ${info.latestVersion}).`;
-            $('update-action-btn').style.display = 'none';
-            $('update-banner').style.display = 'flex';
-            setStatus(`Up to date: v${info.currentVersion}`);
-          } else {
-            $('update-banner').style.display = 'none';
-          }
-        } else {
-          if (manual) {
-            $('update-version').textContent = `Notice`;
-            $('update-desc').textContent = info?.error || info?.message || 'Update check failed.';
-            $('update-action-btn').style.display = 'none';
-            $('update-banner').style.display = 'flex';
-            setStatus(`Notice: ${info?.message || 'Update check failed'}`);
-          }
-        }
-      } catch (err) {
-        if (manual) {
-          $('update-version').textContent = 'Check Failed';
-          $('update-desc').textContent = err.message;
-          $('update-action-btn').style.display = 'none';
-          $('update-banner').style.display = 'flex';
-          setStatus('Update check error: ' + err.message);
-        }
-      }
-    }
-
-    function openUpdateLink() {
-      if (latestUpdateInfo && latestUpdateInfo.downloadUrl) {
-        window.nexVault.openExternalUrl(latestUpdateInfo.downloadUrl);
-        setStatus('Opening download link...');
-      } else if (latestUpdateInfo && latestUpdateInfo.releaseUrl) {
-        window.nexVault.openExternalUrl(latestUpdateInfo.releaseUrl);
-      }
-    }
-
-    function dismissUpdate() {
-      $('update-banner').style.display = 'none';
-    }
-
-    async function syncAndRefreshVault() {
-      setStatus('Syncing vault with peers...');
-      try {
-        await window.nexVault.syncVaultToPeers();
-        await listPasswords();
-        await listOTPs();
-        await loadTrustedDevicesUI();
-        const timeStr = new Date().toLocaleTimeString();
-        setStatus(`Vault synchronized & refreshed at ${timeStr}`);
-      } catch (err) {
-        setStatus('Sync error: ' + err.message);
-      }
-    }
-
-    async function loadTrustedDevicesUI() {
-      const container = $('trusted-devices-list');
-      if (!container || !window.nexVault || !window.nexVault.getTrustedDevices) return;
-      try {
-        const res = await window.nexVault.getTrustedDevices();
-        const devices = res.devices || [];
-        if (!devices.length) {
-          container.innerHTML = '<div class="nv-empty" style="padding: 0.5rem; font-size: 0.75rem;">No paired devices yet. Mobile devices will appear here once paired.</div>';
-          return;
-        }
-        container.innerHTML = devices.map(d => `
-          <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.4rem 0.6rem; background: rgba(255,255,255,0.03); border: 1px solid var(--nv-border); border-radius: 6px; font-size: 0.75rem;">
-            <div>
-              <div style="font-weight: bold; color: #fff;">${escapeHtml(d.deviceName || 'Device')} <span style="font-family: var(--nv-font-mono); font-size: 0.65rem; color: var(--nv-accent);">${escapeHtml(d.deviceId)}</span></div>
-              <div style="font-size: 0.65rem; color: var(--nv-muted);">Paired: ${new Date(d.pairedAt || Date.now()).toLocaleDateString()}</div>
-            </div>
-            <button class="nv-btn nv-btn-ghost" style="padding: 0.2rem 0.5rem; font-size: 0.65rem; color: var(--nv-danger); border-color: rgba(255,59,107,0.3);" onclick="removeTrustedDeviceUI('${escapeHtml(d.deviceId)}')">Revoke</button>
-          </div>
-        `).join('');
-      } catch (err) {
-        console.error('Failed to load trusted devices:', err);
-      }
-    }
-
-    async function removeTrustedDeviceUI(deviceId) {
-      if (!confirm('Revoke trust for this device?')) return;
-      try {
-        await window.nexVault.removeTrustedDevice(deviceId);
-        loadTrustedDevicesUI();
-        gridLog('Revoked trusted device: ' + deviceId);
-      } catch (err) {
-        gridLog('Revoke error: ' + err.message);
-      }
-    }
-
-    // Auto-detect existing user profile on startup
+    // Startup Initialization
     async function initStartup() {
       try {
-        loadTrustedDevicesUI();
-        checkForUpdates(false);
-        if (!window.nexVault || !window.nexVault.getVaultProfile) return;
+        if (!window.nexVault?.getVaultProfile) return;
         const profile = await window.nexVault.getVaultProfile();
         if (profile && profile.hasUser && profile.bootstrapToken) {
           $('existing-token').value = JSON.stringify(profile.bootstrapToken, null, 2);
-          switchTab('existing-user');
-          setStatus(`Vault found for ${profile.username || 'user'}. Enter password to unlock.`);
-          setTimeout(() => {
-            const passInput = $('existing-password');
-            if (passInput) passInput.focus();
-          }, 80);
+          $('settings-token-display').value = JSON.stringify(profile.bootstrapToken, null, 2);
+          switchAuthTab('unlock');
+          setStatus(`Vault profile found for ${profile.username || 'user'}.`);
+          setTimeout(() => { $('existing-password')?.focus(); }, 100);
         }
+        checkForUpdates(false);
       } catch (err) {
-        console.error('Startup profile check error:', err);
+        console.error('Startup profile check notice:', err);
       }
     }
 
-    // Keyboard shortcuts
+    // Keyboard bindings
     $('new-password')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleNewUser(); });
     $('existing-password')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleExistingUser(); });
     $('vault-password')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') savePassword(); });
@@ -710,33 +1200,30 @@
     document.addEventListener('DOMContentLoaded', initStartup);
     setTimeout(initStartup, 100);
 
-    // Setup incoming network event listeners
+    // Event listeners from backend
     if (window.nexVault) {
       if (window.nexVault.onIncomingPairRequest) {
         window.nexVault.onIncomingPairRequest(({ peerId, deviceName }) => {
           currentPendingPairPeerId = peerId;
-          gridLog(`🔔 INCOMING PAIR REQUEST from "${deviceName}" (${peerId})`);
-          $('pair-req-desc').innerText = `Device "${deviceName}" wants to join your network.`;
+          gridLog(`Incoming pairing request from "${deviceName}" (${peerId})`);
+          $('pair-req-desc').innerText = `Device "${deviceName}" wants to link with your vault.`;
           $('pair-approval-box').style.display = 'block';
         });
       }
-
       if (window.nexVault.onPeerJoined) {
         window.nexVault.onPeerJoined((peer) => {
-          gridLog(`📡 Peer detected on network: ${peer.deviceName || 'Peer'} (${peer.deviceId})`);
+          gridLog(`Peer joined: ${peer.deviceName || 'Peer'} (${peer.deviceId})`);
         });
       }
-
       if (window.nexVault.onPeerPaired) {
         window.nexVault.onPeerPaired(({ peerId, deviceName }) => {
-          gridLog(`✅ Device paired & verified: "${deviceName}" (${peerId})`);
+          gridLog(`Device paired: "${deviceName}" (${peerId})`);
           loadTrustedDevicesUI();
         });
       }
-
       if (window.nexVault.onVaultUpdated) {
         window.nexVault.onVaultUpdated(() => {
-          gridLog(`🔄 Vault updated from network sync!`);
+          gridLog('Vault updated from peer sync.');
           listPasswords();
           listOTPs();
           loadTrustedDevicesUI();
@@ -744,28 +1231,41 @@
       }
     }
 
-    // Expose for preload
+    // Expose helpers
+    window.navigateTo = navigateTo;
+    window.switchAuthTab = switchAuthTab;
     window.toggleTokenView = toggleTokenView;
     window.handleNewUser = handleNewUser;
     window.handleExistingUser = handleExistingUser;
+    window.lockVault = lockVault;
+    window.toggleAddCredentialForm = toggleAddCredentialForm;
+    window.generateRandomPassword = generateRandomPassword;
+    window.savePassword = savePassword;
+    window.listPasswords = listPasswords;
+    window.filterVaultEntries = filterVaultEntries;
+    window.copyUsername = copyUsername;
+    window.copyPassword = copyPassword;
+    window.deletePassword = deletePassword;
+    window.toggleAddOtpForm = toggleAddOtpForm;
+    window.saveOTP = saveOTP;
+    window.listOTPs = listOTPs;
+    window.copyOTP = copyOTP;
+    window.deleteOTP = deleteOTP;
     window.startGrid = startGrid;
     window.stopGrid = stopGrid;
     window.requestPair = requestPair;
     window.approvePair = approvePair;
     window.rejectPair = rejectPair;
-    window.savePassword = savePassword;
-    window.listPasswords = listPasswords;
-    window.saveOTP = saveOTP;
-    window.listOTPs = listOTPs;
     window.syncAndRefreshVault = syncAndRefreshVault;
-    window.checkForUpdates = checkForUpdates;
-    window.openUpdateLink = openUpdateLink;
-    window.dismissUpdate = dismissUpdate;
     window.loadTrustedDevicesUI = loadTrustedDevicesUI;
     window.removeTrustedDeviceUI = removeTrustedDeviceUI;
     window.runIntegrityCheck = runIntegrityCheck;
     window.runTamperMonitor = runTamperMonitor;
     window.triggerNuke = triggerNuke;
+    window.checkForUpdates = checkForUpdates;
+    window.openUpdateLink = openUpdateLink;
+    window.dismissUpdate = dismissUpdate;
+    window.copyTokenFromSettings = copyTokenFromSettings;
   </script>
 </body>
 </html>

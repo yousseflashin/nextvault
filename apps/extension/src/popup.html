@@ -7,178 +7,208 @@
   <link rel="stylesheet" href="cyber/cyber.css">
   <style>
     body {
-      min-width: 320px;
-      max-width: 360px;
+      width: 340px;
       margin: 0;
       padding: 0;
       background: var(--nv-bg);
       color: var(--nv-text);
       font-family: var(--nv-font-sans);
+      font-size: 13px;
     }
+
     .nv-popup {
-      position: relative;
-      z-index: 1;
       padding: 0.85rem;
     }
+
     .nv-popup-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding-bottom: 0.6rem;
+      padding-bottom: 0.65rem;
       border-bottom: 1px solid var(--nv-border);
       margin-bottom: 0.75rem;
     }
+
     .nv-popup-brand {
       display: flex;
       align-items: center;
       gap: 0.5rem;
       color: white;
     }
-    .nv-popup-brand .nv-shield { width: 28px; height: 32px; }
+
     .nv-popup-title {
-      font-family: var(--nv-font-mono);
-      font-weight: 800;
-      font-size: 0.9rem;
-      letter-spacing: -0.02em;
+      font-weight: 700;
+      font-size: 0.95rem;
+      letter-spacing: -0.01em;
     }
-    .nv-settings-btn {
-      background: none;
-      border: 1px solid var(--nv-border);
-      border-radius: 4px;
-      color: var(--nv-muted);
-      cursor: pointer;
-      font-family: var(--nv-font-mono);
-      font-size: 0.65rem;
-      padding: 0.2rem 0.5rem;
-      transition: all 0.2s;
-    }
-    .nv-settings-btn:hover {
-      border-color: var(--nv-primary);
+
+    .nv-popup-title span {
       color: var(--nv-primary);
     }
+
+    /* Top Tabs */
+    .popup-nav {
+      display: flex;
+      gap: 0.25rem;
+      background: var(--nv-bg-2);
+      border: 1px solid var(--nv-border);
+      border-radius: var(--nv-radius-sm);
+      padding: 2px;
+      margin-bottom: 0.85rem;
+    }
+
+    .popup-nav-btn {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--nv-muted);
+      padding: 0.35rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s ease;
+    }
+
+    .popup-nav-btn:hover {
+      color: var(--nv-text);
+    }
+
+    .popup-nav-btn.active {
+      color: #fff;
+      background: var(--nv-surface);
+      font-weight: 600;
+    }
+
     .nv-popup-status {
-      font-family: var(--nv-font-mono);
-      font-size: 0.65rem;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
+      font-size: 0.72rem;
       color: var(--nv-muted);
       margin-bottom: 0.75rem;
       display: flex;
       align-items: center;
       gap: 0.4rem;
     }
+
     .nv-popup-status .dot {
       width: 6px;
       height: 6px;
       border-radius: 50%;
       background: var(--nv-muted);
     }
+
     .nv-popup-status.connected {
       color: var(--nv-primary);
     }
+
     .nv-popup-status.connected .dot {
       background: var(--nv-primary);
-      box-shadow: 0 0 8px var(--nv-primary);
-      animation: nv-pulse 1.6s ease-in-out infinite;
     }
+
     .nv-popup-input, .nv-popup-textarea {
       width: 100%;
-      background: rgba(4, 6, 12, 0.7);
+      background: var(--nv-bg-2);
       border: 1px solid var(--nv-border);
-      border-radius: 6px;
+      border-radius: var(--nv-radius-sm);
       color: var(--nv-text);
-      font-family: var(--nv-font-mono);
-      font-size: 0.75rem;
+      font-family: var(--nv-font-sans);
+      font-size: 0.8rem;
       padding: 0.5rem 0.65rem;
       outline: none;
-      margin-bottom: 0.6rem;
+      margin-bottom: 0.5rem;
       box-sizing: border-box;
-      transition: border-color 0.2s, box-shadow 0.2s;
+      transition: border-color 0.15s;
     }
+
     .nv-popup-input:focus, .nv-popup-textarea:focus {
       border-color: var(--nv-primary);
-      box-shadow: 0 0 0 2px rgba(0, 255, 157, 0.12);
+      background: #0d1320;
     }
+
     .nv-popup-textarea {
       resize: vertical;
       min-height: 70px;
+      font-family: var(--nv-font-mono);
+      font-size: 0.72rem;
     }
+
     .nv-popup-btn {
       width: 100%;
-      font-family: var(--nv-font-mono);
-      font-size: 0.7rem;
-      font-weight: 600;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-      color: #04140c;
-      background: linear-gradient(180deg, var(--nv-primary) 0%, var(--nv-primary-dim) 100%);
-      border: 1px solid rgba(0, 255, 157, 0.6);
-      border-radius: 6px;
-      padding: 0.55rem 0.85rem;
+      font-family: var(--nv-font-sans);
+      font-size: 0.78rem;
+      font-weight: 500;
+      color: #ffffff;
+      background: var(--nv-primary);
+      border: 1px solid transparent;
+      border-radius: var(--nv-radius-sm);
+      padding: 0.5rem 0.75rem;
       cursor: pointer;
-      transition: box-shadow 0.2s, transform 0.15s;
-      box-shadow: var(--nv-glow);
-      margin-bottom: 0.45rem;
+      margin-bottom: 0.4rem;
+      transition: background 0.15s ease;
     }
+
     .nv-popup-btn:hover {
-      box-shadow: var(--nv-glow-strong);
-      transform: translateY(-1px);
+      background: var(--nv-primary-dim);
     }
+
     .nv-popup-btn.ghost {
-      color: var(--nv-primary);
-      background: rgba(0, 255, 157, 0.06);
+      color: var(--nv-text);
+      background: rgba(255, 255, 255, 0.05);
       border: 1px solid var(--nv-border);
-      box-shadow: none;
     }
+
     .nv-popup-btn.ghost:hover {
-      background: rgba(0, 255, 157, 0.12);
+      background: rgba(255, 255, 255, 0.09);
     }
+
     .nv-popup-btn.danger {
-      color: #ff3b6b;
-      background: rgba(255, 59, 107, 0.08);
-      border-color: rgba(255, 59, 107, 0.3);
-      box-shadow: none;
+      color: #ffffff;
+      background: var(--nv-danger);
     }
+
+    .nv-popup-btn.danger:hover {
+      background: #dc2626;
+    }
+
     .nv-popup-divider {
       height: 1px;
-      background: linear-gradient(90deg, transparent, var(--nv-border-strong), transparent);
+      background: var(--nv-border);
       margin: 0.6rem 0;
     }
+
     .nv-popup-result {
       font-family: var(--nv-font-mono);
-      font-size: 0.7rem;
-      line-height: 1.4;
-      color: var(--nv-primary);
-      background: rgba(2, 4, 8, 0.85);
+      font-size: 0.72rem;
+      line-height: 1.45;
+      color: var(--nv-text);
+      background: #080c14;
       border: 1px solid var(--nv-border);
-      border-radius: 6px;
+      border-radius: var(--nv-radius-sm);
       padding: 0.5rem 0.65rem;
-      min-height: 3rem;
+      min-height: 2.8rem;
       max-height: 6rem;
       overflow-y: auto;
       word-break: break-all;
       white-space: pre-wrap;
     }
+
     .nv-popup-result .nv-dim {
       color: var(--nv-muted);
     }
-    .nv-panel-view {
+
+    .popup-view {
+      display: none;
+    }
+
+    .popup-view.active {
       display: block;
     }
-    .nv-hidden {
-      display: none !important;
-    }
+
     .nv-popup-hint {
-      font-family: var(--nv-font-mono);
-      font-size: 0.55rem;
+      font-size: 0.65rem;
       color: var(--nv-muted);
       text-align: center;
       margin-top: 0.5rem;
-      opacity: 0.7;
-    }
-    @keyframes nv-pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.45; transform: scale(0.82); }
     }
   </style>
 </head>
@@ -186,58 +216,68 @@
   <div class="nv-popup">
     <div class="nv-popup-header">
       <div class="nv-popup-brand">
-        <span class="nv-shield" aria-hidden="true">
+        <span class="nv-shield" style="width: 20px; height: 20px;">
           <svg viewBox="0 0 64 74" fill="none">
-            <path d="M32 2 60 14v22c0 18-12.6 30.4-28 36C16.6 66.4 4 54 4 36V14L32 2z" stroke="#00ff9d" stroke-width="2.5" fill="rgba(0,255,157,0.06)"/>
-            <path d="M22 36l7 7 14-15" stroke="#00d4ff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M32 2 60 14v22c0 18-12.6 30.4-28 36C16.6 66.4 4 54 4 36V14L32 2z" stroke="#10b981" stroke-width="2.5" fill="rgba(16,185,129,0.1)"/>
+            <path d="M22 36l7 7 14-15" stroke="#0ea5e9" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </span>
-        <span class="nv-popup-title">NEX<span class="nv-gradient-text">VAULT</span></span>
+        <span class="nv-popup-title">NEX<span>VAULT</span></span>
       </div>
-      <button class="nv-settings-btn" id="toggle-settings" type="button">Settings</button>
-    </div>
-
-    <!-- Main View -->
-    <div id="main-view" class="nv-panel-view">
-      <div class="nv-popup-status" id="status">
+      <div class="nv-popup-status" id="status" style="margin-bottom: 0;">
         <span class="dot"></span>
         <span id="status-text">Disconnected</span>
       </div>
+    </div>
 
-      <button class="nv-popup-btn" id="connect" type="button">Connect to NexVault</button>
-      <button class="nv-popup-btn ghost" id="generate-pw" type="button">Generate Password</button>
+    <!-- Top Navigation Menu -->
+    <nav class="popup-nav">
+      <button class="popup-nav-btn active" data-view="vault" id="nav-vault-btn">Vault</button>
+      <button class="popup-nav-btn" data-view="generator" id="nav-gen-btn">Generator</button>
+      <button class="popup-nav-btn" data-view="settings" id="nav-settings-btn">Settings</button>
+    </nav>
+
+    <!-- Page 1: Vault View -->
+    <div id="view-vault" class="popup-view active">
+      <button class="nv-popup-btn" id="connect" type="button">Connect to Desktop</button>
+      <button class="nv-popup-btn ghost" id="fill-current" type="button" disabled>Autofill Current Page</button>
 
       <div class="nv-popup-divider"></div>
 
-      <input class="nv-popup-input" id="search" type="text" placeholder="search vault..." disabled>
+      <input class="nv-popup-input" id="search" type="text" placeholder="Search vault credentials..." disabled>
       <div class="nv-popup-result" id="result">
         <span class="nv-dim">>> Connect to the desktop vault to search</span>
       </div>
-
-      <div class="nv-popup-divider"></div>
-
-      <button class="nv-popup-btn ghost" id="fill-current" type="button" disabled>Autofill Current Page</button>
     </div>
 
-    <!-- Settings / Token Setup View -->
-    <div id="settings-view" class="nv-panel-view nv-hidden">
-      <div class="nv-popup-status">
-        <span class="dot"></span>
-        <span>Bootstrap Token Config</span>
+    <!-- Page 2: Generator View -->
+    <div id="view-generator" class="popup-view">
+      <label style="font-size: 0.72rem; color: var(--nv-muted); margin-bottom: 0.35rem; display: block;">
+        Password Length: <span id="pwd-len-val">24</span> characters
+      </label>
+      <input type="range" id="pwd-length-range" min="12" max="64" value="24" style="width: 100%; margin-bottom: 0.75rem;">
+
+      <input class="nv-popup-input nv-mono" id="gen-pwd-display" readonly style="font-size: 0.85rem; font-weight: 600; text-align: center;">
+
+      <div style="display: flex; gap: 0.4rem;">
+        <button class="nv-popup-btn" id="generate-pw" type="button" style="flex: 1;">Generate New</button>
+        <button class="nv-popup-btn ghost" id="copy-gen-pwd" type="button" style="flex: 1;">Copy</button>
       </div>
-      <label style="font-family:var(--nv-font-mono);font-size:0.65rem;color:var(--nv-muted);margin-bottom:4px;display:block;">
-        Paste Desktop Bootstrap Token JSON:
+    </div>
+
+    <!-- Page 3: Settings View -->
+    <div id="view-settings" class="popup-view">
+      <label style="font-size: 0.72rem; color: var(--nv-muted); margin-bottom: 4px; display: block;">
+        Desktop Bootstrap Token (JSON):
       </label>
       <textarea class="nv-popup-textarea" id="token-input" placeholder='{"tokenId":"...","publicKey":"...","signature":"...","expiresAt":"..."}'></textarea>
       <button class="nv-popup-btn" id="save-token" type="button">Save Token</button>
       <button class="nv-popup-btn danger" id="clear-token" type="button">Clear Saved Token</button>
-      <button class="nv-popup-btn ghost" id="back-btn" type="button">Back to Vault</button>
     </div>
 
-    <div class="nv-popup-hint">local-first · no cloud · encrypted</div>
+    <div class="nv-popup-hint">Local-first encrypted · Zero cloud middlemen</div>
   </div>
 
-  <script src="cyber/binary-shield.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

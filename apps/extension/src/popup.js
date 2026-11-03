@@ -2,14 +2,22 @@ const statusEl = document.getElementById('status');
 const statusText = document.getElementById('status-text');
 const connectButton = document.getElementById('connect');
 const generateButton = document.getElementById('generate-pw');
+const copyGenPwdButton = document.getElementById('copy-gen-pwd');
+const genPwdDisplay = document.getElementById('gen-pwd-display');
+const pwdLengthRange = document.getElementById('pwd-length-range');
+const pwdLenVal = document.getElementById('pwd-len-val');
 const searchInput = document.getElementById('search');
 const resultEl = document.getElementById('result');
 const fillButton = document.getElementById('fill-current');
 
-const mainView = document.getElementById('main-view');
-const settingsView = document.getElementById('settings-view');
-const toggleSettingsBtn = document.getElementById('toggle-settings');
-const backBtn = document.getElementById('back-btn');
+const navVaultBtn = document.getElementById('nav-vault-btn');
+const navGenBtn = document.getElementById('nav-gen-btn');
+const navSettingsBtn = document.getElementById('nav-settings-btn');
+
+const viewVault = document.getElementById('view-vault');
+const viewGenerator = document.getElementById('view-generator');
+const viewSettings = document.getElementById('view-settings');
+
 const tokenInput = document.getElementById('token-input');
 const saveTokenBtn = document.getElementById('save-token');
 const clearTokenBtn = document.getElementById('clear-token');
@@ -24,33 +32,65 @@ function setResult(html) {
 }
 
 function escapeHtml(s) {
-  return String(s || '').replace(/[&<>"']/g, c => ({ '&': '&', '<': '<', '>': '>', '"': '"', "'": "'" }[c]));
+  return String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-function showSettings(show) {
-  if (show) {
-    mainView.classList.add('nv-hidden');
-    settingsView.classList.remove('nv-hidden');
-    toggleSettingsBtn.textContent = 'Close';
+// Tab navigation
+function switchView(viewName) {
+  [viewVault, viewGenerator, viewSettings].forEach(v => v.classList.remove('active'));
+  [navVaultBtn, navGenBtn, navSettingsBtn].forEach(b => b.classList.remove('active'));
+
+  if (viewName === 'vault') {
+    viewVault.classList.add('active');
+    navVaultBtn.classList.add('active');
+  } else if (viewName === 'generator') {
+    viewGenerator.classList.add('active');
+    navGenBtn.classList.add('active');
+    if (!genPwdDisplay.value) updateGeneratedPassword();
+  } else if (viewName === 'settings') {
+    viewSettings.classList.add('active');
+    navSettingsBtn.classList.add('active');
     chrome.runtime.sendMessage({ action: 'get-saved-token' }, (res) => {
       if (res && res.token) {
         tokenInput.value = JSON.stringify(res.token, null, 2);
       }
     });
-  } else {
-    settingsView.classList.add('nv-hidden');
-    mainView.classList.remove('nv-hidden');
-    toggleSettingsBtn.textContent = 'Settings';
   }
 }
 
-toggleSettingsBtn.addEventListener('click', () => {
-  const isSettings = !settingsView.classList.contains('nv-hidden');
-  showSettings(!isSettings);
+navVaultBtn.addEventListener('click', () => switchView('vault'));
+navGenBtn.addEventListener('click', () => switchView('generator'));
+navSettingsBtn.addEventListener('click', () => switchView('settings'));
+
+// Password generator
+function generateSecurePassword(length = 24) {
+  const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*-_+=';
+  const array = new Uint8Array(length);
+  crypto.getRandomValues(array);
+  let password = '';
+  for (let i = 0; i < length; i++) {
+    password += charset[array[i] % charset.length];
+  }
+  return password;
+}
+
+function updateGeneratedPassword() {
+  const len = parseInt(pwdLengthRange.value, 10) || 24;
+  pwdLenVal.textContent = len;
+  genPwdDisplay.value = generateSecurePassword(len);
+}
+
+pwdLengthRange.addEventListener('input', updateGeneratedPassword);
+generateButton.addEventListener('click', updateGeneratedPassword);
+
+copyGenPwdButton.addEventListener('click', () => {
+  if (!genPwdDisplay.value) updateGeneratedPassword();
+  navigator.clipboard.writeText(genPwdDisplay.value).then(() => {
+    setStatus('Password copied');
+  });
 });
 
-backBtn.addEventListener('click', () => showSettings(false));
-
+// Settings & Token save
 saveTokenBtn.addEventListener('click', () => {
   const raw = tokenInput.value.trim();
   if (!raw) return alert('Please paste a bootstrap token JSON');
@@ -62,7 +102,7 @@ saveTokenBtn.addEventListener('click', () => {
     chrome.runtime.sendMessage({ action: 'save-token', token }, (res) => {
       if (res && res.success) {
         setStatus('Token saved. Connecting...');
-        showSettings(false);
+        switchView('vault');
         triggerConnect();
       } else {
         alert('Failed to save token');
@@ -77,34 +117,16 @@ clearTokenBtn.addEventListener('click', () => {
   if (!confirm('Clear stored bootstrap token?')) return;
   chrome.runtime.sendMessage({ action: 'clear-token' }, () => {
     tokenInput.value = '';
-    setStatus('Token cleared (disconnected)', false);
+    setStatus('Disconnected', false);
     searchInput.disabled = true;
     fillButton.disabled = true;
-    showSettings(false);
+    switchView('vault');
   });
 });
 
-function generateSecurePassword(length = 24) {
-  const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+~`|}{[]:;?><,./-=';
-  const array = new Uint8Array(length);
-  crypto.getRandomValues(array);
-  let password = '';
-  for (let i = 0; i < length; i++) {
-    password += charset[array[i] % charset.length];
-  }
-  return password;
-}
-
-generateButton.addEventListener('click', () => {
-  const password = generateSecurePassword();
-  navigator.clipboard.writeText(password).then(() => {
-    setStatus('Password copied to clipboard');
-    setResult(`<span class="nv-dim">>> Generated & copied:</span><br><code>${escapeHtml(password)}</code>`);
-  });
-});
-
+// Connect to Desktop Vault
 async function triggerConnect() {
-  setStatus('Connecting to desktop vault...');
+  setStatus('Connecting...');
   try {
     const response = await chrome.runtime.sendMessage({ action: 'connect' });
     if (chrome.runtime.lastError) {
@@ -113,14 +135,14 @@ async function triggerConnect() {
       return;
     }
     if (response && response.status === 'connected') {
-      setStatus('Connected to NexVault', true);
+      setStatus('Connected', true);
       searchInput.disabled = false;
       fillButton.disabled = false;
       setResult('<span class="nv-dim">>> Vault connected. Search or autofill.</span>');
     } else {
       setStatus(response?.error || 'Connection failed', false);
       if (response?.error?.includes('not configured')) {
-        showSettings(true);
+        switchView('settings');
       }
     }
   } catch (e) {
@@ -130,6 +152,7 @@ async function triggerConnect() {
 
 connectButton.addEventListener('click', triggerConnect);
 
+// Vault Search
 searchInput.addEventListener('input', async () => {
   const q = searchInput.value.trim();
   if (!q) {
@@ -140,9 +163,9 @@ searchInput.addEventListener('input', async () => {
     const response = await chrome.runtime.sendMessage({ action: 'search-vault', query: q });
     if (response && response.entries && response.entries.length) {
       setResult(response.entries.map(en =>
-        `<div style="padding:4px 0;border-bottom:1px solid rgba(0,255,157,0.1)">` +
+        `<div style="padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.06)">` +
         `<strong>${escapeHtml(en.service)}</strong>` +
-        (en.username ? ` <span style="color:#00ff9d;font-size:10px">(${escapeHtml(en.username)})</span>` : '') +
+        (en.username ? ` <span style="color:var(--nv-primary);font-size:11px">(${escapeHtml(en.username)})</span>` : '') +
         `</div>`
       ).join(''));
     } else {
@@ -153,6 +176,7 @@ searchInput.addEventListener('input', async () => {
   }
 });
 
+// Autofill Current Page
 fillButton.addEventListener('click', async () => {
   setResult('<span class="nv-dim">>> Autofilling active tab...</span>');
   try {
@@ -174,6 +198,6 @@ chrome.runtime.sendMessage({ action: 'get-saved-token' }, (res) => {
     triggerConnect();
   } else {
     setStatus('No token configured', false);
-    setResult('<span class="nv-dim">>> Click Settings above to paste your desktop bootstrap token.</span>');
+    setResult('<span class="nv-dim">>> Go to Settings tab to paste your desktop bootstrap token.</span>');
   }
 });

@@ -1,4 +1,9 @@
-/* Mobile cyber theme - scoped to .nv-app */
+/* ============================================================
+   NexVault Mobile Clean Theme
+   Simplified, responsive, multi-page layout.
+   Animations dropped. Clean bottom navigation.
+   ============================================================ */
+
 .nv-app {
   min-height: 100vh;
   min-width: 320px;
@@ -9,249 +14,168 @@
   flex-direction: column;
 }
 
-.nv-canvas {
-  position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 0;
-  pointer-events: none !important;
-}
-
 .nv-app-layer {
   position: relative;
-  z-index: 10;
-  pointer-events: auto;
+  z-index: 1;
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 1rem;
-  max-width: 480px;
+  max-width: 600px;
   margin: 0 auto;
   width: 100%;
+  padding-bottom: 72px; /* space for bottom nav bar */
 }
 
+/* Header */
 .nv-app-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem 0;
+  padding: 0.85rem 1rem;
   border-bottom: 1px solid var(--nv-border);
-  margin-bottom: 1rem;
+  background: var(--nv-bg-2);
+  position: sticky;
+  top: 0;
+  z-index: 20;
 }
 
 .nv-app-brand {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.6rem;
   text-decoration: none;
   color: white;
 }
 
 .nv-app-title {
-  font-family: var(--nv-font-mono);
-  font-weight: 800;
-  font-size: 1.1rem;
-  letter-spacing: -0.02em;
+  font-weight: 700;
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
 }
 
-.nv-app-h1 {
-  font-family: var(--nv-font-mono);
-  font-weight: 800;
-  font-size: 1.5rem;
-  margin-bottom: 0.5rem;
-  color: #fff;
-  text-shadow: 0 0 24px rgba(0, 255, 157, 0.35);
-}
-
-.nv-app-sub {
-  color: var(--nv-muted);
-  margin-bottom: 1.5rem;
-  font-size: 0.9rem;
+.nv-app-title span {
+  color: var(--nv-primary);
 }
 
 .nv-app-main {
   flex: 1;
   display: flex;
   flex-direction: column;
+  padding: 1rem;
   gap: 1rem;
 }
 
-.nv-app-footer {
-  padding: 1.5rem 0;
-  text-align: center;
-  font-family: var(--nv-font-mono);
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.15em;
-  color: var(--nv-muted);
+/* Bottom Navigation Bar */
+.nv-bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 64px;
+  background: var(--nv-bg-2);
   border-top: 1px solid var(--nv-border);
-}
-
-.nv-tabs {
   display: flex;
-  gap: 0.25rem;
-  margin-bottom: 1rem;
-  border-bottom: 1px solid var(--nv-border);
-  padding-bottom: 0.5rem;
+  align-items: center;
+  justify-content: space-around;
+  z-index: 30;
+  max-width: 600px;
+  margin: 0 auto;
 }
 
-.nv-tab {
-  font-family: var(--nv-font-mono);
-  font-size: 0.65rem;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--nv-muted);
+.nv-nav-button {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
   background: none;
   border: none;
-  padding: 0.5rem 0.75rem;
+  color: var(--nv-muted);
   cursor: pointer;
-  border-radius: 6px;
-  transition: all 0.15s;
+  padding: 0.5rem 0;
+  font-family: var(--nv-font-sans);
+  font-size: 0.68rem;
+  font-weight: 500;
+  transition: color 0.15s ease;
 }
 
-.nv-tab.active {
+.nv-nav-button .nav-icon {
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.nv-nav-button.active {
   color: var(--nv-primary);
-  background: rgba(0, 255, 157, 0.08);
+  font-weight: 600;
+}
+
+/* Vault and OTP cards */
+.nv-vault-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 0.9rem;
+  background: var(--nv-surface);
   border: 1px solid var(--nv-border);
+  border-radius: var(--nv-radius-sm);
+  margin-bottom: 0.5rem;
+  transition: background 0.15s ease;
 }
 
-.nv-tab:hover:not(.active) {
+.nv-vault-item:hover {
+  background: var(--nv-surface-hover);
+}
+
+.nv-vault-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.nv-vault-service {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+.nv-vault-meta {
+  font-size: 0.72rem;
+  color: var(--nv-muted);
+}
+
+/* Search bar */
+.nv-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--nv-bg-2);
+  border: 1px solid var(--nv-border);
+  border-radius: var(--nv-radius-sm);
+  padding: 0.55rem 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+.nv-search-bar input {
+  flex: 1;
+  background: transparent;
+  border: none;
   color: var(--nv-text);
-  background: rgba(0, 255, 157, 0.04);
+  font-size: 0.85rem;
+  outline: none;
 }
 
+/* Form layouts */
 .nv-form {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-}
-
-.nv-label {
-  font-family: var(--nv-font-mono);
-  font-size: 0.6rem;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--nv-muted);
-  margin-bottom: 0.25rem;
-}
-
-.nv-input {
-  width: 100%;
-  background: rgba(4, 6, 12, 0.7);
-  border: 1px solid var(--nv-border);
-  border-radius: 8px;
-  color: var(--nv-text);
-  font-family: var(--nv-font-mono);
-  font-size: 0.85rem;
-  padding: 0.7rem 0.85rem;
-  outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s;
-}
-
-.nv-input:focus {
-  border-color: var(--nv-primary);
-  box-shadow: 0 0 0 3px rgba(0, 255, 157, 0.12), var(--nv-glow);
-}
-
-.nv-input::placeholder {
-  color: var(--nv-muted);
-  opacity: 0.6;
-}
-
-.nv-textarea {
-  width: 100%;
-  background: rgba(4, 6, 12, 0.7);
-  border: 1px solid var(--nv-border);
-  border-radius: 8px;
-  color: var(--nv-text);
-  font-family: var(--nv-font-mono);
-  font-size: 0.8rem;
-  padding: 0.7rem 0.85rem;
-  outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s;
-  resize: vertical;
-  min-height: 80px;
-  line-height: 1.5;
-}
-
-.nv-textarea:focus {
-  border-color: var(--nv-primary);
-  box-shadow: 0 0 0 3px rgba(0, 255, 157, 0.12), var(--nv-glow);
-}
-
-.nv-btn {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  font-family: var(--nv-font-mono);
-  font-size: 0.8rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: #04140c;
-  background: linear-gradient(180deg, var(--nv-primary) 0%, var(--nv-primary-dim) 100%);
-  border: 1px solid rgba(0, 255, 157, 0.6);
-  border-radius: 8px;
-  padding: 0.75rem 1.25rem;
-  cursor: pointer;
-  overflow: hidden;
-  transition: box-shadow 0.2s, transform 0.15s, filter 0.2s;
-  box-shadow: var(--nv-glow);
-  width: 100%;
-}
-
-.nv-btn:hover {
-  box-shadow: var(--nv-glow-strong);
-  transform: translateY(-1px);
-  filter: brightness(1.08);
-}
-
-.nv-btn:active {
-  transform: translateY(0);
-}
-
-.nv-btn::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: -80%;
-  width: 60%;
-  height: 100%;
-  background: linear-gradient(100deg, transparent, rgba(255,255,255,0.5), transparent);
-  transform: skewX(-20deg);
-  transition: left 0.5s ease;
-}
-
-.nv-btn:hover::after {
-  left: 130%;
-}
-
-.nv-btn-ghost {
-  color: var(--nv-primary);
-  background: rgba(0, 255, 157, 0.06);
-  border: 1px solid var(--nv-border);
-  box-shadow: none;
-}
-
-.nv-btn-ghost:hover {
-  background: rgba(0, 255, 157, 0.12);
-  border-color: var(--nv-border-strong);
-}
-
-.nv-btn-cyan {
-  color: #031820;
-  background: linear-gradient(180deg, var(--nv-accent), #0099c4);
-  border-color: rgba(0, 212, 255, 0.6);
-  box-shadow: 0 0 18px rgba(0, 212, 255, 0.35);
+  gap: 0.75rem;
 }
 
 .nv-btn-row {
   display: flex;
-  flex-wrap: wrap;
   gap: 0.5rem;
+  margin-top: 0.25rem;
 }
 
 .nv-form-row {
@@ -260,10 +184,10 @@
   gap: 0.5rem;
 }
 
-.nv-input-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
+@media (max-width: 480px) {
+  .nv-form-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 .nv-panel-header {
@@ -274,163 +198,32 @@
 }
 
 .nv-panel-title {
-  font-family: var(--nv-font-mono);
-  font-size: 0.6rem;
-  text-transform: uppercase;
-  letter-spacing: 0.15em;
-  color: var(--nv-primary);
-  font-weight: 700;
-}
-
-.nv-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-family: var(--nv-font-mono);
-  font-size: 0.6rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--nv-primary);
-  background: rgba(0, 255, 157, 0.08);
-  border: 1px solid var(--nv-border);
-  border-radius: 999px;
-  padding: 0.25rem 0.6rem;
-}
-
-.nv-badge .dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--nv-primary);
-  box-shadow: 0 0 8px var(--nv-primary);
-  animation: nv-pulse 1.6s ease-in-out infinite;
-}
-
-.nv-terminal {
-  font-family: var(--nv-font-mono);
-  font-size: 0.7rem;
-  line-height: 1.5;
-  background: rgba(2, 4, 8, 0.85);
-  border: 1px solid var(--nv-border);
-  border-radius: 8px;
-  padding: 0.75rem 1rem;
-  color: var(--nv-primary);
-  white-space: pre-wrap;
-  word-break: break-word;
-  min-height: 100px;
-  max-height: 180px;
-  overflow-y: auto;
-  box-shadow: inset 0 0 30px rgba(0, 255, 157, 0.04);
-}
-
-.nv-terminal .nv-dim {
-  color: var(--nv-muted);
-}
-
-.nv-vault-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin-top: 1rem;
-}
-
-.nv-vault-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.65rem;
-  background: rgba(0, 255, 157, 0.03);
-  border: 1px solid var(--nv-border);
-  border-radius: 8px;
-  transition: border-color 0.2s, background 0.2s;
-}
-
-.nv-vault-item:hover {
-  border-color: var(--nv-border-strong);
-  background: rgba(0, 255, 157, 0.06);
-}
-
-.nv-vault-info {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-}
-
-.nv-vault-service {
-  font-family: var(--nv-font-mono);
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   font-weight: 600;
-  color: var(--nv-text);
-}
-
-.nv-vault-meta {
-  font-family: var(--nv-font-mono);
-  font-size: 0.6rem;
-  color: var(--nv-muted);
+  color: #fff;
 }
 
 .nv-empty {
   text-align: center;
-  padding: 1.5rem;
+  padding: 2rem 1rem;
   color: var(--nv-muted);
-  font-size: 0.8rem;
+  font-size: 0.82rem;
 }
 
-.nv-app-status {
-  font-family: var(--nv-font-mono);
-  font-size: 0.75rem;
-  color: var(--nv-primary);
-  margin-top: 1rem;
-  text-align: center;
-  min-height: 1.2rem;
-}
-
-@keyframes nv-pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.45; transform: scale(0.82); }
-}
-
-/* scanlines overlay */
-.nv-app::before {
-  content: "";
+/* Toast */
+.nv-toast {
   position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background: repeating-linear-gradient(
-    to bottom,
-    rgba(0, 255, 157, 0.02) 0px,
-    rgba(0, 255, 157, 0.02) 1px,
-    transparent 1px,
-    transparent 3px
-  );
-  mix-blend-mode: overlay;
-}
-
-/* grid backdrop */
-.nv-app {
-  background-image:
-    linear-gradient(rgba(0, 255, 157, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 255, 157, 0.03) 1px, transparent 1px);
-  background-size: 36px 36px;
-}
-
-/* CSS custom properties for mobile */
-:root {
-  --nv-bg: #04060c;
-  --nv-bg-2: #070b14;
-  --nv-surface: #0b1220;
-  --nv-surface-2: #0e1626;
-  --nv-border: rgba(0, 255, 157, 0.16);
-  --nv-border-strong: rgba(0, 255, 157, 0.35);
-  --nv-primary: #00ff9d;
-  --nv-primary-dim: #00c77a;
-  --nv-accent: #00d4ff;
-  --nv-danger: #ff3b6b;
-  --nv-text: #e7f2ff;
-  --nv-muted: #7d8ea8;
-  --nv-glow: 0 0 18px rgba(0, 255, 157, 0.35);
-  --nv-glow-strong: 0 0 32px rgba(0, 255, 157, 0.55);
-  --nv-font-mono: ui-monospace, "SF Mono", "JetBrains Mono", "Fira Code", Consolas, monospace;
-  --nv-font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--nv-surface-2);
+  border: 1px solid var(--nv-border);
+  color: var(--nv-text);
+  border-radius: var(--nv-radius);
+  padding: 0.6rem 1.2rem;
+  font-size: 0.8rem;
+  z-index: 100;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  max-width: 90vw;
+  text-align: center;
 }

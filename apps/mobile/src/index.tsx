@@ -4,21 +4,20 @@ import { createRoot } from 'react-dom/client';
 import './cyber/cyber.css';
 import './main.css';
 import { getDefaultRelayUrl, CURRENT_VERSION } from './mobileVault';
-import './cyber/binary-shield.js';
 
-function Shield({ size = 56 }) {
+function Shield({ size = 32 }: { size?: number }) {
   return (
-    <svg viewBox="0 0 64 74" fill="none" style={{ width: size, height: size * 1.16, filter: 'drop-shadow(0 0 12px rgba(0,255,157,0.5))' }}>
-      <path d="M32 2 60 14v22c0 18-12.6 30.4-28 36C16.6 66.4 4 54 4 36V14L32 2z" stroke="#00ff9d" strokeWidth="2.5" fill="rgba(0,255,157,0.06)" />
-      <path d="M22 36l7 7 14-15" stroke="#00d4ff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+    <svg viewBox="0 0 64 74" fill="none" style={{ width: size, height: size * 1.15 }}>
+      <path d="M32 2 60 14v22c0 18-12.6 30.4-28 36C16.6 66.4 4 54 4 36V14L32 2z" stroke="#10b981" strokeWidth="2.5" fill="rgba(16,185,129,0.1)" />
+      <path d="M22 36l7 7 14-15" stroke="#0ea5e9" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
 
 function StatusPill({ ok, label }: { ok: boolean; label: string }) {
   return (
-    <span className="nv-badge">
-      <span className="dot" style={ok ? {} : { background: 'var(--nv-danger)', boxShadow: '0 0 8px var(--nv-danger)' }} />
+    <span className={`nv-badge ${ok ? 'success' : ''}`}>
+      <span className="dot" style={ok ? {} : { background: 'var(--nv-danger)' }} />
       {label}
     </span>
   );
@@ -28,39 +27,54 @@ function Card({ children, style }: { children: ReactNode; style?: CSSProperties 
   return <div className="nv-card" style={style}>{children}</div>;
 }
 
+type TabType = 'vault' | 'otp' | 'grid' | 'settings';
+
 function App() {
+  // Navigation
+  const [activeTab, setActiveTab] = useState<TabType>('vault');
+
+  // Auth State
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [tokenJson, setTokenJson] = useState('');
   const [status, setStatus] = useState('Ready');
-  const [tab, setTab] = useState<'new' | 'existing'>('existing');
-  const [gridLog, setGridLog] = useState<string[]>([]);
+  const [authMode, setAuthMode] = useState<'existing' | 'new'>('existing');
+  const [unlocked, setUnlocked] = useState(false);
+
+  // Vault State
+  const [vaultItems, setVaultItems] = useState<{ service: string; username?: string; createdAt: string }[]>([]);
+  const [vaultSearch, setVaultSearch] = useState('');
+  const [showAddVault, setShowAddVault] = useState(false);
+  const [service, setService] = useState('');
+  const [vaultUsername, setVaultUsername] = useState('');
+  const [credential, setCredential] = useState('');
+
+  // OTP State
+  const [otpItems, setOtpItems] = useState<{ service: string; code?: string }[]>([]);
+  const [showAddOtp, setShowAddOtp] = useState(false);
+  const [otpService, setOtpService] = useState('');
+  const [otpSecret, setOtpSecret] = useState('');
+  const [countdown, setCountdown] = useState(30);
+
+  // NexGrid State
   const [relayUrl, setRelayUrl] = useState(getDefaultRelayUrl());
   const [gridStatus, setGridStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'paired'>('disconnected');
   const [pairingCode, setPairingCode] = useState('');
   const [incomingRequest, setIncomingRequest] = useState<{ from: string; deviceName: string } | null>(null);
-
-  const [vaultItems, setVaultItems] = useState<{ service: string; username?: string; createdAt: string }[]>([]);
-  const [service, setService] = useState('');
-  const [vaultUsername, setVaultUsername] = useState('');
-  const [credential, setCredential] = useState('');
-  const [otpService, setOtpService] = useState('');
-  const [otpSecret, setOtpSecret] = useState('');
-  const [otpItems, setOtpItems] = useState<{ service: string; code?: string }[]>([]);
-  const [unlocked, setUnlocked] = useState(false);
-
-  // Sync feedback & Updater state
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [syncToast, setSyncToast] = useState<string | null>(null);
-  const [updateInfo, setUpdateInfo] = useState<{ hasUpdate: boolean; latestVersion: string; downloadUrl?: string; releaseName?: string; notes?: string } | null>(null);
   const [trustedDevices, setTrustedDevices] = useState<{ deviceId: string; deviceName?: string; pairedAt?: string }[]>([]);
+  const [gridLog, setGridLog] = useState<string[]>([]);
+
+  // Sync & Updates
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [updateInfo, setUpdateInfo] = useState<{ hasUpdate: boolean; latestVersion: string; downloadUrl?: string } | null>(null);
 
   function showToast(msg: string) {
-    setSyncToast(msg);
-    setTimeout(() => setSyncToast(null), 3800);
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(null), 3500);
   }
 
-  const log = (msg: string) => setGridLog(prev => [...prev.slice(-40), `>> ${msg}`]);
+  const log = (msg: string) => setGridLog(prev => [...prev.slice(-30), `>> ${msg}`]);
 
   async function checkMobileUpdates(manual = false) {
     if (manual) showToast('Checking GitHub for updates...');
@@ -68,17 +82,10 @@ function App() {
       const res = await (window as any).nexVault.checkForUpdates();
       if (res && res.hasUpdate) {
         setUpdateInfo(res);
-        showToast(`🚀 Update Available: v${res.latestVersion}! Click download below.`);
+        showToast(`Update Available: v${res.latestVersion}`);
       } else if (res && res.success) {
         setUpdateInfo(null);
-        if (manual) {
-          showToast(`✓ Up to Date: Running v${res.currentVersion} (Latest: v${res.latestVersion})`);
-        }
-      } else {
-        setUpdateInfo(null);
-        if (manual) {
-          showToast(`⚠️ ${res?.message || 'Update check failed.'}`);
-        }
+        if (manual) showToast(`Up to Date: v${res.currentVersion}`);
       }
     } catch (err: any) {
       if (manual) showToast('Update check failed: ' + err.message);
@@ -94,7 +101,7 @@ function App() {
   }
 
   async function onRevokeDevice(deviceId: string) {
-    if (!confirm(`Revoke pairing trust for device ${deviceId}?`)) return;
+    if (!confirm(`Revoke trust for device ${deviceId}?`)) return;
     try {
       await (window as any).nexVault.removeTrustedDevice(deviceId);
       await loadDevices();
@@ -105,19 +112,25 @@ function App() {
     }
   }
 
+  // TOTP countdown timer
   useEffect(() => {
-    // Mount binary shield background effect
-    if ((window as any).NexVaultFX?.mountAll) {
-      (window as any).NexVaultFX.mountAll();
-    }
+    const timer = setInterval(() => {
+      const sec = 30 - (Math.floor(Date.now() / 1000) % 30);
+      setCountdown(sec);
+      if (sec === 30 && unlocked) {
+        refreshOTPs(false);
+      }
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [unlocked]);
 
-    // Check if vault profile already exists locally and restore session if preserved
+  useEffect(() => {
     async function checkExistingProfile() {
       try {
         const prof = await (window as any).nexVault.getVaultProfile();
         if (prof && prof.hasUser && prof.bootstrapToken) {
           setTokenJson(JSON.stringify(prof.bootstrapToken, null, 2));
-          setTab('existing');
+          setAuthMode('existing');
 
           const sessionActive = sessionStorage.getItem('nexvault_mobile_unlocked') === '1';
           if (sessionActive) {
@@ -125,12 +138,10 @@ function App() {
             refreshVault(false);
             refreshOTPs(false);
             loadDevices();
-            setTimeout(() => {
-              onStartGrid();
-            }, 300);
+            setTimeout(() => onStartGrid(), 300);
             showToast(`Session restored for ${prof.username || 'user'}.`);
           } else {
-            setStatus(`Saved vault found for ${prof.username || 'user'}. Enter password to unlock.`);
+            setStatus(`Vault profile found. Enter master password to unlock.`);
           }
         }
       } catch {}
@@ -146,88 +157,119 @@ function App() {
     try {
       const r = await (window as any).nexVault.initializeNewUser(username, password);
       if (!r.success) throw new Error(r.error);
-      setStatus('Bootstrap token: ' + r.tokenId);
+      setStatus('Created identity: ' + r.tokenId);
       setTokenJson(JSON.stringify(r.bootstrapToken, null, 2));
-      setTab('existing');
+      sessionStorage.setItem('nexvault_mobile_unlocked', '1');
+      setUnlocked(true);
+      showToast('Vault created successfully.');
     } catch (e: any) { setStatus('Error: ' + e.message); }
   }
 
   async function onExistingUser() {
-    if (!tokenJson || !password) return setStatus('Enter token and password');
+    if (!password) return setStatus('Enter master password');
     setStatus('Validating...');
     try {
-      const t = JSON.parse(tokenJson);
+      let t: any = null;
+      if (tokenJson && tokenJson.trim()) {
+        t = JSON.parse(tokenJson);
+      } else {
+        const prof = await (window as any).nexVault.getVaultProfile();
+        if (prof && prof.bootstrapToken) t = prof.bootstrapToken;
+      }
+      if (!t) throw new Error('Bootstrap token is missing. Paste JSON first.');
+
       const r = await (window as any).nexVault.initializeExistingUser(t.tokenId, t.publicKey, t.signature, password, t.expiresAt);
       if (!r.success) throw new Error(r.error);
       sessionStorage.setItem('nexvault_mobile_unlocked', '1');
-      setStatus('Unlocked: ' + r.tokenId);
       setUnlocked(true);
+      setStatus('Unlocked: ' + r.tokenId);
       refreshVault(false);
       refreshOTPs(false);
       loadDevices();
-      setTimeout(() => {
-        onStartGrid();
-      }, 200);
+      setTimeout(() => onStartGrid(), 400);
     } catch (e: any) { setStatus('Error: ' + e.message); }
   }
 
   function onLockVault() {
     sessionStorage.removeItem('nexvault_mobile_unlocked');
     setUnlocked(false);
-    onStopGrid();
-    setStatus('Vault locked');
+    setPassword('');
+    setStatus('Vault locked.');
     showToast('Vault locked.');
   }
 
+  // NexGrid Handlers
   async function onStartGrid() {
-    log(`Connecting to NexGrid relay (${relayUrl})...`);
+    log('Connecting NexGrid...');
+    setGridStatus('connecting');
     try {
-      const r = await (window as any).nexVault.startNexGrid({ relayUrl }, {
-        onLog: (msg: string) => log(msg),
-        onStatusChange: (s: any) => setGridStatus(s),
-        onPairApproved: (peer: any) => {
-          log(`✅ Paired with ${peer.deviceName || peer.deviceId}!`);
-          refreshVault(false);
-          refreshOTPs(false);
-          loadDevices();
-        },
-        onIncomingPairRequest: (req: any) => {
-          setIncomingRequest({ from: req.from, deviceName: req.deviceName });
-        },
-        onVaultSynced: (count: number) => {
-          refreshVault(false);
-          refreshOTPs(false);
-          showToast(`✓ Received live sync from desktop (${count} items)!`);
+      const r = await (window as any).nexVault.startNexGrid(relayUrl);
+      if (r.success) {
+        setGridStatus('connected');
+        log('NexGrid connected to relay.');
+        loadDevices();
+        if ((window as any).nexVault.onIncomingPairRequest) {
+          (window as any).nexVault.onIncomingPairRequest(({ peerId, deviceName }: any) => {
+            log(`🔔 Incoming pairing request from ${deviceName || peerId}`);
+            setIncomingRequest({ from: peerId, deviceName: deviceName || 'Desktop Device' });
+          });
         }
-      });
-      if (r && !r.success) {
-        log('Error: ' + r.error);
+        if ((window as any).nexVault.onPeerPaired) {
+          (window as any).nexVault.onPeerPaired(({ peerId, deviceName }: any) => {
+            log(`✅ Device paired & verified: "${deviceName}" (${peerId})`);
+            setGridStatus('paired');
+            loadDevices();
+            refreshVault(false);
+            refreshOTPs(false);
+            showToast(`Device paired: ${deviceName || peerId}`);
+          });
+        }
+        if ((window as any).nexVault.onVaultUpdated) {
+          (window as any).nexVault.onVaultUpdated(() => {
+            log('🔄 Vault updated from network sync!');
+            refreshVault(false);
+            refreshOTPs(false);
+            showToast('Vault refreshed from sync');
+          });
+        }
+      } else {
+        setGridStatus('disconnected');
+        log('Connection notice: ' + r.error);
       }
-    } catch (e: any) { log('Exception: ' + e.message); }
+    } catch (e: any) {
+      setGridStatus('disconnected');
+      log('Error: ' + e.message);
+    }
   }
 
   async function onStopGrid() {
-    log('Stopping NexGrid...');
     try {
       await (window as any).nexVault.stopNexGrid();
       setGridStatus('disconnected');
+      log('NexGrid stopped.');
     } catch (e: any) { log('Error: ' + e.message); }
   }
 
   async function onPairWithCode() {
-    if (!pairingCode.trim()) return log('Enter the 6-digit code from desktop');
-    log(`Submitting pairing code ${pairingCode}...`);
+    if (!pairingCode || pairingCode.trim().length < 6) return showToast('Enter valid 6-digit code');
+    log(`Pairing with code ${pairingCode}...`);
     try {
-      const r = await (window as any).nexVault.pairWithCode(pairingCode);
+      const r = await (window as any).nexVault.pairWithCode(pairingCode.trim());
       if (r.success) {
-        log('Pairing code sent to network. Waiting for desktop confirmation...');
+        log('Pairing successful! Devices synced.');
+        showToast('Successfully paired!');
         setPairingCode('');
-        showToast('Pairing code submitted. Awaiting approval...');
+        setGridStatus('paired');
+        await loadDevices();
+        await refreshVault(false);
+        await refreshOTPs(false);
       } else {
-        log('Pair error: ' + r.error);
+        log('Pairing notice: ' + (r.error || 'Failed to pair with code'));
+        showToast(r.error || 'Pairing failed. Check code.');
       }
     } catch (e: any) {
-      log('Pair error: ' + e.message);
+      log('Error pairing: ' + e.message);
+      showToast('Pair error: ' + e.message);
     }
   }
 
@@ -235,34 +277,39 @@ function App() {
     if (!incomingRequest) return;
     try {
       await (window as any).nexVault.approvePairRequest(incomingRequest.from);
-      log(`Approved pairing with ${incomingRequest.deviceName}`);
+      log(`Approved pairing with ${incomingRequest.from}`);
+      showToast('Pairing approved!');
       setIncomingRequest(null);
-      refreshVault(false);
-      loadDevices();
-      showToast(`Device ${incomingRequest.deviceName} paired & approved.`);
-    } catch (e: any) { log('Error: ' + e.message); }
+      await loadDevices();
+      await refreshVault(false);
+    } catch (e: any) {
+      showToast('Error approving: ' + e.message);
+    }
   }
 
   async function onRejectIncoming() {
     if (!incomingRequest) return;
     try {
       await (window as any).nexVault.rejectPairRequest(incomingRequest.from);
-      log(`Declined pairing with ${incomingRequest.deviceName}`);
+      log(`Rejected pairing from ${incomingRequest.from}`);
       setIncomingRequest(null);
-    } catch (e: any) { log('Error: ' + e.message); }
+    } catch (e: any) {
+      showToast('Error rejecting: ' + e.message);
+    }
   }
 
+  // Passwords Handlers
   async function onSavePassword() {
-    if (!service || !credential) return setStatus('Enter service and credential');
+    if (!service || !credential) return setStatus('Enter service and password');
     try {
       const r = await (window as any).nexVault.addPassword(service, credential, vaultUsername);
       if (r.success) {
-        setStatus('Saved');
         setService('');
         setVaultUsername('');
         setCredential('');
+        setShowAddVault(false);
         refreshVault(false);
-        showToast('Credential saved & broadcasted to peers.');
+        showToast('Password saved.');
       } else throw new Error(r.error);
     } catch (e: any) { setStatus('Error: ' + e.message); }
   }
@@ -270,34 +317,64 @@ function App() {
   async function refreshVault(interactive = true) {
     if (interactive) setIsSyncing(true);
     try {
-      const syncRes = await (window as any).nexVault.syncWithPeers();
+      await (window as any).nexVault.syncWithPeers();
       const r = await (window as any).nexVault.listPasswords();
       setVaultItems(r.entries || []);
-      if (interactive) {
-        const timeStr = new Date().toLocaleTimeString();
-        if (syncRes && syncRes.peersContacted > 0) {
-          showToast(`✓ Synced with ${syncRes.peersContacted} peer(s) (${r.entries?.length || 0} credentials) at ${timeStr}`);
-        } else {
-          showToast(`✓ Refreshed ${r.entries?.length || 0} credentials at ${timeStr}`);
-        }
-      }
+      if (interactive) showToast(`Refreshed ${r.entries?.length || 0} credentials`);
     } catch (err: any) {
-      if (interactive) showToast('Refresh error: ' + err.message);
+      if (interactive) showToast('Sync error: ' + err.message);
     } finally {
       if (interactive) setIsSyncing(false);
     }
   }
 
-  async function onSaveOTP() {
-    if (!otpService || !otpSecret) return setStatus('Enter service and secret');
+  async function copyPassword(serviceName: string) {
     try {
-      const r = await (window as any).nexVault.addOTP(otpService, otpSecret);
+      const res = await (window as any).nexVault.getPassword(serviceName);
+      if (res && res.success && res.password) {
+        await navigator.clipboard.writeText(res.password);
+        showToast(`Copied password for ${serviceName}`);
+      } else {
+        showToast('Failed to retrieve password');
+      }
+    } catch (err: any) {
+      showToast('Copy error: ' + err.message);
+    }
+  }
+
+  async function copyUsername(user: string) {
+    try {
+      await navigator.clipboard.writeText(user);
+      showToast(`Copied username: ${user}`);
+    } catch {
+      showToast('Copy error');
+    }
+  }
+
+  async function deletePassword(serviceName: string) {
+    if (!confirm(`Delete credential for ${serviceName}?`)) return;
+    try {
+      await (window as any).nexVault.deletePassword(serviceName);
+      refreshVault(false);
+      showToast(`Deleted ${serviceName}`);
+    } catch (err: any) {
+      showToast('Error: ' + err.message);
+    }
+  }
+
+  // OTP Handlers
+  async function onSaveOTP() {
+    const s = otpService.trim();
+    const sec = otpSecret.trim().toUpperCase().replace(/\s/g, '');
+    if (!s || !sec) return setStatus('Enter service and secret key');
+    try {
+      const r = await (window as any).nexVault.addOTP(s, sec);
       if (r.success) {
-        setStatus('TOTP added');
         setOtpService('');
         setOtpSecret('');
+        setShowAddOtp(false);
         refreshOTPs(false);
-        showToast('TOTP secret saved.');
+        showToast('TOTP authenticator added.');
       } else throw new Error(r.error);
     } catch (e: any) { setStatus('Error: ' + e.message); }
   }
@@ -305,13 +382,10 @@ function App() {
   async function refreshOTPs(interactive = true) {
     if (interactive) setIsSyncing(true);
     try {
-      const syncRes = await (window as any).nexVault.syncWithPeers();
+      await (window as any).nexVault.syncWithPeers();
       const r = await (window as any).nexVault.listOTPs();
       setOtpItems(r.entries || []);
-      if (interactive) {
-        const timeStr = new Date().toLocaleTimeString();
-        showToast(`✓ Refreshed ${r.entries?.length || 0} TOTP codes at ${timeStr}`);
-      }
+      if (interactive) showToast(`Refreshed ${r.entries?.length || 0} TOTP codes`);
     } catch (err: any) {
       if (interactive) showToast('Refresh error: ' + err.message);
     } finally {
@@ -319,35 +393,55 @@ function App() {
     }
   }
 
+  async function copyOTP(code?: string) {
+    if (!code) return;
+    try {
+      await navigator.clipboard.writeText(code);
+      showToast(`Copied TOTP code: ${code}`);
+    } catch {
+      showToast('Copy error');
+    }
+  }
+
+  async function deleteOTP(serviceName: string) {
+    if (!confirm(`Delete TOTP for ${serviceName}?`)) return;
+    try {
+      await (window as any).nexVault.deleteOTP(serviceName);
+      refreshOTPs(false);
+      showToast(`Deleted ${serviceName}`);
+    } catch (err: any) {
+      showToast('Error: ' + err.message);
+    }
+  }
+
+  function copyBootstrapToken() {
+    if (!tokenJson) return;
+    navigator.clipboard.writeText(tokenJson);
+    showToast('Token copied to clipboard');
+  }
+
+  const filteredVaultItems = vaultItems.filter(v => {
+    if (!vaultSearch) return true;
+    const q = vaultSearch.toLowerCase();
+    return v.service.toLowerCase().includes(q) || (v.username && v.username.toLowerCase().includes(q));
+  });
+
   return (
     <div className="nv-app">
-      <canvas className="nv-canvas" data-nv-binary-shield></canvas>
       <div className="nv-app-layer">
-        <header className="nv-app-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        
+        {/* Header */}
+        <header className="nv-app-header">
           <div className="nv-app-brand">
-            <Shield size={36} />
-            <span className="nv-app-title">NEX<span className="nv-gradient-text">VAULT</span></span>
-            <span
-              className="nv-badge"
-              style={{ fontSize: '0.65rem', cursor: 'pointer', marginLeft: '0.25rem' }}
-              onClick={() => checkMobileUpdates(true)}
-              title="Click to check for updates"
-            >
-              v{CURRENT_VERSION}
-            </span>
+            <Shield size={24} />
+            <span className="nv-app-title">NEX<span>VAULT</span></span>
+            <span className="nv-badge" style={{ fontSize: '0.62rem' }}>v{CURRENT_VERSION}</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <button
-              className="nv-btn nv-btn-ghost"
-              style={{ padding: '0.25rem 0.5rem', fontSize: '0.65rem' }}
-              onClick={() => checkMobileUpdates(true)}
-            >
-              Updates
-            </button>
             {unlocked && (
               <button
                 className="nv-btn nv-btn-ghost"
-                style={{ padding: '0.25rem 0.5rem', fontSize: '0.65rem', borderColor: 'rgba(255,59,107,0.3)', color: 'var(--nv-danger)' }}
+                style={{ padding: '0.25rem 0.55rem', fontSize: '0.7rem' }}
                 onClick={onLockVault}
               >
                 Lock
@@ -360,11 +454,11 @@ function App() {
         {/* Update Notification Banner */}
         {updateInfo && updateInfo.hasUpdate && (
           <div style={{
-            margin: '0.75rem 1rem 0 1rem',
+            margin: '0.75rem 1rem 0',
             padding: '0.75rem 1rem',
-            background: 'rgba(0,212,255,0.12)',
-            border: '1px solid var(--nv-accent)',
-            borderRadius: '8px',
+            background: 'var(--nv-accent-light)',
+            border: '1px solid var(--nv-border-accent)',
+            borderRadius: 'var(--nv-radius-sm)',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
@@ -372,248 +466,505 @@ function App() {
             gap: '0.5rem'
           }}>
             <div>
-              <div style={{ fontWeight: 'bold', color: '#fff', fontSize: '0.85rem' }}>🚀 Update Available: {updateInfo.latestVersion}</div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--nv-muted)' }}>A newer Android APK is available for download.</div>
+              <div style={{ fontWeight: 600, color: '#fff', fontSize: '0.82rem' }}>Update Available: v{updateInfo.latestVersion}</div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--nv-muted)' }}>A newer Android APK is available.</div>
             </div>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', gap: '0.4rem' }}>
               <a
                 href={updateInfo.downloadUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="nv-btn nv-btn-cyan"
-                style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem', textDecoration: 'none', display: 'inline-block' }}
+                className="nv-btn nv-btn-accent nv-btn-sm"
+                style={{ textDecoration: 'none' }}
               >
                 Download APK
               </a>
               <button
-                className="nv-btn nv-btn-ghost"
-                style={{ padding: '0.35rem 0.6rem', fontSize: '0.75rem' }}
+                className="nv-btn nv-btn-ghost nv-btn-sm"
                 onClick={() => setUpdateInfo(null)}
               >
-                Dismiss
+                ✕
               </button>
             </div>
           </div>
         )}
 
+        {/* Main Content Area */}
         <main className="nv-app-main">
           {!unlocked ? (
-            <Card>
-              <h1 className="nv-title nv-app-h1">NexVault<span className="nv-gradient-text"> Mobile</span></h1>
-              <p className="nv-muted nv-app-sub">Local-first password, OTP, and trusted-device network.</p>
-
-              <div className="nv-tabs">
-                <button className={`nv-tab ${tab === 'existing' ? 'active' : ''}`} onClick={() => setTab('existing')}>Existing Network / Pair</button>
-                <button className={`nv-tab ${tab === 'new' ? 'active' : ''}`} onClick={() => setTab('new')}>New Network</button>
+            /* LOCKED AUTH SCREEN */
+            <Card style={{ margin: 'auto 0' }}>
+              <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
+                <Shield size={48} />
+                <h1 className="nv-title" style={{ fontSize: '1.35rem', marginTop: '0.5rem' }}>NexVault Mobile</h1>
+                <p className="nv-muted" style={{ fontSize: '0.8rem', margin: '0.25rem 0 0' }}>
+                  Local-first password manager &amp; authenticator.
+                </p>
               </div>
 
-              {tab === 'existing' ? (
+              <div className="nv-tabs" style={{ justifyContent: 'center' }}>
+                <button
+                  className={`nv-tab ${authMode === 'existing' ? 'active' : ''}`}
+                  onClick={() => setAuthMode('existing')}
+                >
+                  Unlock Vault
+                </button>
+                <button
+                  className={`nv-tab ${authMode === 'new' ? 'active' : ''}`}
+                  onClick={() => setAuthMode('new')}
+                >
+                  New Vault
+                </button>
+              </div>
+
+              {authMode === 'existing' ? (
                 <div className="nv-form">
-                  <label className="nv-label">Paste Bootstrap Token (from Desktop)</label>
-                  <textarea className="nv-textarea" rows={5} placeholder='{"tokenId":"...","publicKey":"...","signature":"...","expiresAt":...}' value={tokenJson} onChange={e => setTokenJson(e.target.value)} />
-                  <label className="nv-label">Master Password</label>
-                  <input className="nv-input" type="password" placeholder="master password" value={password} onChange={e => setPassword(e.target.value)} autoComplete="current-password" />
-                  <button className="nv-btn nv-btn-cyan" onClick={onExistingUser}>Validate &amp; Unlock</button>
+                  <div className="form-group">
+                    <label className="nv-label">Master Password</label>
+                    <input
+                      className="nv-input"
+                      type="password"
+                      placeholder="Enter master password"
+                      value={password}
+                      onChange={e => setPassword(e.target.value)}
+                      autoComplete="current-password"
+                    />
+                  </div>
+                  {(!tokenJson || tokenJson.length < 10) && (
+                    <div className="form-group">
+                      <label className="nv-label">Bootstrap Token (JSON from Desktop)</label>
+                      <textarea
+                        className="nv-textarea nv-mono"
+                        rows={4}
+                        placeholder='{"tokenId":"...","publicKey":"..."}'
+                        value={tokenJson}
+                        onChange={e => setTokenJson(e.target.value)}
+                      />
+                    </div>
+                  )}
+                  <button className="nv-btn" onClick={onExistingUser}>Unlock Vault</button>
                 </div>
               ) : (
                 <div className="nv-form">
-                  <label className="nv-label">Username</label>
-                  <input className="nv-input" placeholder="choose a username" value={username} onChange={e => setUsername(e.target.value)} autoComplete="username" />
-                  <label className="nv-label">Master Password</label>
-                  <input className="nv-input" type="password" placeholder="master password" value={password} onChange={e => setPassword(e.target.value)} autoComplete="new-password" />
-                  <button className="nv-btn" onClick={onNewUser}>Generate Bootstrap Token</button>
-                  {tokenJson && (
-                    <>
-                      <label className="nv-label">Your Bootstrap Token (save this!)</label>
-                      <textarea className="nv-textarea" rows={6} readOnly value={tokenJson} onChange={e => setTokenJson(e.target.value)} />
-                    </>
+                  <div className="form-group">
+                    <label className="nv-label">Username</label>
+                    <input
+                      className="nv-input"
+                      placeholder="Choose a username"
+                      value={username}
+                      onChange={e => setUsername(e.target.value)}
+                      autoComplete="username"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="nv-label">Master Password</label>
+                    <input
+                      className="nv-input"
+                      type="password"
+                      placeholder="Choose master password"
+                      value={password}
+                      onChange={e => setPassword(e.target.value)}
+                      autoComplete="new-password"
+                    />
+                  </div>
+                  <button className="nv-btn" onClick={onNewUser}>Create Vault</button>
+                </div>
+              )}
+
+              <p style={{ fontSize: '0.75rem', color: 'var(--nv-muted)', textAlign: 'center', marginTop: '1rem', marginBottom: 0 }}>
+                {status}
+              </p>
+            </Card>
+          ) : (
+            /* UNLOCKED MULTI-PAGE VIEWS */
+            <>
+              {/* PAGE 1: VAULT */}
+              {activeTab === 'vault' && (
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                    <div style={{ fontSize: '1rem', fontWeight: 700, color: '#fff' }}>Vault Logins</div>
+                    <div style={{ display: 'flex', gap: '0.4rem' }}>
+                      <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={() => refreshVault(true)}>
+                        {isSyncing ? 'Syncing...' : 'Sync'}
+                      </button>
+                      <button className="nv-btn nv-btn-sm" onClick={() => setShowAddVault(!showAddVault)}>
+                        {showAddVault ? '✕ Close' : '+ Add'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="nv-search-bar">
+                    <span>🔍</span>
+                    <input
+                      placeholder="Search passwords..."
+                      value={vaultSearch}
+                      onChange={e => setVaultSearch(e.target.value)}
+                    />
+                  </div>
+
+                  {showAddVault && (
+                    <Card style={{ marginBottom: '1rem' }}>
+                      <div style={{ fontWeight: 600, color: '#fff', marginBottom: '0.75rem' }}>Add Credential</div>
+                      <div className="nv-form">
+                        <input
+                          className="nv-input"
+                          placeholder="Service / Website (e.g. github.com)"
+                          value={service}
+                          onChange={e => setService(e.target.value)}
+                        />
+                        <input
+                          className="nv-input"
+                          placeholder="Username / Email"
+                          value={vaultUsername}
+                          onChange={e => setVaultUsername(e.target.value)}
+                        />
+                        <input
+                          className="nv-input"
+                          placeholder="Credential / Password"
+                          value={credential}
+                          onChange={e => setCredential(e.target.value)}
+                        />
+                        <div className="nv-btn-row">
+                          <button className="nv-btn" onClick={onSavePassword}>Save Credential</button>
+                          <button className="nv-btn nv-btn-ghost" onClick={() => setShowAddVault(false)}>Cancel</button>
+                        </div>
+                      </div>
+                    </Card>
+                  )}
+
+                  {filteredVaultItems.length === 0 ? (
+                    <div className="nv-empty">
+                      No credentials found. Connect to Desktop via NexGrid to sync your logins!
+                    </div>
+                  ) : (
+                    filteredVaultItems.map(v => (
+                      <div className="nv-vault-item" key={v.service}>
+                        <div className="nv-vault-info">
+                          <span className="nv-vault-service">{v.service}</span>
+                          <span className="nv-vault-meta">
+                            {v.username ? `👤 ${v.username}` : `Saved ${new Date(v.createdAt).toLocaleDateString()}`}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.35rem' }}>
+                          <button
+                            className="nv-btn nv-btn-ghost nv-btn-sm"
+                            onClick={() => copyPassword(v.service)}
+                          >
+                            Copy Pass
+                          </button>
+                          {v.username && (
+                            <button
+                              className="nv-btn nv-btn-ghost nv-btn-sm"
+                              onClick={() => copyUsername(v.username!)}
+                            >
+                              Copy User
+                            </button>
+                          )}
+                          <button
+                            className="nv-btn nv-btn-ghost nv-btn-sm"
+                            style={{ color: 'var(--nv-danger)' }}
+                            onClick={() => deletePassword(v.service)}
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+                    ))
                   )}
                 </div>
               )}
 
-              <p className="nv-app-status">{status}</p>
-            </Card>
-          ) : (
-            <>
-              {/* NexGrid Panel */}
-              <Card style={{ marginBottom: '1rem' }}>
-                <div className="nv-panel-header">
-                  <span className="nv-panel-title">nexgrid p2p</span>
-                  <StatusPill ok={gridStatus === 'paired' || gridStatus === 'connected'} label={gridStatus} />
-                </div>
-
-                <div style={{ marginBottom: '0.65rem' }}>
-                  <label className="nv-label">Relay Server URL</label>
-                  <input
-                    className="nv-input"
-                    value={relayUrl}
-                    onChange={e => setRelayUrl(e.target.value)}
-                    placeholder="ws://10.0.2.2:46123 or ws://192.168.1.X:46123"
-                    style={{ fontSize: '0.8rem' }}
-                  />
-                </div>
-
-                <div className="nv-btn-row">
-                  <button className="nv-btn" onClick={onStartGrid}>
-                    {gridStatus === 'disconnected' ? 'Start NexGrid' : 'Reconnect Grid'}
-                  </button>
-                  {gridStatus !== 'disconnected' && (
-                    <button className="nv-btn nv-btn-ghost" onClick={onStopGrid}>Stop</button>
-                  )}
-                </div>
-
-                {/* Pair with 6-digit code */}
-                <div style={{ marginTop: '0.75rem', padding: '0.65rem', background: 'rgba(0,212,255,0.06)', borderRadius: '8px', border: '1px solid rgba(0,212,255,0.2)' }}>
-                  <label className="nv-label" style={{ color: 'var(--nv-accent)' }}>Enter Desktop Pairing Code</label>
-                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
-                    <input
-                      className="nv-input"
-                      placeholder="e.g. 543210"
-                      value={pairingCode}
-                      maxLength={8}
-                      onChange={e => setPairingCode(e.target.value)}
-                      style={{ fontSize: '1rem', letterSpacing: '2px', fontWeight: 'bold' }}
-                    />
-                    <button className="nv-btn nv-btn-cyan" style={{ padding: '0.5rem 0.9rem', fontSize: '0.8rem', whiteSpace: 'nowrap' }} onClick={onPairWithCode}>
-                      Pair Code
-                    </button>
-                  </div>
-                </div>
-
-                {/* Incoming Request Banner */}
-                {incomingRequest && (
-                  <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: 'rgba(0,255,157,0.12)', border: '1px solid var(--nv-primary)', borderRadius: '8px' }}>
-                    <div style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#fff' }}>🔔 Pairing Request from "{incomingRequest.deviceName}"</div>
-                    <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.4rem' }}>
-                      <button className="nv-btn" style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem' }} onClick={onApproveIncoming}>Approve &amp; Sync</button>
-                      <button className="nv-btn nv-btn-ghost" style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem' }} onClick={onRejectIncoming}>Reject</button>
+              {/* PAGE 2: AUTHENTICATOR (OTP) */}
+              {activeTab === 'otp' && (
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem' }}>
+                    <div>
+                      <div style={{ fontSize: '1rem', fontWeight: 700, color: '#fff' }}>Authenticator</div>
+                      <span className="nv-badge" style={{ fontSize: '0.65rem' }}>Refreshes in {countdown}s</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.4rem' }}>
+                      <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={() => refreshOTPs(true)}>
+                        {isSyncing ? 'Syncing...' : 'Sync'}
+                      </button>
+                      <button className="nv-btn nv-btn-sm" onClick={() => setShowAddOtp(!showAddOtp)}>
+                        {showAddOtp ? '✕ Close' : '+ Add TOTP'}
+                      </button>
                     </div>
                   </div>
-                )}
 
-                {/* Persistent Trusted Devices List */}
-                <div style={{ marginTop: '0.75rem', borderTop: '1px solid var(--nv-border)', paddingTop: '0.65rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-                    <span className="nv-label" style={{ margin: 0, color: 'var(--nv-primary)', fontSize: '0.75rem' }}>Paired Devices (Persistent)</span>
-                    <button className="nv-btn nv-btn-ghost" style={{ padding: '0.2rem 0.5rem', fontSize: '0.65rem' }} onClick={loadDevices}>Reload</button>
-                  </div>
-                  {trustedDevices.length === 0 ? (
-                    <div className="nv-empty" style={{ padding: '0.4rem', fontSize: '0.75rem' }}>No paired devices yet. Devices will auto-reconnect once paired.</div>
+                  {showAddOtp && (
+                    <Card style={{ marginBottom: '1rem' }}>
+                      <div style={{ fontWeight: 600, color: '#fff', marginBottom: '0.75rem' }}>New Authenticator</div>
+                      <div className="nv-form">
+                        <input
+                          className="nv-input"
+                          placeholder="Service Name (e.g. GitHub)"
+                          value={otpService}
+                          onChange={e => setOtpService(e.target.value)}
+                        />
+                        <input
+                          className="nv-input nv-mono"
+                          placeholder="Base32 Secret Key"
+                          value={otpSecret}
+                          onChange={e => setOtpSecret(e.target.value)}
+                        />
+                        <div className="nv-btn-row">
+                          <button className="nv-btn" onClick={onSaveOTP}>Save TOTP</button>
+                          <button className="nv-btn nv-btn-ghost" onClick={() => setShowAddOtp(false)}>Cancel</button>
+                        </div>
+                      </div>
+                    </Card>
+                  )}
+
+                  {otpItems.length === 0 ? (
+                    <div className="nv-empty">No TOTP authenticators added yet.</div>
                   ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                      {trustedDevices.map(d => (
-                        <div key={d.deviceId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.35rem 0.5rem', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--nv-border)', borderRadius: '6px', fontSize: '0.75rem' }}>
+                    otpItems.map(o => (
+                      <div className="nv-vault-item" key={o.service}>
+                        <div className="nv-vault-info">
+                          <span className="nv-vault-service">{o.service}</span>
+                          <span style={{
+                            fontSize: '1.25rem',
+                            fontFamily: 'var(--nv-font-mono)',
+                            fontWeight: 700,
+                            color: 'var(--nv-primary)',
+                            letterSpacing: '3px'
+                          }}>
+                            {o.code || '------'}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.35rem' }}>
+                          <button
+                            className="nv-btn nv-btn-accent nv-btn-sm"
+                            onClick={() => copyOTP(o.code)}
+                          >
+                            Copy Code
+                          </button>
+                          <button
+                            className="nv-btn nv-btn-ghost nv-btn-sm"
+                            style={{ color: 'var(--nv-danger)' }}
+                            onClick={() => deleteOTP(o.service)}
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+
+              {/* PAGE 3: NEXGRID */}
+              {activeTab === 'grid' && (
+                <div>
+                  <Card style={{ marginBottom: '1rem' }}>
+                    <div className="nv-panel-header">
+                      <span className="nv-panel-title">NexGrid Mesh Connection</span>
+                      <StatusPill ok={gridStatus === 'paired' || gridStatus === 'connected'} label={gridStatus} />
+                    </div>
+
+                    <div style={{ marginBottom: '0.65rem' }}>
+                      <label className="nv-label">Relay Server URL</label>
+                      <input
+                        className="nv-input nv-mono"
+                        value={relayUrl}
+                        onChange={e => setRelayUrl(e.target.value)}
+                        placeholder="ws://10.0.2.2:46123 or ws://192.168.1.X:46123"
+                        style={{ fontSize: '0.8rem' }}
+                      />
+                    </div>
+
+                    <div className="nv-btn-row">
+                      <button className="nv-btn nv-btn-sm" onClick={onStartGrid}>
+                        {gridStatus === 'disconnected' ? 'Start NexGrid' : 'Reconnect'}
+                      </button>
+                      {gridStatus !== 'disconnected' && (
+                        <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={onStopGrid}>Stop</button>
+                      )}
+                    </div>
+                  </Card>
+
+                  {/* Pair with 6-digit Code */}
+                  <Card style={{ marginBottom: '1rem' }}>
+                    <div style={{ fontWeight: 600, color: '#fff', fontSize: '0.85rem', marginBottom: '0.4rem' }}>
+                      Enter Desktop Pairing Code
+                    </div>
+                    <p style={{ fontSize: '0.72rem', color: 'var(--nv-muted)', margin: '0 0 0.65rem' }}>
+                      Generate a pairing code on your Desktop NexVault app and enter it here.
+                    </p>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <input
+                        className="nv-input nv-mono"
+                        placeholder="e.g. 543210"
+                        value={pairingCode}
+                        maxLength={8}
+                        onChange={e => setPairingCode(e.target.value)}
+                        style={{ fontSize: '1.05rem', letterSpacing: '3px', fontWeight: 700 }}
+                      />
+                      <button className="nv-btn nv-btn-accent nv-btn-sm" onClick={onPairWithCode}>
+                        Pair Code
+                      </button>
+                    </div>
+                  </Card>
+
+                  {/* Incoming Request Alert */}
+                  {incomingRequest && (
+                    <Card style={{ marginBottom: '1rem', background: 'var(--nv-primary-light)', borderColor: 'var(--nv-primary)' }}>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fff' }}>
+                        Pairing Request from "{incomingRequest.deviceName}"
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.6rem' }}>
+                        <button className="nv-btn nv-btn-sm" onClick={onApproveIncoming}>Approve &amp; Sync</button>
+                        <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={onRejectIncoming}>Reject</button>
+                      </div>
+                    </Card>
+                  )}
+
+                  {/* Trusted Devices List */}
+                  <Card style={{ marginBottom: '1rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem' }}>
+                      <span style={{ fontWeight: 600, color: '#fff', fontSize: '0.85rem' }}>Paired Devices</span>
+                      <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={loadDevices}>Reload</button>
+                    </div>
+
+                    {trustedDevices.length === 0 ? (
+                      <div className="nv-empty" style={{ padding: '0.75rem', fontSize: '0.75rem' }}>
+                        No paired devices yet. Devices will auto-reconnect once paired.
+                      </div>
+                    ) : (
+                      trustedDevices.map(d => (
+                        <div
+                          key={d.deviceId}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '0.5rem 0.65rem',
+                            background: 'var(--nv-bg-2)',
+                            border: '1px solid var(--nv-border)',
+                            borderRadius: 'var(--nv-radius-sm)',
+                            marginBottom: '0.4rem',
+                            fontSize: '0.75rem'
+                          }}
+                        >
                           <div>
-                            <div style={{ fontWeight: 'bold', color: '#fff' }}>{d.deviceName || 'Desktop'}</div>
+                            <div style={{ fontWeight: 600, color: '#fff' }}>{d.deviceName || 'Desktop'}</div>
                             <div style={{ fontSize: '0.65rem', color: 'var(--nv-muted)', fontFamily: 'var(--nv-font-mono)' }}>{d.deviceId}</div>
                           </div>
-                          <button className="nv-btn nv-btn-ghost" style={{ padding: '0.2rem 0.45rem', fontSize: '0.65rem', color: 'var(--nv-danger)', borderColor: 'rgba(255,59,107,0.3)' }} onClick={() => onRevokeDevice(d.deviceId)}>Revoke</button>
+                          <button
+                            className="nv-btn nv-btn-ghost nv-btn-sm"
+                            style={{ color: 'var(--nv-danger)', padding: '0.2rem 0.45rem', fontSize: '0.65rem' }}
+                            onClick={() => onRevokeDevice(d.deviceId)}
+                          >
+                            Revoke
+                          </button>
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                      ))
+                    )}
+                  </Card>
 
-                <div className="nv-terminal" style={{ marginTop: '0.75rem' }}>
-                  {gridLog.length ? gridLog.join('\n') : '>> Awaiting NexGrid start...'}
+                  {/* Network Log */}
+                  <div className="nv-terminal" style={{ maxHeight: '140px', overflowY: 'auto' }}>
+                    {gridLog.length ? gridLog.join('\n') : '>> NexGrid ready.'}
+                  </div>
                 </div>
-              </Card>
+              )}
 
-              {/* Vault Credentials Card */}
-              <Card style={{ marginBottom: '1rem' }}>
-                <div className="nv-panel-header">
-                  <span className="nv-panel-title">vault credentials</span>
-                </div>
-                <div className="nv-form-row">
-                  <input className="nv-input" placeholder="Service / Website" value={service} onChange={e => setService(e.target.value)} />
-                  <input className="nv-input" placeholder="Username / Email" value={vaultUsername} onChange={e => setVaultUsername(e.target.value)} />
-                </div>
-                <div style={{ marginTop: '0.5rem', marginBottom: '0.5rem' }}>
-                  <input className="nv-input" placeholder="Credential / Password" value={credential} onChange={e => setCredential(e.target.value)} />
-                </div>
-                <div className="nv-btn-row">
-                  <button className="nv-btn" onClick={onSavePassword}>Save Credential</button>
-                  <button className="nv-btn nv-btn-cyan" onClick={() => refreshVault(true)}>
-                    {isSyncing ? 'Syncing...' : 'Sync & Refresh'}
-                  </button>
-                </div>
-                <div className="nv-vault-list">
-                  {vaultItems.length === 0 ? (
-                    <div className="nv-empty">No credentials stored yet. Connect to Desktop via NexGrid to sync!</div>
-                  ) : vaultItems.map(v => (
-                    <div className="nv-vault-item" key={v.service}>
-                      <div className="nv-vault-info">
-                        <span className="nv-vault-service">
-                          {v.service} {v.username ? <span style={{ color: 'var(--nv-accent)', fontSize: '0.75rem' }}>({v.username})</span> : null}
-                        </span>
-                        <span className="nv-vault-meta">Created: {new Date(v.createdAt).toLocaleDateString()}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </Card>
+              {/* PAGE 4: SETTINGS */}
+              {activeTab === 'settings' && (
+                <div>
+                  <Card style={{ marginBottom: '1rem' }}>
+                    <div style={{ fontWeight: 600, color: '#fff', marginBottom: '0.35rem' }}>Vault Identity &amp; Token</div>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--nv-muted)', margin: '0 0 0.75rem' }}>
+                      Your cryptographically signed identity token.
+                    </p>
+                    {tokenJson ? (
+                      <>
+                        <textarea
+                          className="nv-textarea nv-mono"
+                          rows={4}
+                          readOnly
+                          value={tokenJson}
+                          style={{ fontSize: '0.72rem', marginBottom: '0.5rem' }}
+                        />
+                        <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={copyBootstrapToken}>
+                          Copy Token JSON
+                        </button>
+                      </>
+                    ) : (
+                      <p style={{ fontSize: '0.75rem', color: 'var(--nv-muted)' }}>No token loaded in memory.</p>
+                    )}
+                  </Card>
 
-              {/* OTP / TOTP Card */}
-              <Card>
-                <div className="nv-panel-header">
-                  <span className="nv-panel-title">otp / totp</span>
-                </div>
-                <div className="nv-form-row">
-                  <input className="nv-input" placeholder="Service" value={otpService} onChange={e => setOtpService(e.target.value)} />
-                  <input className="nv-input" placeholder="Secret (base32)" value={otpSecret} onChange={e => setOtpSecret(e.target.value)} />
-                </div>
-                <div className="nv-btn-row">
-                  <button className="nv-btn" onClick={onSaveOTP}>Add TOTP</button>
-                  <button className="nv-btn nv-btn-cyan" onClick={() => refreshOTPs(true)}>
-                    {isSyncing ? 'Syncing...' : 'Sync & Refresh'}
-                  </button>
-                </div>
-                <div className="nv-vault-list">
-                  {otpItems.length === 0 ? (
-                    <div className="nv-empty">No TOTP entries yet.</div>
-                  ) : otpItems.map(o => (
-                    <div className="nv-vault-item" key={o.service}>
-                      <div className="nv-vault-info">
-                        <span className="nv-vault-service">{o.service}</span>
-                        {o.code && (
-                          <span style={{ fontSize: '1.2rem', fontFamily: 'var(--nv-font-mono)', fontWeight: 'bold', color: 'var(--nv-primary)', letterSpacing: '3px' }}>
-                            {o.code}
-                          </span>
-                        )}
-                      </div>
+                  <Card style={{ marginBottom: '1rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                      <div style={{ fontWeight: 600, color: '#fff' }}>Application Updates</div>
+                      <span className="nv-badge">v{CURRENT_VERSION}</span>
                     </div>
-                  ))}
+                    <p style={{ fontSize: '0.75rem', color: 'var(--nv-muted)', margin: '0 0 0.75rem' }}>
+                      Check GitHub releases for the latest Android APK build.
+                    </p>
+                    <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={() => checkMobileUpdates(true)}>
+                      Check for Updates
+                    </button>
+                  </Card>
+
+                  <Card style={{ borderColor: 'rgba(239, 68, 68, 0.25)' }}>
+                    <div style={{ fontWeight: 600, color: 'var(--nv-danger)', marginBottom: '0.35rem' }}>Session</div>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--nv-muted)', margin: '0 0 0.75rem' }}>
+                      Lock your vault to encrypt passwords and keys in memory.
+                    </p>
+                    <button className="nv-btn nv-btn-danger nv-btn-sm" onClick={onLockVault}>
+                      Lock Vault Now
+                    </button>
+                  </Card>
                 </div>
-              </Card>
+              )}
             </>
           )}
         </main>
 
-        {/* Global Toast Notification */}
-        {syncToast && (
-          <div style={{
-            position: 'fixed',
-            bottom: '24px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            background: 'rgba(5, 12, 24, 0.96)',
-            border: '1px solid var(--nv-primary)',
-            color: 'var(--nv-primary)',
-            boxShadow: '0 0 20px rgba(0,255,157,0.3)',
-            borderRadius: '24px',
-            padding: '0.55rem 1.35rem',
-            fontSize: '0.8rem',
-            fontFamily: 'var(--nv-font-mono)',
-            zIndex: 9999,
-            pointerEvents: 'none',
-            textAlign: 'center',
-            maxWidth: '90vw'
-          }}>
-            {syncToast}
+        {/* Global Toast */}
+        {toastMsg && (
+          <div className="nv-toast">
+            {toastMsg}
           </div>
         )}
 
-        <footer className="nv-app-footer">NEXVAULT — local-first. nothing in between.</footer>
+        {/* Bottom Navigation Bar (Visible when unlocked) */}
+        {unlocked && (
+          <nav className="nv-bottom-nav">
+            <button
+              className={`nv-nav-button ${activeTab === 'vault' ? 'active' : ''}`}
+              onClick={() => setActiveTab('vault')}
+            >
+              <span className="nav-icon">🔑</span>
+              <span>Vault</span>
+            </button>
+            <button
+              className={`nv-nav-button ${activeTab === 'otp' ? 'active' : ''}`}
+              onClick={() => setActiveTab('otp')}
+            >
+              <span className="nav-icon">⏱️</span>
+              <span>OTP</span>
+            </button>
+            <button
+              className={`nv-nav-button ${activeTab === 'grid' ? 'active' : ''}`}
+              onClick={() => setActiveTab('grid')}
+            >
+              <span className="nav-icon">🌐</span>
+              <span>NexGrid</span>
+            </button>
+            <button
+              className={`nv-nav-button ${activeTab === 'settings' ? 'active' : ''}`}
+              onClick={() => setActiveTab('settings')}
+            >
+              <span className="nav-icon">⚙️</span>
+              <span>Settings</span>
+            </button>
+          </nav>
+        )}
+
       </div>
     </div>
   );
