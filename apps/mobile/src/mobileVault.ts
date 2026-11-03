@@ -1103,7 +1103,7 @@ export function initMobileVault() {
     },
 
     onVaultUpdated(callback: () => void) {
-      if (typeof callback === 'function') {
+      if (typeof callback === 'function' && !vaultUpdatedListeners.includes(callback)) {
         vaultUpdatedListeners.push(callback);
       }
     }

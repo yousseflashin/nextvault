@@ -794,6 +794,7 @@
       listPasswords();
       listOTPs();
       loadTrustedDevicesUI();
+      setTimeout(() => startGrid(), 300);
     }
 
     function copyToken() {
@@ -1376,6 +1377,23 @@
           listPasswords();
           listOTPs();
           loadTrustedDevicesUI();
+        });
+      }
+      if (window.nexVault.onVaultSyncedToPeers) {
+        window.nexVault.onVaultSyncedToPeers(({ count }) => {
+          gridLog(`Broadcasted updated credentials to ${count} mesh peer(s).`);
+        });
+      }
+      if (window.nexVault.onGridStatus) {
+        window.nexVault.onGridStatus(({ status, relayUrl, peers }) => {
+          if (status === 'connected') {
+            $('grid-badge').innerHTML = '<span class="dot"></span>connected';
+            $('grid-status-pill').textContent = 'Connected';
+            gridLog('NexGrid connected to ' + relayUrl);
+            if (peers && peers.length) {
+              gridLog('Active peers in mesh: ' + peers.map(p => p.deviceName || p.deviceId).join(', '));
+            }
+          }
         });
       }
     }

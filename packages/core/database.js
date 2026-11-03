@@ -346,6 +346,13 @@ class NexVaultDatabase {
   }
 
   /**
+   * Compatibility alias for addOtpSecret
+   */
+  addOTP(userId, serviceName, secretPlainText, encryptionKey) {
+    return this.addOtpSecret(userId, serviceName, 'TOTP', secretPlainText, encryptionKey);
+  }
+
+  /**
    * Get all passwords for a user
    */
   getPasswords(userId) {

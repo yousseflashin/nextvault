@@ -73,5 +73,7 @@ contextBridge.exposeInMainWorld('nexVault', {
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
   pairWithCode: (code) => ipcRenderer.invoke('pair-with-code', code),
   getRelayUrl: () => ipcRenderer.invoke('get-relay-url'),
-  setRelayUrl: (url) => ipcRenderer.invoke('set-relay-url', url)
+  setRelayUrl: (url) => ipcRenderer.invoke('set-relay-url', url),
+  onVaultSyncedToPeers: (callback) => ipcRenderer.on('vault-synced-to-peers', (event, data) => callback(data)),
+  onGridStatus: (callback) => ipcRenderer.on('grid-status', (event, data) => callback(data))
 });

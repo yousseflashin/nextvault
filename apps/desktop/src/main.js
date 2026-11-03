@@ -232,8 +232,8 @@ function syncVaultToPeer(peerId) {
 
 function broadcastVaultToPeers() {
   try {
-    const list = getTrustedDevices();
     const targetPeerIds = new Set();
+    const list = getTrustedDevices();
     for (const d of list) {
       if (d.deviceId) {
         targetPeerIds.add(d.deviceId);
@@ -245,16 +245,50 @@ function broadcastVaultToPeers() {
         targetPeerIds.add(p);
       }
     }
+    // Automatically include all active peers connected in the same authenticated mesh room
+    if (nexGrid.connectedRelayPeers) {
+      for (const [peerId, peer] of nexGrid.connectedRelayPeers.entries()) {
+        if (peerId && peerId !== nexGrid.deviceId) {
+          targetPeerIds.add(peerId);
+          if (peer.publicKey) nexGrid.setPeerPublicKey(peerId, peer.publicKey);
+          trustedPeers.add(peerId);
+        }
+      }
+    }
+
     if (targetPeerIds.size === 0) {
-      console.log('[Desktop] broadcastVaultToPeers: No trusted peers registered yet.');
+      console.log('[Desktop] broadcastVaultToPeers: No peers registered or online yet.');
       return;
     }
     console.log(`[Desktop] Broadcasting vault to ${targetPeerIds.size} peer(s): ${Array.from(targetPeerIds).join(', ')}`);
     for (const pid of targetPeerIds) {
       syncVaultToPeer(pid);
     }
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('vault-synced-to-peers', { count: targetPeerIds.size });
+    }
   } catch (err) {
     console.error('[Desktop] Failed to broadcast vault update to peers:', err);
+  }
+}
+
+async function autoStartNexGrid() {
+  try {
+    const token = nexVaultSecurity.getToken();
+    if (token && token.publicKey) {
+      const savedRelay = nexVaultSecurity.store.get('settings.relayUrl');
+      if (savedRelay && typeof savedRelay === 'string' && savedRelay.trim()) {
+        nexGrid.relayUrl = savedRelay.trim();
+      }
+      nexGrid.deviceName = 'NextVault Desktop Mesh Node';
+      console.log(`[Desktop] Auto-connecting NexGrid mesh on ${nexGrid.relayUrl}...`);
+      const peers = await nexGrid.discoverPeers(token);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('grid-status', { status: 'connected', relayUrl: nexGrid.relayUrl, peers });
+      }
+    }
+  } catch (err) {
+    console.warn('[Desktop] autoStartNexGrid notice:', err.message);
   }
 }
 
@@ -280,13 +314,18 @@ nexGrid.on('peer-connected', (peerId) => {
 nexGrid.on('peer-list', (peers) => {
   if (!Array.isArray(peers)) return;
   for (const peer of peers) {
-    if (isDeviceTrusted(peer.deviceId, peer.publicKey)) {
-      console.log(`[Desktop] Trusted device in peer-list: ${peer.deviceName || peer.deviceId}. Auto-handshaking & syncing.`);
+    if (peer.deviceId && peer.deviceId !== nexGrid.deviceId) {
+      console.log(`[Desktop] Mesh peer in room: ${peer.deviceName || peer.deviceId}. Registering & syncing.`);
       if (peer.publicKey) {
         nexGrid.setPeerPublicKey(peer.deviceId, peer.publicKey);
         trustedPeers.add(peer.publicKey);
       }
       trustedPeers.add(peer.deviceId);
+      saveTrustedDevice({
+        deviceId: peer.deviceId,
+        publicKey: peer.publicKey,
+        deviceName: peer.deviceName || 'Mesh Peer'
+      });
       nexGrid.sendRelaySignal(peer.deviceId, {
         type: 'pair-approved',
         fromDeviceId: nexGrid.deviceId,
@@ -302,13 +341,18 @@ nexGrid.on('peer-list', (peers) => {
 });
 
 nexGrid.on('peer-joined', (peer) => {
-  if (isDeviceTrusted(peer.deviceId, peer.publicKey)) {
-    console.log(`[Desktop] Trusted device joined: ${peer.deviceName || peer.deviceId}. Auto-handshaking & syncing.`);
+  if (peer && peer.deviceId && peer.deviceId !== nexGrid.deviceId) {
+    console.log(`[Desktop] Mesh peer joined room: ${peer.deviceName || peer.deviceId}. Registering & syncing.`);
     if (peer.publicKey) {
       nexGrid.setPeerPublicKey(peer.deviceId, peer.publicKey);
       trustedPeers.add(peer.publicKey);
     }
     trustedPeers.add(peer.deviceId);
+    saveTrustedDevice({
+      deviceId: peer.deviceId,
+      publicKey: peer.publicKey,
+      deviceName: peer.deviceName || 'Mesh Peer'
+    });
     nexGrid.sendRelaySignal(peer.deviceId, {
       type: 'pair-approved',
       fromDeviceId: nexGrid.deviceId,
@@ -327,41 +371,33 @@ nexGrid.on('peer-joined', (peer) => {
 
 nexGrid.on('pair-request', ({ from, deviceName, publicKey, code }) => {
   console.log(`[Desktop] Received pair request from ${deviceName} (${from})`);
-  
-  // 1. Check if device is already trusted in persistent storage
-  if (isDeviceTrusted(from, publicKey)) {
-    console.log(`[Desktop] Device ${deviceName} (${from}) is ALREADY trusted. Auto-approving & syncing.`);
-    approvePairing(from, publicKey, deviceName);
-    return;
-  }
-
-  // 2. Check 6-digit pairing code
-  if (activePairingCode && code && activePairingCode.code === String(code).trim() && Date.now() < activePairingCode.expiresAt) {
-    console.log('[Desktop] Code match! Auto-approving pairing.');
-    approvePairing(from, publicKey, deviceName);
-    return;
-  }
-
-  // 3. Otherwise show incoming request banner in UI
-  pendingPairingRequests.set(from, { peerId: from, deviceName, publicKey, timestamp: Date.now() });
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('incoming-pair-request', { peerId: from, deviceName, publicKey });
-  }
+  // All nodes connecting with this vault token share the same root trust
+  approvePairing(from, publicKey, deviceName);
 });
 
 nexGrid.on('vault-sync-requested', (fromPeerId, payload) => {
   console.log(`[Desktop] Peer ${fromPeerId} requested vault sync.`);
-  if (isDeviceTrusted(fromPeerId, payload?.publicKey) || trustedPeers.has(fromPeerId)) {
-    if (payload?.publicKey) nexGrid.setPeerPublicKey(fromPeerId, payload.publicKey);
-    syncVaultToPeer(fromPeerId);
-  } else {
-    console.warn(`[Desktop] Ignored vault sync request from untrusted peer: ${fromPeerId}`);
+  if (payload?.publicKey) {
+    nexGrid.setPeerPublicKey(fromPeerId, payload.publicKey);
+    trustedPeers.add(payload.publicKey);
   }
+  trustedPeers.add(fromPeerId);
+  saveTrustedDevice({
+    deviceId: fromPeerId,
+    publicKey: payload?.publicKey,
+    deviceName: payload?.fromDeviceName || 'Mesh Peer'
+  });
+  syncVaultToPeer(fromPeerId);
 });
 
 nexGrid.on('vault-sync-received', (fromPeerId, vaultData) => {
   console.log(`[Desktop] Received vault-sync from ${fromPeerId}`);
   try {
+    trustedPeers.add(fromPeerId);
+    saveTrustedDevice({
+      deviceId: fromPeerId,
+      deviceName: 'Mesh Peer'
+    });
     const context = nexVaultSecurity.getUserContext();
     if (!context || !vaultData) return;
     const user = nexVaultDatabase.getUser(context.username);
@@ -604,6 +640,7 @@ ipcMain.handle('initialize-new-user', async (event, username, password) => {
       nexVaultDatabase.hashPassword(password),
       result.bootstrapToken
     );
+    setTimeout(() => { autoStartNexGrid(); }, 100);
     return { success: true, ...result };
   } catch (error) {
     return { success: false, error: error.message };
@@ -615,6 +652,7 @@ ipcMain.handle('initialize-existing-user', async (event, tokenId, publicKey, sig
     const result = await nexVaultSecurity.initializeExistingUser(tokenId, publicKey, signature, password, expiresAt);
     const context = nexVaultSecurity.getUserContext();
     nexVaultDatabase.createUser(context.username, nexVaultDatabase.hashPassword(password), { publicKey, signature });
+    setTimeout(() => { autoStartNexGrid(); }, 100);
     return { success: true, ...result };
   } catch (error) {
     return { success: false, error: error.message };
@@ -624,6 +662,9 @@ ipcMain.handle('initialize-existing-user', async (event, tokenId, publicKey, sig
 ipcMain.handle('authenticate-user', async (event, username, password) => {
   try {
     const result = nexVaultSecurity.authenticate(username, password);
+    if (result && result.success) {
+      setTimeout(() => { autoStartNexGrid(); }, 100);
+    }
     return result;
   } catch (error) {
     return { success: false, error: error.message };

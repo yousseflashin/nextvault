@@ -25,6 +25,8 @@ class NexGrid extends EventEmitter {
     this.peers = new Map();
     this.localKeyPairs = new Map();
     this.signalChannels = new Map();
+    this.remotePeerKeys = new Map();
+    this.connectedRelayPeers = new Map();
     this.relayUrl = options.relayUrl || process.env.NEXVAULT_RELAY_URL || 'ws://127.0.0.1:46123';
     this.relaySocket = null;
     this.deviceId = null;
@@ -304,8 +306,10 @@ class NexGrid extends EventEmitter {
           if (message.type === 'peer-list') {
             clearTimeout(timeout);
             const peers = message.peers || [];
+            this.connectedRelayPeers.clear();
             peers.forEach(p => {
               if (p.publicKey) this.setPeerPublicKey(p.deviceId, p.publicKey);
+              this.connectedRelayPeers.set(p.deviceId, p);
             });
             resolve(peers);
             this.emit('peer-list', peers);
@@ -313,10 +317,19 @@ class NexGrid extends EventEmitter {
             if (message.peer?.publicKey) {
               this.setPeerPublicKey(message.peer.deviceId, message.peer.publicKey);
             }
+            if (message.peer?.deviceId) {
+              this.connectedRelayPeers.set(message.peer.deviceId, message.peer);
+            }
             this.emit('peer-joined', message.peer);
           } else if (message.type === 'peer-left') {
+            if (message.deviceId) {
+              this.connectedRelayPeers.delete(message.deviceId);
+            }
             this.handlePeerDisconnect(message.deviceId);
           } else if (message.type === 'signal') {
+            if (message.from && !this.connectedRelayPeers.has(message.from)) {
+              this.connectedRelayPeers.set(message.from, { deviceId: message.from });
+            }
             this.handleIncomingSignal(message.from, message.payload);
           }
         } catch (err) {
@@ -325,9 +338,14 @@ class NexGrid extends EventEmitter {
       });
       socket.once('error', () => {
         clearTimeout(timeout);
+        this.relaySocket = null;
         resolve([]);
       });
-      socket.once('close', () => this.emit('relay-disconnected'));
+      socket.once('close', () => {
+        this.relaySocket = null;
+        this.connectedRelayPeers.clear();
+        this.emit('relay-disconnected');
+      });
     });
   }
 
