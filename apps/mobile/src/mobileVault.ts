@@ -45,7 +45,7 @@ export interface MobileVaultState {
   otps: StoredOTP[];
 }
 
-export const CURRENT_VERSION = '0.1.8';
+export const CURRENT_VERSION = '0.1.9';
 export const GITHUB_REPO = 'yousseflashin/nextvault';
 
 export function isPeerTrusted(peerId: string, state: MobileVaultState): boolean {
@@ -954,6 +954,30 @@ export function initMobileVault() {
       const state = loadVault();
       if (!state) return { success: true, devices: [] };
       return { success: true, devices: state.trustedPeers || [] };
+    },
+
+    async applyUpdate(downloadUrl?: string) {
+      try {
+        if (!downloadUrl) {
+          const info = await (window as any).nexVault.checkForUpdates();
+          downloadUrl = info.downloadUrl;
+        }
+        if (!downloadUrl) throw new Error('No update URL found');
+
+        const cap = (window as any).Capacitor;
+        if (cap && typeof cap.isNativePlatform === 'function' && cap.isNativePlatform()) {
+          const plugins = cap.Plugins;
+          if (plugins && plugins.AppUpdater && typeof plugins.AppUpdater.installApk === 'function') {
+            const res = await plugins.AppUpdater.installApk({ url: downloadUrl });
+            return { success: true, message: res?.message || 'Package installer launched' };
+          }
+        }
+
+        window.open(downloadUrl, '_blank');
+        return { success: true, message: 'Opening download link...' };
+      } catch (err: any) {
+        return { success: false, error: err.message };
+      }
     },
 
     async removeTrustedDevice(deviceId: string) {

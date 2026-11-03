@@ -58,7 +58,7 @@ const pendingPairingRequests = new Map();
 let activePairingCode = null;
 const trustedPeers = new Set();
 
-const CURRENT_VERSION = '0.1.8';
+const CURRENT_VERSION = '0.1.9';
 const GITHUB_REPO = 'yousseflashin/nextvault';
 
 // Persistent trusted devices management
@@ -1030,6 +1030,155 @@ ipcMain.handle('check-for-updates', async () => {
   }
 });
 
+function downloadFileWithRedirects(targetUrl, destinationPath, onProgress, maxRedirects = 10) {
+  return new Promise((resolve, reject) => {
+    function fetchUrl(currentUrl, depth) {
+      if (depth > maxRedirects) {
+        return reject(new Error('Too many HTTP redirects'));
+      }
+      const parsed = new URL(currentUrl);
+      const httpModule = parsed.protocol === 'http:' ? require('http') : https;
+      const headers = {
+        'User-Agent': 'NexVault-Desktop/' + CURRENT_VERSION,
+        'Accept': 'application/octet-stream'
+      };
+      let token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
+      try {
+        if (!token) token = nexVaultSecurity.store.get('security.githubToken');
+      } catch {}
+      if (token && parsed.hostname.includes('github.com')) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const req = httpModule.get(currentUrl, { headers }, (res) => {
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          return fetchUrl(res.headers.location, depth + 1);
+        }
+        if (res.statusCode !== 200) {
+          return reject(new Error(`Download failed: HTTP ${res.statusCode}`));
+        }
+        const totalBytes = parseInt(res.headers['content-length'] || '0', 10);
+        let downloadedBytes = 0;
+        const fileStream = fs.createWriteStream(destinationPath);
+        res.on('data', (chunk) => {
+          downloadedBytes += chunk.length;
+          if (onProgress && totalBytes > 0) {
+            onProgress({
+              percent: Math.min(100, Math.round((downloadedBytes / totalBytes) * 100)),
+              downloadedBytes,
+              totalBytes
+            });
+          }
+        });
+        res.pipe(fileStream);
+        fileStream.on('finish', () => {
+          fileStream.close(() => resolve({ path: destinationPath, size: downloadedBytes }));
+        });
+        fileStream.on('error', (err) => {
+          fs.unlink(destinationPath, () => {});
+          reject(err);
+        });
+      });
+      req.on('error', reject);
+    }
+    fetchUrl(targetUrl, 0);
+  });
+}
+
+ipcMain.handle('apply-update', async (event, downloadUrl) => {
+  try {
+    if (!downloadUrl) {
+      const releaseInfo = await fetchGithubRelease();
+      if (!releaseInfo.success || !releaseInfo.release) {
+        throw new Error('Unable to retrieve latest release information');
+      }
+      const assets = releaseInfo.release.assets || [];
+      const appImageAsset = assets.find(a => /\.AppImage$/i.test(a.name));
+      if (!appImageAsset) {
+        throw new Error('No AppImage asset found in latest release');
+      }
+      downloadUrl = appImageAsset.browser_download_url;
+    }
+
+    const os = require('os');
+    const { spawn } = require('child_process');
+
+    const currentAppImage = process.env.APPIMAGE;
+    const tempDownloadPath = path.join(os.tmpdir(), `nexvault-update-${Date.now()}.AppImage`);
+
+    console.log(`[Desktop Auto-Update] Downloading ${downloadUrl} to ${tempDownloadPath}...`);
+    await downloadFileWithRedirects(downloadUrl, tempDownloadPath, (progress) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('update-download-progress', progress);
+      }
+    });
+
+    fs.chmodSync(tempDownloadPath, 0o755);
+
+    if (currentAppImage && fs.existsSync(currentAppImage)) {
+      console.log(`[Desktop Auto-Update] In-place replacing AppImage at: ${currentAppImage}`);
+      const updaterScriptPath = path.join(os.tmpdir(), `nexvault-restart-${Date.now()}.sh`);
+      
+      let targetFileName = path.basename(currentAppImage);
+      try {
+        const urlObj = new URL(downloadUrl);
+        const parsedName = path.basename(urlObj.pathname);
+        if (parsedName && parsedName.endsWith('.AppImage')) {
+          targetFileName = parsedName;
+        }
+      } catch {}
+
+      const targetAppImagePath = path.join(path.dirname(currentAppImage), targetFileName);
+
+      const scriptContent = `#!/bin/bash
+OLD_PID=${process.pid}
+OLD_FILE="${currentAppImage}"
+TARGET_FILE="${targetAppImagePath}"
+TMP_FILE="${tempDownloadPath}"
+
+while kill -0 "$OLD_PID" 2>/dev/null; do
+  sleep 0.1
+done
+
+# If replacing with a new version filename, remove the old file first so no duplicates exist
+if [ "$OLD_FILE" != "$TARGET_FILE" ] && [ -f "$OLD_FILE" ]; then
+  rm -f "$OLD_FILE"
+fi
+
+mv -f "$TMP_FILE" "$TARGET_FILE"
+chmod +x "$TARGET_FILE"
+
+nohup "$TARGET_FILE" >/dev/null 2>&1 &
+exit 0
+`;
+      fs.writeFileSync(updaterScriptPath, scriptContent, { mode: 0o755 });
+
+      const child = spawn('/bin/bash', [updaterScriptPath], {
+        detached: true,
+        stdio: 'ignore'
+      });
+      child.unref();
+
+      app.quit();
+      setTimeout(() => process.exit(0), 500);
+      return { success: true, message: 'Restarting with updated version...' };
+    } else {
+      console.log(`[Desktop Auto-Update] Running outside packaged AppImage. Spawning: ${tempDownloadPath}`);
+      const child = spawn(tempDownloadPath, [], {
+        detached: true,
+        stdio: 'ignore'
+      });
+      child.unref();
+      app.quit();
+      setTimeout(() => process.exit(0), 500);
+      return { success: true, message: 'Launching updated AppImage...' };
+    }
+  } catch (err) {
+    console.error('[Desktop Auto-Update] Failed to apply update:', err);
+    return { success: false, error: err.message };
+  }
+});
+
 ipcMain.handle('set-github-token', async (event, token) => {
   try {
     if (token) {
@@ -1140,7 +1289,7 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
-    title: 'NexVault',
+    title: 'NextVault',
     icon: fs.existsSync(iconPath) ? iconPath : undefined,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),

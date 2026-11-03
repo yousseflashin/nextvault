@@ -66,12 +66,31 @@ function App() {
 
   // Sync & Updates
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [updateInfo, setUpdateInfo] = useState<{ hasUpdate: boolean; latestVersion: string; downloadUrl?: string } | null>(null);
 
   function showToast(msg: string) {
     setToastMsg(msg);
     setTimeout(() => setToastMsg(null), 3500);
+  }
+
+  async function onApplyMobileUpdate() {
+    if (isUpdating) return;
+    setIsUpdating(true);
+    showToast('Downloading update and opening installer...');
+    try {
+      const res = await (window as any).nexVault.applyUpdate(updateInfo?.downloadUrl);
+      if (res && res.success) {
+        showToast('Package installer launched. Confirm to update in-place.');
+      } else {
+        showToast(res?.error || 'Update failed');
+      }
+    } catch (e: any) {
+      showToast('Error applying update: ' + e.message);
+    } finally {
+      setIsUpdating(false);
+    }
   }
 
   const log = (msg: string) => setGridLog(prev => [...prev.slice(-30), `>> ${msg}`]);
@@ -433,8 +452,8 @@ function App() {
         {/* Header */}
         <header className="nv-app-header">
           <div className="nv-app-brand">
-            <Shield size={24} />
-            <span className="nv-app-title">NEX<span>VAULT</span></span>
+            <img src="/icon.png" alt="NextVault" style={{ width: 24, height: 24, borderRadius: 5, objectFit: 'contain' }} />
+            <span className="nv-app-title">Next<span>Vault</span></span>
             <span className="nv-badge" style={{ fontSize: '0.62rem' }}>v{CURRENT_VERSION}</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -470,15 +489,13 @@ function App() {
               <div style={{ fontSize: '0.72rem', color: 'var(--nv-muted)' }}>A newer Android APK is available.</div>
             </div>
             <div style={{ display: 'flex', gap: '0.4rem' }}>
-              <a
-                href={updateInfo.downloadUrl}
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
                 className="nv-btn nv-btn-accent nv-btn-sm"
-                style={{ textDecoration: 'none' }}
+                disabled={isUpdating}
+                onClick={onApplyMobileUpdate}
               >
-                Download APK
-              </a>
+                {isUpdating ? 'Installing...' : 'Update & Install'}
+              </button>
               <button
                 className="nv-btn nv-btn-ghost nv-btn-sm"
                 onClick={() => setUpdateInfo(null)}
@@ -495,8 +512,8 @@ function App() {
             /* LOCKED AUTH SCREEN */
             <Card style={{ margin: 'auto 0' }}>
               <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
-                <Shield size={48} />
-                <h1 className="nv-title" style={{ fontSize: '1.35rem', marginTop: '0.5rem' }}>NexVault Mobile</h1>
+                <img src="/icon.png" alt="NextVault" style={{ width: 56, height: 56, borderRadius: 12, marginBottom: '0.5rem', boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }} />
+                <h1 className="nv-title" style={{ fontSize: '1.35rem', marginTop: '0.25rem' }}>NextVault Mobile</h1>
                 <p className="nv-muted" style={{ fontSize: '0.8rem', margin: '0.25rem 0 0' }}>
                   Local-first password manager &amp; authenticator.
                 </p>
@@ -790,7 +807,7 @@ function App() {
                       Enter Desktop Pairing Code
                     </div>
                     <p style={{ fontSize: '0.72rem', color: 'var(--nv-muted)', margin: '0 0 0.65rem' }}>
-                      Generate a pairing code on your Desktop NexVault app and enter it here.
+                      Generate a pairing code on your Desktop NextVault app and enter it here.
                     </p>
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                       <input
@@ -902,11 +919,22 @@ function App() {
                       <span className="nv-badge">v{CURRENT_VERSION}</span>
                     </div>
                     <p style={{ fontSize: '0.75rem', color: 'var(--nv-muted)', margin: '0 0 0.75rem' }}>
-                      Check GitHub releases for the latest Android APK build.
+                      Check GitHub releases for seamless in-place updates.
                     </p>
-                    <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={() => checkMobileUpdates(true)}>
-                      Check for Updates
-                    </button>
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={() => checkMobileUpdates(true)}>
+                        Check for Updates
+                      </button>
+                      {updateInfo && updateInfo.hasUpdate && (
+                        <button
+                          className="nv-btn nv-btn-accent nv-btn-sm"
+                          disabled={isUpdating}
+                          onClick={onApplyMobileUpdate}
+                        >
+                          {isUpdating ? 'Installing...' : `Install v${updateInfo.latestVersion}`}
+                        </button>
+                      )}
+                    </div>
                   </Card>
 
                   <Card style={{ borderColor: 'rgba(239, 68, 68, 0.25)' }}>
@@ -938,28 +966,36 @@ function App() {
               className={`nv-nav-button ${activeTab === 'vault' ? 'active' : ''}`}
               onClick={() => setActiveTab('vault')}
             >
-              <span className="nav-icon">🔑</span>
+              <span className="nav-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21 2-2 2m-1.5 1.5L16 7l-1.5-1.5M16 7l-4 4m0 0a5.5 5.5 0 1 1-7.78 7.78 5.5 5.5 0 0 1 7.78-7.78Z"/></svg>
+              </span>
               <span>Vault</span>
             </button>
             <button
               className={`nv-nav-button ${activeTab === 'otp' ? 'active' : ''}`}
               onClick={() => setActiveTab('otp')}
             >
-              <span className="nav-icon">⏱️</span>
+              <span className="nav-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              </span>
               <span>OTP</span>
             </button>
             <button
               className={`nv-nav-button ${activeTab === 'grid' ? 'active' : ''}`}
               onClick={() => setActiveTab('grid')}
             >
-              <span className="nav-icon">🌐</span>
+              <span className="nav-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="6" height="6" x="9" y="2" rx="1"/><rect width="6" height="6" x="2" y="16" rx="1"/><rect width="6" height="6" x="16" y="16" rx="1"/><path d="M12 8v4m0 0H5v4m7-4h7v4"/></svg>
+              </span>
               <span>NexGrid</span>
             </button>
             <button
               className={`nv-nav-button ${activeTab === 'settings' ? 'active' : ''}`}
               onClick={() => setActiveTab('settings')}
             >
-              <span className="nav-icon">⚙️</span>
+              <span className="nav-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+              </span>
               <span>Settings</span>
             </button>
           </nav>

@@ -6,7 +6,7 @@ export default function Footer() {
       <div className="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left">
         <div className="flex items-center gap-2">
           <span className="w-1.5 h-1.5 rounded-full bg-dw-green"></span>
-          <span className="text-white font-bold">NexVault</span>
+          <span className="text-white font-bold">NextVault</span>
           <span className="text-dw-dim">— Zero cloud servers. Zero cookies. Zero trackers.</span>
         </div>
 

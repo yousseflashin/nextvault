@@ -63,6 +63,8 @@ contextBridge.exposeInMainWorld('nexVault', {
   onPeerPaired: (callback) => ipcRenderer.on('peer-paired', (event, data) => callback(data)),
   onVaultUpdated: (callback) => ipcRenderer.on('vault-updated', () => callback()),
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
+  applyUpdate: (downloadUrl) => ipcRenderer.invoke('apply-update', downloadUrl),
+  onUpdateProgress: (callback) => ipcRenderer.on('update-download-progress', (event, data) => callback(data)),
   openExternalUrl: (url) => ipcRenderer.invoke('open-external-url', url),
   getTrustedDevices: () => ipcRenderer.invoke('get-trusted-devices'),
   removeTrustedDevice: (deviceId) => ipcRenderer.invoke('remove-trusted-device', deviceId),

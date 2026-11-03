@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NexVault Desktop</title>
+  <link rel="icon" type="image/png" href="assets/icon.png">
+  <title>NextVault Desktop</title>
   <link rel="stylesheet" href="cyber/cyber.css">
   <style>
     * { box-sizing: border-box; }
@@ -309,15 +310,10 @@
   <div id="auth-container">
     <div class="auth-card">
       <div class="auth-brand">
-        <span class="nv-shield">
-          <svg viewBox="0 0 64 74" fill="none">
-            <path d="M32 2 60 14v22c0 18-12.6 30.4-28 36C16.6 66.4 4 54 4 36V14L32 2z" stroke="#10b981" stroke-width="2.5" fill="rgba(16,185,129,0.1)"/>
-            <path d="M22 36l7 7 14-15" stroke="#0ea5e9" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </span>
+        <img src="assets/icon.png" alt="NextVault" style="width: 32px; height: 32px; border-radius: 6px; object-fit: contain;">
         <div>
-          <div class="brand-title">NEX<span>VAULT</span></div>
-          <div style="font-size: 0.75rem; color: var(--nv-muted);">Local-First Encrypted Enclave</div>
+          <div class="brand-title">Next<span>Vault</span></div>
+          <div style="font-size: 0.75rem; color: var(--nv-muted);">Local-First Encrypted Vault</div>
         </div>
       </div>
 
@@ -369,35 +365,40 @@
     <!-- Left Navigation Sidebar -->
     <aside class="app-sidebar">
       <div class="sidebar-header">
-        <span class="nv-shield" style="width: 24px; height: 24px;">
-          <svg viewBox="0 0 64 74" fill="none">
-            <path d="M32 2 60 14v22c0 18-12.6 30.4-28 36C16.6 66.4 4 54 4 36V14L32 2z" stroke="#10b981" stroke-width="2.5" fill="rgba(16,185,129,0.1)"/>
-            <path d="M22 36l7 7 14-15" stroke="#0ea5e9" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </span>
-        <div class="brand-title">NEX<span>VAULT</span></div>
-        <span class="nv-badge" style="font-size: 0.65rem; margin-left: auto;">v0.1.8</span>
+        <img src="assets/icon.png" alt="NextVault" style="width: 24px; height: 24px; border-radius: 5px; object-fit: contain;">
+        <div class="brand-title">Next<span>Vault</span></div>
+        <span class="nv-badge" style="font-size: 0.65rem; margin-left: auto;">v0.1.9</span>
       </div>
 
       <nav class="sidebar-nav">
         <a class="nav-item active" data-page="vault" onclick="navigateTo('vault')">
-          <span class="nav-icon">🔑</span>
+          <span class="nav-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 2-2 2m-1.5 1.5L16 7l-1.5-1.5M16 7l-4 4m0 0a5.5 5.5 0 1 1-7.78 7.78 5.5 5.5 0 0 1 7.78-7.78Z"/></svg>
+          </span>
           <span>Vault</span>
         </a>
         <a class="nav-item" data-page="otp" onclick="navigateTo('otp')">
-          <span class="nav-icon">⏱️</span>
+          <span class="nav-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </span>
           <span>Authenticator</span>
         </a>
         <a class="nav-item" data-page="grid" onclick="navigateTo('grid')">
-          <span class="nav-icon">🌐</span>
+          <span class="nav-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="6" height="6" x="9" y="2" rx="1"/><rect width="6" height="6" x="2" y="16" rx="1"/><rect width="6" height="6" x="16" y="16" rx="1"/><path d="M12 8v4m0 0H5v4m7-4h7v4"/></svg>
+          </span>
           <span>NexGrid Sync</span>
         </a>
         <a class="nav-item" data-page="security" onclick="navigateTo('security')">
-          <span class="nav-icon">🛡️</span>
+          <span class="nav-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </span>
           <span>Security</span>
         </a>
         <a class="nav-item" data-page="settings" onclick="navigateTo('settings')">
-          <span class="nav-icon">⚙️</span>
+          <span class="nav-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+          </span>
           <span>Settings</span>
         </a>
       </nav>
@@ -440,7 +441,7 @@
             <div style="font-size: 0.75rem; color: var(--nv-muted);" id="update-desc">A newer version is ready.</div>
           </div>
           <div style="display: flex; gap: 0.5rem;">
-            <button class="nv-btn nv-btn-accent nv-btn-sm" id="update-action-btn" onclick="openUpdateLink()">Download AppImage</button>
+            <button class="nv-btn nv-btn-accent nv-btn-sm" id="update-action-btn" onclick="applyAppUpdate()">Update &amp; Restart</button>
             <button class="nv-btn nv-btn-ghost nv-btn-sm" onclick="dismissUpdate()">Dismiss</button>
           </div>
         </div>
@@ -634,12 +635,15 @@
           <div class="nv-card" style="margin-bottom: 1.25rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
               <div style="font-weight: 600; color: #fff;">Application Updates</div>
-              <span class="nv-badge">Current: v0.1.7</span>
+              <span class="nv-badge" id="settings-version-badge">Current: v0.1.7</span>
             </div>
-            <p style="font-size: 0.8rem; color: var(--nv-muted); margin-bottom: 1rem;">
-              Check the official GitHub repository releases for signed AppImages and updates.
+            <p style="font-size: 0.8rem; color: var(--nv-muted); margin-bottom: 1rem;" id="settings-update-desc">
+              Check official GitHub releases for signed updates with seamless in-place upgrade.
             </p>
-            <button class="nv-btn nv-btn-ghost" onclick="checkForUpdates(true)">Check for Updates Now</button>
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;" id="settings-update-actions">
+              <button class="nv-btn nv-btn-ghost" onclick="checkForUpdates(true)">Check for Updates</button>
+              <button class="nv-btn nv-btn-accent" id="settings-update-btn" style="display: none;" onclick="applyAppUpdate()">Update &amp; Restart Now</button>
+            </div>
           </div>
 
           <!-- Session & Danger Zone -->
@@ -1128,7 +1132,9 @@
       } catch (e) { log('Exception: ' + e.message); }
     }
 
-    // App Updates Check
+    // App Updates Check & In-Place Auto-Updater
+    let isApplyingUpdate = false;
+
     async function checkForUpdates(manual = false) {
       if (manual) setStatus('Checking GitHub for updates...');
       try {
@@ -1136,23 +1142,90 @@
         if (info && info.hasUpdate) {
           latestUpdateInfo = info;
           $('update-version').textContent = info.latestVersion;
-          $('update-desc').textContent = `${info.releaseName || 'v' + info.latestVersion} is available on GitHub.`;
+          $('update-desc').textContent = `${info.releaseName || 'v' + info.latestVersion} is available. Click below to upgrade in-place.`;
           $('update-action-btn').style.display = 'inline-flex';
+          $('update-action-btn').disabled = false;
+          $('update-action-btn').textContent = 'Update & Restart';
           $('update-banner').style.display = 'flex';
+
+          if ($('settings-update-desc')) {
+            $('settings-update-desc').textContent = `🚀 Update v${info.latestVersion} is ready to install!`;
+          }
+          if ($('settings-update-btn')) {
+            $('settings-update-btn').style.display = 'inline-flex';
+            $('settings-update-btn').disabled = false;
+            $('settings-update-btn').textContent = `Install v${info.latestVersion} & Restart`;
+          }
           setStatus(`Update available: ${info.latestVersion}`);
         } else if (info && info.success) {
           if (manual) setStatus(`Up to date: v${info.currentVersion}`);
+          if ($('settings-update-desc')) {
+            $('settings-update-desc').textContent = `✓ NexVault is up to date (v0.1.9).`;
+          }
         }
       } catch (err) {
         if (manual) setStatus('Update check notice: ' + err.message);
       }
     }
 
-    function openUpdateLink() {
-      if (latestUpdateInfo?.downloadUrl) {
-        window.nexVault.openExternalUrl(latestUpdateInfo.downloadUrl);
-      } else if (latestUpdateInfo?.releaseUrl) {
-        window.nexVault.openExternalUrl(latestUpdateInfo.releaseUrl);
+    async function applyAppUpdate() {
+      if (isApplyingUpdate) return;
+      isApplyingUpdate = true;
+      const btn = $('update-action-btn');
+      const settingsBtn = $('settings-update-btn');
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Downloading...';
+      }
+      if (settingsBtn) {
+        settingsBtn.disabled = true;
+        settingsBtn.textContent = 'Downloading...';
+      }
+      $('update-desc').textContent = 'Downloading update in background...';
+      setStatus('Downloading update...');
+
+      if (window.nexVault?.onUpdateProgress) {
+        window.nexVault.onUpdateProgress((prog) => {
+          const mbDown = (prog.downloadedBytes / (1024 * 1024)).toFixed(1);
+          const mbTotal = (prog.totalBytes / (1024 * 1024)).toFixed(1);
+          const progressMsg = `Downloading: ${prog.percent}% (${mbDown} MB / ${mbTotal} MB)...`;
+          $('update-desc').textContent = progressMsg;
+          if (btn) btn.textContent = `${prog.percent}%`;
+          if (settingsBtn) settingsBtn.textContent = `${prog.percent}%`;
+        });
+      }
+
+      try {
+        const downloadUrl = latestUpdateInfo?.downloadUrl;
+        const res = await window.nexVault.applyUpdate(downloadUrl);
+        if (res && res.success) {
+          $('update-desc').textContent = 'Update downloaded! Replacing old version and restarting...';
+          setStatus('Restarting app with new version...');
+        } else {
+          isApplyingUpdate = false;
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Retry Update';
+          }
+          if (settingsBtn) {
+            settingsBtn.disabled = false;
+            settingsBtn.textContent = 'Retry Update';
+          }
+          $('update-desc').textContent = 'Update failed: ' + (res?.error || 'Unknown error');
+          setStatus('Update error: ' + (res?.error || 'Failed'));
+        }
+      } catch (err) {
+        isApplyingUpdate = false;
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = 'Retry Update';
+        }
+        if (settingsBtn) {
+          settingsBtn.disabled = false;
+          settingsBtn.textContent = 'Retry Update';
+        }
+        $('update-desc').textContent = 'Update error: ' + err.message;
+        setStatus('Update failed: ' + err.message);
       }
     }
 
@@ -1263,7 +1336,7 @@
     window.runTamperMonitor = runTamperMonitor;
     window.triggerNuke = triggerNuke;
     window.checkForUpdates = checkForUpdates;
-    window.openUpdateLink = openUpdateLink;
+    window.applyAppUpdate = applyAppUpdate;
     window.dismissUpdate = dismissUpdate;
     window.copyTokenFromSettings = copyTokenFromSettings;
   </script>

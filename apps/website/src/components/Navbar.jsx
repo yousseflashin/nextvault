@@ -10,15 +10,10 @@ export default function Navbar() {
       <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
         
         {/* Brand */}
-        <a href="#" className="flex items-center gap-3 group">
-          <div className="w-7 h-7 rounded-lg bg-dw-surface border border-dw-border flex items-center justify-center text-dw-green font-mono font-bold group-hover:border-dw-green/40 transition">
-            <svg viewBox="0 0 24 24" fill="none" className="w-4 h-4 text-dw-green">
-              <path d="M12 2L4 6V12C4 17.5 7.4 22.6 12 24C16.6 22.6 20 17.5 20 12V6L12 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M9 12L11 14L15 10" stroke="#00d4ff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </div>
-          <span className="font-mono font-extrabold text-base tracking-tight text-white">
-            NEX<span className="text-dw-green">VAULT</span>
+        <a href="#" className="flex items-center gap-2.5 group">
+          <img src="/icon.png" alt="NextVault" className="w-6 h-6 rounded-md object-contain" />
+          <span className="font-sans font-bold text-base tracking-tight text-white">
+            Next<span className="text-dw-green">Vault</span>
             <span className="text-dw-dim ml-1.5 text-xs font-normal">// 0-CLOUD</span>
           </span>
         </a>
@@ -33,7 +28,7 @@ export default function Navbar() {
         {/* Status Pill & Action */}
         <div className="flex items-center gap-4">
           <span className="hidden sm:inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-[11px] font-mono text-dw-green bg-dw-surface border border-dw-border">
-            <span className="w-1.5 h-1.5 rounded-full bg-dw-green animate-pulse"></span>
+            <span className="w-1.5 h-1.5 rounded-full bg-dw-green"></span>
             <span>AIR-GAP READY</span>
           </span>
 
