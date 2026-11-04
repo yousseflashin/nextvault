@@ -104,4 +104,16 @@ describe('NexVault Database', () => {
     const deleted = db.getDeletedRecords(1);
     expect(Array.isArray(deleted)).toBe(true);
   });
+
+  test('should delete all passwords and record tombstones', () => {
+    expect(() => db.deleteAllPasswords(1)).not.toThrow();
+  });
+
+  test('should delete all OTP secrets and record tombstones', () => {
+    expect(() => db.deleteAllOtpSecrets(1)).not.toThrow();
+  });
+
+  test('should delete all vault items', () => {
+    expect(() => db.deleteAll(1)).not.toThrow();
+  });
 });

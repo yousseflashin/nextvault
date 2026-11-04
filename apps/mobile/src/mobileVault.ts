@@ -1389,6 +1389,37 @@ export function initMobileVault() {
       return { success: true };
     },
 
+    async deleteAllPasswords() {
+      const state = loadVault();
+      if (!state) throw new Error('Vault is locked');
+      const count = state.passwords.length;
+      if (count === 0) return { success: true, count: 0 };
+      const now = Date.now();
+      if (!state.deletedRecords) state.deletedRecords = [];
+
+      for (const p of state.passwords) {
+        const target = normalizeDomain(p.service);
+        const existingTombIdx = state.deletedRecords.findIndex(d => normalizeDomain(d.service) === target && d.type === 'password');
+        if (existingTombIdx >= 0) {
+          state.deletedRecords[existingTombIdx].deletedAt = now;
+        } else {
+          state.deletedRecords.push({ service: p.service.trim(), type: 'password', deletedAt: now });
+        }
+      }
+      state.passwords = [];
+      saveVault(state);
+      notifyVaultUpdated();
+
+      if (activeSocket && activeSocket.readyState === WebSocket.OPEN) {
+        const peers = getActiveAndTrustedPeers(state);
+        for (const peerId of peers) {
+          broadcastVaultToPeer(peerId, activeSocket, false);
+        }
+        broadcastVaultToPeer('*', activeSocket, false);
+      }
+      return { success: true, count };
+    },
+
     async addOTP(service: string, secret: string) {
       const state = loadVault();
       if (!state) throw new Error('Vault is locked or uninitialized');
@@ -1494,6 +1525,78 @@ export function initMobileVault() {
         }, state, activeSocket);
       }
       return { success: true };
+    },
+
+    async deleteAllOTPs() {
+      const state = loadVault();
+      if (!state) throw new Error('Vault is locked');
+      const count = state.otps.length;
+      if (count === 0) return { success: true, count: 0 };
+      const now = Date.now();
+      if (!state.deletedRecords) state.deletedRecords = [];
+
+      for (const o of state.otps) {
+        const target = normalizeDomain(o.service);
+        const existingTombIdx = state.deletedRecords.findIndex(d => normalizeDomain(d.service) === target && d.type === 'otp');
+        if (existingTombIdx >= 0) {
+          state.deletedRecords[existingTombIdx].deletedAt = now;
+        } else {
+          state.deletedRecords.push({ service: o.service.trim(), type: 'otp', deletedAt: now });
+        }
+      }
+      state.otps = [];
+      saveVault(state);
+      notifyVaultUpdated();
+
+      if (activeSocket && activeSocket.readyState === WebSocket.OPEN) {
+        const peers = getActiveAndTrustedPeers(state);
+        for (const peerId of peers) {
+          broadcastVaultToPeer(peerId, activeSocket, false);
+        }
+        broadcastVaultToPeer('*', activeSocket, false);
+      }
+      return { success: true, count };
+    },
+
+    async deleteAllVault() {
+      const state = loadVault();
+      if (!state) throw new Error('Vault is locked');
+      const pwCount = state.passwords.length;
+      const otpCount = state.otps.length;
+      const now = Date.now();
+      if (!state.deletedRecords) state.deletedRecords = [];
+
+      for (const p of state.passwords) {
+        const target = normalizeDomain(p.service);
+        const existingTombIdx = state.deletedRecords.findIndex(d => normalizeDomain(d.service) === target && d.type === 'password');
+        if (existingTombIdx >= 0) {
+          state.deletedRecords[existingTombIdx].deletedAt = now;
+        } else {
+          state.deletedRecords.push({ service: p.service.trim(), type: 'password', deletedAt: now });
+        }
+      }
+      for (const o of state.otps) {
+        const target = normalizeDomain(o.service);
+        const existingTombIdx = state.deletedRecords.findIndex(d => normalizeDomain(d.service) === target && d.type === 'otp');
+        if (existingTombIdx >= 0) {
+          state.deletedRecords[existingTombIdx].deletedAt = now;
+        } else {
+          state.deletedRecords.push({ service: o.service.trim(), type: 'otp', deletedAt: now });
+        }
+      }
+      state.passwords = [];
+      state.otps = [];
+      saveVault(state);
+      notifyVaultUpdated();
+
+      if (activeSocket && activeSocket.readyState === WebSocket.OPEN) {
+        const peers = getActiveAndTrustedPeers(state);
+        for (const peerId of peers) {
+          broadcastVaultToPeer(peerId, activeSocket, false);
+        }
+        broadcastVaultToPeer('*', activeSocket, false);
+      }
+      return { success: true, passwordsCount: pwCount, otpsCount: otpCount, totalCount: pwCount + otpCount };
     },
 
     async bulkImportPasswords(items: { service: string; credential: string; username?: string }[]) {

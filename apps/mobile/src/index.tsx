@@ -806,6 +806,52 @@ function App() {
     }
   }
 
+  async function onDeleteAllVault() {
+    if (!window.confirm('Are you sure you want to delete ALL passwords? This will delete them across all connected devices in the mesh.')) return;
+    try {
+      const r = await (window as any).nexVault.deleteAllPasswords();
+      if (r && r.success) {
+        showToast(`Deleted ${r.count || 0} passwords`);
+        refreshVault(false);
+      } else {
+        throw new Error(r?.error || 'Failed to delete');
+      }
+    } catch (err: any) {
+      showToast('Error: ' + err.message);
+    }
+  }
+
+  async function onDeleteAllOTPs() {
+    if (!window.confirm('Are you sure you want to delete ALL 2FA authenticators? This will delete them across all connected devices in the mesh.')) return;
+    try {
+      const r = await (window as any).nexVault.deleteAllOTPs();
+      if (r && r.success) {
+        showToast(`Deleted ${r.count || 0} authenticators`);
+        refreshOTPs(false);
+      } else {
+        throw new Error(r?.error || 'Failed to delete');
+      }
+    } catch (err: any) {
+      showToast('Error: ' + err.message);
+    }
+  }
+
+  async function onDeleteAllEverything() {
+    if (!window.confirm('Are you sure you want to delete ALL passwords and 2FA authenticators? This will permanently wipe all credentials from this vault and all mesh devices.')) return;
+    try {
+      const r = await (window as any).nexVault.deleteAllVault();
+      if (r && r.success) {
+        showToast(`Wiped all ${r.totalCount || 0} vault items`);
+        refreshVault(false);
+        refreshOTPs(false);
+      } else {
+        throw new Error(r?.error || 'Failed to delete');
+      }
+    } catch (err: any) {
+      showToast('Error: ' + err.message);
+    }
+  }
+
   function copyBootstrapToken() {
     if (!tokenJson) return;
     navigator.clipboard.writeText(tokenJson);
@@ -971,9 +1017,19 @@ function App() {
               {/* PAGE 1: VAULT */}
               {activeTab === 'vault' && (
                 <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.4rem' }}>
                     <div style={{ fontSize: '1rem', fontWeight: 700, color: '#fff' }}>Vault Logins</div>
-                    <div style={{ display: 'flex', gap: '0.4rem' }}>
+                    <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+                      {vaultItems.length > 0 && (
+                        <button
+                          className="nv-btn nv-btn-ghost nv-btn-sm"
+                          style={{ color: 'var(--nv-danger)', borderColor: 'rgba(239, 68, 68, 0.3)' }}
+                          onClick={onDeleteAllVault}
+                          title="Delete all passwords from vault and mesh"
+                        >
+                          🗑 Delete All
+                        </button>
+                      )}
                       <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={() => refreshVault(true)}>
                         {isSyncing ? 'Syncing...' : 'Sync'}
                       </button>
@@ -1070,12 +1126,22 @@ function App() {
               {/* PAGE 2: AUTHENTICATOR (OTP) */}
               {activeTab === 'otp' && (
                 <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem', flexWrap: 'wrap', gap: '0.4rem' }}>
                     <div>
                       <div style={{ fontSize: '1rem', fontWeight: 700, color: '#fff' }}>Authenticator</div>
                       <span className="nv-badge" style={{ fontSize: '0.65rem' }}>Refreshes in {countdown}s</span>
                     </div>
-                    <div style={{ display: 'flex', gap: '0.4rem' }}>
+                    <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+                      {otpItems.length > 0 && (
+                        <button
+                          className="nv-btn nv-btn-ghost nv-btn-sm"
+                          style={{ color: 'var(--nv-danger)', borderColor: 'rgba(239, 68, 68, 0.3)' }}
+                          onClick={onDeleteAllOTPs}
+                          title="Delete all 2FA accounts from vault and mesh"
+                        >
+                          🗑 Delete All
+                        </button>
+                      )}
                       <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={() => refreshOTPs(true)}>
                         {isSyncing ? 'Syncing...' : 'Sync'}
                       </button>
@@ -1352,11 +1418,16 @@ function App() {
                   <Card style={{ marginBottom: '1rem' }}>
                     <div style={{ fontWeight: 600, color: '#fff', marginBottom: '0.35rem' }}>Data &amp; Migration</div>
                     <p style={{ fontSize: '0.75rem', color: 'var(--nv-muted)', margin: '0 0 0.75rem' }}>
-                      Import passwords and 2FA accounts from Chrome, Bitwarden, 1Password, or otpauth:// links.
+                      Import passwords and 2FA accounts from Chrome, Bitwarden, 1Password, or otpauth:// links, or delete all vault entries.
                     </p>
-                    <button className="nv-btn nv-btn-accent nv-btn-sm" onClick={() => setImportModalType('all')}>
-                      📥 Bulk Import Credentials &amp; 2FA
-                    </button>
+                    <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                      <button className="nv-btn nv-btn-accent nv-btn-sm" onClick={() => setImportModalType('all')}>
+                        📥 Bulk Import Credentials &amp; 2FA
+                      </button>
+                      <button className="nv-btn nv-btn-ghost nv-btn-sm" style={{ color: 'var(--nv-danger)', borderColor: 'rgba(239, 68, 68, 0.3)' }} onClick={onDeleteAllEverything}>
+                        🗑 Delete All Vault Items
+                      </button>
+                    </div>
                   </Card>
 
                   <Card style={{ marginBottom: '1rem' }}>

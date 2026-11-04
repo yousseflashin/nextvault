@@ -301,6 +301,51 @@ class NexVaultDatabase {
   }
 
   /**
+   * Delete all passwords for a user and record tombstones
+   */
+  deleteAllPasswords(userId, deletedAt = Date.now()) {
+    const effectiveDeletedAt = Number(deletedAt) || Date.now();
+    const rows = this.getPasswords(userId) || [];
+    for (const r of rows) {
+      if (r.service_name) {
+        this.recordTombstone(userId, r.service_name, 'password', effectiveDeletedAt);
+      }
+    }
+    this.getDb().prepare('DELETE FROM passwords WHERE user_id = ?').run(userId);
+    return { count: rows.length, deletedServices: rows.map(r => r.service_name) };
+  }
+
+  /**
+   * Delete all OTP secrets for a user and record tombstones
+   */
+  deleteAllOtpSecrets(userId, deletedAt = Date.now()) {
+    const effectiveDeletedAt = Number(deletedAt) || Date.now();
+    const rows = this.getOtpSecrets(userId) || [];
+    for (const r of rows) {
+      const name = r.service_name || r.otp_type;
+      if (name) {
+        this.recordTombstone(userId, name, 'otp', effectiveDeletedAt);
+      }
+    }
+    this.getDb().prepare('DELETE FROM otp_secrets WHERE user_id = ?').run(userId);
+    return { count: rows.length, deletedServices: rows.map(r => r.service_name || r.otp_type) };
+  }
+
+  /**
+   * Delete all passwords and OTPs for a user
+   */
+  deleteAll(userId, deletedAt = Date.now()) {
+    const effectiveDeletedAt = Number(deletedAt) || Date.now();
+    const pwResult = this.deleteAllPasswords(userId, effectiveDeletedAt);
+    const otpResult = this.deleteAllOtpSecrets(userId, effectiveDeletedAt);
+    return {
+      passwordsCount: pwResult.count,
+      otpsCount: otpResult.count,
+      totalCount: pwResult.count + otpResult.count
+    };
+  }
+
+  /**
    * Record a tombstone explicitly
    */
   recordTombstone(userId, serviceName, itemType, deletedAt = Date.now()) {
@@ -366,6 +411,7 @@ class NexVaultDatabase {
    */
   listPasswords(userId) {
     const rows = this.getDb().prepare('SELECT service_name, username, created_at, updated_at FROM passwords WHERE user_id = ? ORDER BY service_name ASC').all(userId);
+    if (!rows || !Array.isArray(rows)) return [];
     return rows.map(r => ({
       service: r.service_name,
       username: r.username || '',
@@ -467,6 +513,7 @@ class NexVaultDatabase {
     const rows = this.getDb().prepare(
       'SELECT service_name, otp_type, created_at, updated_at FROM otp_secrets WHERE user_id = ? ORDER BY service_name ASC'
     ).all(userId);
+    if (!rows || !Array.isArray(rows)) return [];
     return rows.map(r => ({
       service: r.service_name || r.otp_type,
       otpType: r.otp_type,
@@ -554,7 +601,7 @@ class NexVaultDatabase {
    */
   getPasswords(userId) {
     const rows = this.getDb().prepare('SELECT * FROM passwords WHERE user_id = ?').all(userId);
-    return rows.map(r => ({
+    return (rows || []).map(r => ({
       ...r,
       updated_at: Number(r.updated_at) || (r.created_at ? new Date(r.created_at).getTime() : Date.now())
     }));
@@ -565,7 +612,7 @@ class NexVaultDatabase {
    */
   getOtpSecrets(userId) {
     const rows = this.getDb().prepare('SELECT * FROM otp_secrets WHERE user_id = ?').all(userId);
-    return rows.map(r => ({
+    return (rows || []).map(r => ({
       ...r,
       updated_at: Number(r.updated_at) || (r.created_at ? new Date(r.created_at).getTime() : Date.now())
     }));

@@ -540,6 +540,9 @@
               <input type="text" id="vault-search-input" placeholder="Search passwords..." oninput="filterVaultEntries()">
             </div>
             <div style="display: flex; gap: 0.5rem;">
+              <button class="nv-btn nv-btn-danger" onclick="deleteAllPasswords()" title="Delete all saved passwords from vault and mesh">
+                <span>🗑 Delete All</span>
+              </button>
               <button class="nv-btn nv-btn-ghost" onclick="openBulkImportModal('vault')">
                 <span>📥 Import</span>
               </button>
@@ -588,6 +591,9 @@
               <span class="nv-badge" id="otp-timer-badge">Auto-refresh: 30s</span>
             </div>
             <div style="display: flex; gap: 0.5rem;">
+              <button class="nv-btn nv-btn-danger" onclick="deleteAllOTPs()" title="Delete all saved 2FA authenticators from vault and mesh">
+                <span>🗑 Delete All</span>
+              </button>
               <button class="nv-btn nv-btn-ghost" onclick="openBulkImportModal('otp')">
                 <span>📥 Import 2FA</span>
               </button>
@@ -744,6 +750,7 @@
             </p>
             <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
               <button class="nv-btn nv-btn-accent" onclick="openBulkImportModal('all')">📥 Bulk Import Passwords &amp; OTPs</button>
+              <button class="nv-btn nv-btn-danger" onclick="deleteAllVault()">🗑 Delete All Vault Items</button>
             </div>
           </div>
 
@@ -1080,6 +1087,18 @@
       } catch (e) { setStatus('Error: ' + e.message); }
     }
 
+    async function deleteAllPasswords() {
+      if (!confirm('Are you sure you want to delete ALL passwords? This will delete them across all connected devices in the mesh.')) return;
+      try {
+        const r = await window.nexVault.deleteAllPasswords();
+        if (r.success) {
+          setStatus(`Deleted ${r.count || 0} passwords from vault.`);
+          gridLog(`Deleted ${r.count || 0} passwords and synchronized across mesh.`);
+          listPasswords();
+        } else throw new Error(r.error);
+      } catch (e) { setStatus('Error: ' + e.message); }
+    }
+
     // Authenticator (TOTP) Management
     function toggleAddOtpForm() {
       const card = $('add-otp-card');
@@ -1161,6 +1180,31 @@
         const r = await window.nexVault.deleteOTP(service);
         if (r.success) {
           setStatus('Deleted TOTP ' + service);
+          listOTPs();
+        } else throw new Error(r.error);
+      } catch (e) { setStatus('Error: ' + e.message); }
+    }
+
+    async function deleteAllOTPs() {
+      if (!confirm('Are you sure you want to delete ALL 2FA authenticators? This will delete them across all connected devices in the mesh.')) return;
+      try {
+        const r = await window.nexVault.deleteAllOTPs();
+        if (r.success) {
+          setStatus(`Deleted ${r.count || 0} authenticators from vault.`);
+          gridLog(`Deleted ${r.count || 0} authenticators and synchronized across mesh.`);
+          listOTPs();
+        } else throw new Error(r.error);
+      } catch (e) { setStatus('Error: ' + e.message); }
+    }
+
+    async function deleteAllVault() {
+      if (!confirm('Are you sure you want to delete ALL passwords and 2FA authenticators? This will permanently wipe all credentials from this vault and all mesh devices.')) return;
+      try {
+        const r = await window.nexVault.deleteAllVault();
+        if (r.success) {
+          setStatus(`Deleted all ${r.totalCount || 0} vault items.`);
+          gridLog(`Wiped ${r.totalCount || 0} vault items across mesh.`);
+          listPasswords();
           listOTPs();
         } else throw new Error(r.error);
       } catch (e) { setStatus('Error: ' + e.message); }
@@ -1577,11 +1621,14 @@
     window.copyUsername = copyUsername;
     window.copyPassword = copyPassword;
     window.deletePassword = deletePassword;
+    window.deleteAllPasswords = deleteAllPasswords;
     window.toggleAddOtpForm = toggleAddOtpForm;
     window.saveOTP = saveOTP;
     window.listOTPs = listOTPs;
     window.copyOTP = copyOTP;
     window.deleteOTP = deleteOTP;
+    window.deleteAllOTPs = deleteAllOTPs;
+    window.deleteAllVault = deleteAllVault;
     window.startGrid = startGrid;
     window.stopGrid = stopGrid;
     window.requestPair = requestPair;

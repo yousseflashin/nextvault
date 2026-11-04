@@ -1029,6 +1029,72 @@ ipcMain.handle('delete-password', async (event, serviceName) => {
   }
 });
 
+ipcMain.handle('delete-all-passwords', async () => {
+  try {
+    const context = nexVaultSecurity.getUserContext();
+    if (!context) throw new Error('User is not authenticated');
+    const user = nexVaultDatabase.getUser(context.username);
+    if (!user) throw new Error('User not found');
+    const now = Date.now();
+    const result = nexVaultDatabase.deleteAllPasswords(user.id, now);
+    for (const service of result.deletedServices) {
+      broadcastCredentialDeleted('password', service, now);
+    }
+    broadcastVaultToPeers();
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('vault-updated');
+    return { success: true, count: result.count };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('delete-all-otps', async () => {
+  try {
+    const context = nexVaultSecurity.getUserContext();
+    if (!context) throw new Error('User is not authenticated');
+    const user = nexVaultDatabase.getUser(context.username);
+    if (!user) throw new Error('User not found');
+    const now = Date.now();
+    const result = nexVaultDatabase.deleteAllOtpSecrets(user.id, now);
+    for (const service of result.deletedServices) {
+      broadcastCredentialDeleted('otp', service, now);
+    }
+    broadcastVaultToPeers();
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('vault-updated');
+    return { success: true, count: result.count };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('delete-all-vault', async () => {
+  try {
+    const context = nexVaultSecurity.getUserContext();
+    if (!context) throw new Error('User is not authenticated');
+    const user = nexVaultDatabase.getUser(context.username);
+    if (!user) throw new Error('User not found');
+    const now = Date.now();
+    const pwResult = nexVaultDatabase.deleteAllPasswords(user.id, now);
+    for (const service of pwResult.deletedServices) {
+      broadcastCredentialDeleted('password', service, now);
+    }
+    const otpResult = nexVaultDatabase.deleteAllOtpSecrets(user.id, now);
+    for (const service of otpResult.deletedServices) {
+      broadcastCredentialDeleted('otp', service, now);
+    }
+    broadcastVaultToPeers();
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('vault-updated');
+    return {
+      success: true,
+      passwordsCount: pwResult.count,
+      otpsCount: otpResult.count,
+      totalCount: pwResult.count + otpResult.count
+    };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
 ipcMain.handle('get-password', async (event, serviceName) => {
   try {
     const context = nexVaultSecurity.getUserContext();
