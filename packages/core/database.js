@@ -53,6 +53,13 @@ class NexVaultDatabase {
         if (Array.isArray(passCols) && !passCols.some(c => c.name === 'username')) {
           db.exec('ALTER TABLE passwords ADD COLUMN username TEXT DEFAULT ""');
         }
+        if (Array.isArray(passCols) && !passCols.some(c => c.name === 'updated_at')) {
+          db.exec('ALTER TABLE passwords ADD COLUMN updated_at INTEGER DEFAULT 0');
+        }
+        const otpCols = db.pragma('table_info(otp_secrets)');
+        if (Array.isArray(otpCols) && !otpCols.some(c => c.name === 'updated_at')) {
+          db.exec('ALTER TABLE otp_secrets ADD COLUMN updated_at INTEGER DEFAULT 0');
+        }
         db.exec(`
           CREATE TABLE IF NOT EXISTS deleted_records (
             user_id INTEGER NOT NULL,
@@ -100,6 +107,7 @@ class NexVaultDatabase {
         iv TEXT NOT NULL,
         encrypted_data TEXT NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at INTEGER DEFAULT 0,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       );
 
@@ -110,6 +118,7 @@ class NexVaultDatabase {
         otp_type TEXT NOT NULL,  -- TOTP, HOTP
         secret TEXT NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at INTEGER DEFAULT 0,
         iv TEXT NOT NULL,
         encrypted_data TEXT NOT NULL,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -212,39 +221,57 @@ class NexVaultDatabase {
   }
 
   /**
+   * Helper to normalize service domains
+   */
+  normalizeDomain(service) {
+    if (!service) return '';
+    return String(service).trim().toLowerCase().replace(/^(https?:\/\/)?(www\.)?/, '').replace(/\/.*$/, '');
+  }
+
+  /**
    * Add or update password for user
    */
-  addPassword(userId, serviceName, passwordPlainText, encryptionKey, username = '') {
+  addPassword(userId, serviceName, passwordPlainText, encryptionKey, username = '', updatedAt = Date.now()) {
     const passwordHash = this.hashPassword(passwordPlainText);
     const iv = this.generateIv();
     const encryptedData = this.encryptData(passwordPlainText, encryptionKey, iv);
-    
+    const effectiveUpdatedAt = Number(updatedAt) || Date.now();
+    const clean = this.normalizeDomain(serviceName);
+
     const existing = this.getPassword(userId, serviceName);
-    if (existing) {
+    if (existing && existing.id) {
       this.getDb().prepare(`
-        UPDATE passwords SET username = ?, password_hash = ?, iv = ?, encrypted_data = ?, created_at = CURRENT_TIMESTAMP
-        WHERE user_id = ? AND LOWER(TRIM(service_name)) = LOWER(TRIM(?))
-      `).run(username, passwordHash, iv, encryptedData, userId, serviceName);
+        UPDATE passwords 
+        SET service_name = ?, username = ?, password_hash = ?, iv = ?, encrypted_data = ?, updated_at = ?, created_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(serviceName, username, passwordHash, iv, encryptedData, effectiveUpdatedAt, existing.id);
     } else {
       this.getDb().prepare(`
-        INSERT INTO passwords (user_id, service_name, username, password_hash, iv, encrypted_data)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(userId, serviceName, username, passwordHash, iv, encryptedData);
+        INSERT INTO passwords (user_id, service_name, username, password_hash, iv, encrypted_data, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(userId, serviceName, username, passwordHash, iv, encryptedData, effectiveUpdatedAt);
     }
 
-    // Clear any tombstone for this service name
+    // Clear any tombstone for this service name that is older than or equal to this update
     try {
-      this.getDb().prepare("DELETE FROM deleted_records WHERE user_id = ? AND item_type = 'password' AND LOWER(TRIM(service_name)) = LOWER(TRIM(?))").run(userId, serviceName);
+      this.getDb().prepare(`
+        DELETE FROM deleted_records 
+        WHERE user_id = ? AND item_type = 'password' AND (
+          LOWER(TRIM(service_name)) = LOWER(TRIM(?))
+          OR LOWER(TRIM(service_name)) = LOWER(TRIM(?))
+        ) AND deleted_at <= ?
+      `).run(userId, serviceName, clean, effectiveUpdatedAt);
     } catch {}
   }
 
   /**
-   * Delete password for user and service
+   * Delete password for user and service with timestamp
    */
-  deletePassword(userId, serviceName) {
+  deletePassword(userId, serviceName, deletedAt = Date.now()) {
     if (!serviceName) return;
+    const effectiveDeletedAt = Number(deletedAt) || Date.now();
     const raw = String(serviceName).trim();
-    const clean = raw.toLowerCase().replace(/^(https?:\/\/)?(www\.)?/, '').replace(/\/.*$/, '');
+    const clean = this.normalizeDomain(raw);
     const baseName = clean.includes('.') ? clean.split('.')[0] : clean;
 
     this.getDb().prepare(`
@@ -261,15 +288,31 @@ class NexVaultDatabase {
       this.getDb().prepare(`
         INSERT INTO deleted_records (user_id, service_name, item_type, deleted_at)
         VALUES (?, LOWER(TRIM(?)), 'password', ?)
-        ON CONFLICT(user_id, service_name, item_type) DO UPDATE SET deleted_at = excluded.deleted_at
-      `).run(userId, clean, Date.now());
+        ON CONFLICT(user_id, service_name, item_type) DO UPDATE SET deleted_at = MAX(deleted_records.deleted_at, excluded.deleted_at)
+      `).run(userId, clean, effectiveDeletedAt);
       if (raw.toLowerCase() !== clean) {
         this.getDb().prepare(`
           INSERT INTO deleted_records (user_id, service_name, item_type, deleted_at)
           VALUES (?, LOWER(TRIM(?)), 'password', ?)
-          ON CONFLICT(user_id, service_name, item_type) DO UPDATE SET deleted_at = excluded.deleted_at
-        `).run(userId, raw, Date.now());
+          ON CONFLICT(user_id, service_name, item_type) DO UPDATE SET deleted_at = MAX(deleted_records.deleted_at, excluded.deleted_at)
+        `).run(userId, raw, effectiveDeletedAt);
       }
+    } catch {}
+  }
+
+  /**
+   * Record a tombstone explicitly
+   */
+  recordTombstone(userId, serviceName, itemType, deletedAt = Date.now()) {
+    if (!serviceName) return;
+    const effectiveDeletedAt = Number(deletedAt) || Date.now();
+    const clean = this.normalizeDomain(serviceName);
+    try {
+      this.getDb().prepare(`
+        INSERT INTO deleted_records (user_id, service_name, item_type, deleted_at)
+        VALUES (?, LOWER(TRIM(?)), ?, ?)
+        ON CONFLICT(user_id, service_name, item_type) DO UPDATE SET deleted_at = MAX(deleted_records.deleted_at, excluded.deleted_at)
+      `).run(userId, clean, itemType, effectiveDeletedAt);
     } catch {}
   }
 
@@ -286,12 +329,12 @@ class NexVaultDatabase {
   }
 
   /**
-   * Check if a service has been marked deleted
+   * Get tombstone record if present
    */
-  isDeleted(userId, serviceName, itemType) {
+  getDeletedRecord(userId, serviceName, itemType) {
     try {
       const raw = String(serviceName).trim().toLowerCase();
-      const clean = raw.replace(/^(https?:\/\/)?(www\.)?/, '').replace(/\/.*$/, '');
+      const clean = this.normalizeDomain(raw);
       const baseName = clean.includes('.') ? clean.split('.')[0] : clean;
 
       const row = this.getDb().prepare(`
@@ -301,19 +344,34 @@ class NexVaultDatabase {
           OR LOWER(TRIM(service_name)) = ?
           OR LOWER(TRIM(service_name)) = ?
         )
+        ORDER BY deleted_at DESC
+        LIMIT 1
       `).get(userId, itemType, raw, clean, baseName);
-      return !!row;
+      return row || null;
     } catch {
-      return false;
+      return null;
     }
+  }
+
+  /**
+   * Check if a service has been marked deleted
+   */
+  isDeleted(userId, serviceName, itemType) {
+    const rec = this.getDeletedRecord(userId, serviceName, itemType);
+    return !!rec;
   }
 
   /**
    * List passwords for user (for UI display)
    */
   listPasswords(userId) {
-    const rows = this.getDb().prepare('SELECT service_name, username, created_at FROM passwords WHERE user_id = ? ORDER BY service_name ASC').all(userId);
-    return rows.map(r => ({ service: r.service_name, username: r.username || '', createdAt: r.created_at }));
+    const rows = this.getDb().prepare('SELECT service_name, username, created_at, updated_at FROM passwords WHERE user_id = ? ORDER BY service_name ASC').all(userId);
+    return rows.map(r => ({
+      service: r.service_name,
+      username: r.username || '',
+      createdAt: r.created_at,
+      updatedAt: Number(r.updated_at) || (r.created_at ? new Date(r.created_at).getTime() : Date.now())
+    }));
   }
 
   /**
@@ -321,11 +379,11 @@ class NexVaultDatabase {
    */
   getPassword(userId, serviceName) {
     if (!serviceName) return null;
-    const clean = String(serviceName).trim().toLowerCase().replace(/^(https?:\/\/)?(www\.)?/, '').replace(/\/.*$/, '');
+    const clean = this.normalizeDomain(serviceName);
     const baseName = clean.includes('.') ? clean.split('.')[0] : clean;
 
     return this.getDb().prepare(`
-      SELECT username, password_hash, iv, encrypted_data, service_name 
+      SELECT id, username, password_hash, iv, encrypted_data, service_name, updated_at, created_at 
       FROM passwords 
       WHERE user_id = ? AND (
         LOWER(service_name) = LOWER(?)
@@ -366,12 +424,13 @@ class NexVaultDatabase {
   }
 
   /**
-   * Delete OTP secret by service
+   * Delete OTP secret by service with timestamp
    */
-  deleteOtpSecret(userId, serviceName) {
+  deleteOtpSecret(userId, serviceName, deletedAt = Date.now()) {
     if (!serviceName) return;
+    const effectiveDeletedAt = Number(deletedAt) || Date.now();
     const raw = String(serviceName).trim();
-    const clean = raw.toLowerCase().replace(/^(https?:\/\/)?(www\.)?/, '').replace(/\/.*$/, '');
+    const clean = this.normalizeDomain(raw);
     const baseName = clean.includes('.') ? clean.split('.')[0] : clean;
 
     this.getDb().prepare(`
@@ -389,14 +448,14 @@ class NexVaultDatabase {
       this.getDb().prepare(`
         INSERT INTO deleted_records (user_id, service_name, item_type, deleted_at)
         VALUES (?, LOWER(TRIM(?)), 'otp', ?)
-        ON CONFLICT(user_id, service_name, item_type) DO UPDATE SET deleted_at = excluded.deleted_at
-      `).run(userId, clean, Date.now());
+        ON CONFLICT(user_id, service_name, item_type) DO UPDATE SET deleted_at = MAX(deleted_records.deleted_at, excluded.deleted_at)
+      `).run(userId, clean, effectiveDeletedAt);
       if (raw.toLowerCase() !== clean) {
         this.getDb().prepare(`
           INSERT INTO deleted_records (user_id, service_name, item_type, deleted_at)
           VALUES (?, LOWER(TRIM(?)), 'otp', ?)
-          ON CONFLICT(user_id, service_name, item_type) DO UPDATE SET deleted_at = excluded.deleted_at
-        `).run(userId, raw, Date.now());
+          ON CONFLICT(user_id, service_name, item_type) DO UPDATE SET deleted_at = MAX(deleted_records.deleted_at, excluded.deleted_at)
+        `).run(userId, raw, effectiveDeletedAt);
       }
     } catch {}
   }
@@ -406,29 +465,38 @@ class NexVaultDatabase {
    */
   listOtpSecrets(userId) {
     const rows = this.getDb().prepare(
-      'SELECT service_name, otp_type, created_at FROM otp_secrets WHERE user_id = ? ORDER BY service_name ASC'
+      'SELECT service_name, otp_type, created_at, updated_at FROM otp_secrets WHERE user_id = ? ORDER BY service_name ASC'
     ).all(userId);
-    return rows.map(r => ({ service: r.service_name || r.otp_type, otpType: r.otp_type, createdAt: r.created_at }));
+    return rows.map(r => ({
+      service: r.service_name || r.otp_type,
+      otpType: r.otp_type,
+      createdAt: r.created_at,
+      updatedAt: Number(r.updated_at) || (r.created_at ? new Date(r.created_at).getTime() : Date.now())
+    }));
   }
 
   /**
    * Add or update OTP secret for user
-   * Supports:
-   *   addOtpSecret(userId, serviceName, otpType, secretPlainText, encryptionKey)
-   *   addOtpSecret(userId, otpType, secretPlainText, encryptionKey)
-   *   addOtpSecret(userId, serviceName, secretPlainText, encryptionKey)
    */
-  addOtpSecret(userId, arg2, arg3, arg4, arg5) {
+  addOtpSecret(userId, arg2, arg3, arg4, arg5, arg6) {
     let serviceName = 'Default';
     let otpType = 'TOTP';
     let secretPlainText = '';
     let encryptionKey = '';
+    let updatedAt = Date.now();
 
-    if (arg5 !== undefined) {
+    if (arg5 !== undefined && typeof arg5 === 'string' && !arg6) {
       serviceName = arg2;
       otpType = arg3 || 'TOTP';
       secretPlainText = arg4;
       encryptionKey = arg5;
+      updatedAt = Date.now();
+    } else if (arg6 !== undefined) {
+      serviceName = arg2;
+      otpType = arg3 || 'TOTP';
+      secretPlainText = arg4;
+      encryptionKey = arg5;
+      updatedAt = Number(arg6) || Date.now();
     } else if (arg2 === 'TOTP' || arg2 === 'HOTP') {
       otpType = arg2;
       serviceName = arg2;
@@ -439,50 +507,68 @@ class NexVaultDatabase {
       otpType = 'TOTP';
       secretPlainText = arg3;
       encryptionKey = arg4;
+      if (arg5) updatedAt = Number(arg5) || Date.now();
     }
 
+    const effectiveUpdatedAt = Number(updatedAt) || Date.now();
     const iv = this.generateIv();
     const encryptedData = this.encryptData(secretPlainText, encryptionKey, iv);
+    const clean = this.normalizeDomain(serviceName);
     
     const existing = this.getOtpSecretByService(userId, serviceName);
-    if (existing) {
+    if (existing && existing.id) {
       this.getDb().prepare(`
         UPDATE otp_secrets 
-        SET service_name = ?, otp_type = ?, secret = ?, iv = ?, encrypted_data = ?, created_at = CURRENT_TIMESTAMP
+        SET service_name = ?, otp_type = ?, secret = ?, iv = ?, encrypted_data = ?, updated_at = ?, created_at = CURRENT_TIMESTAMP
         WHERE id = ?
-      `).run(serviceName, otpType, this.hashWithSalt(secretPlainText, iv), iv, encryptedData, existing.id);
+      `).run(serviceName, otpType, this.hashWithSalt(secretPlainText, iv), iv, encryptedData, effectiveUpdatedAt, existing.id);
     } else {
       this.getDb().prepare(`
-        INSERT INTO otp_secrets (user_id, service_name, otp_type, secret, iv, encrypted_data)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(userId, serviceName, otpType, this.hashWithSalt(secretPlainText, iv), iv, encryptedData);
+        INSERT INTO otp_secrets (user_id, service_name, otp_type, secret, iv, encrypted_data, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(userId, serviceName, otpType, this.hashWithSalt(secretPlainText, iv), iv, encryptedData, effectiveUpdatedAt);
     }
 
-    // Clear any tombstone for this OTP service
+    // Clear any tombstone for this OTP service older than or equal to this update
     try {
-      this.getDb().prepare("DELETE FROM deleted_records WHERE user_id = ? AND item_type = 'otp' AND (LOWER(TRIM(service_name)) = LOWER(?) OR LOWER(TRIM(service_name)) = LOWER(?))").run(userId, serviceName.trim(), otpType.trim());
+      this.getDb().prepare(`
+        DELETE FROM deleted_records 
+        WHERE user_id = ? AND item_type = 'otp' AND (
+          LOWER(TRIM(service_name)) = LOWER(?) 
+          OR LOWER(TRIM(service_name)) = LOWER(?)
+          OR LOWER(TRIM(service_name)) = LOWER(?)
+        ) AND deleted_at <= ?
+      `).run(userId, serviceName.trim(), clean, otpType.trim(), effectiveUpdatedAt);
     } catch {}
   }
 
   /**
    * Compatibility alias for addOtpSecret
    */
-  addOTP(userId, serviceName, secretPlainText, encryptionKey) {
-    return this.addOtpSecret(userId, serviceName, 'TOTP', secretPlainText, encryptionKey);
+  addOTP(userId, serviceName, secretPlainText, encryptionKey, updatedAt = Date.now()) {
+    return this.addOtpSecret(userId, serviceName, 'TOTP', secretPlainText, encryptionKey, updatedAt);
   }
 
   /**
    * Get all passwords for a user
    */
   getPasswords(userId) {
-    return this.getDb().prepare('SELECT * FROM passwords WHERE user_id = ?').all(userId);
+    const rows = this.getDb().prepare('SELECT * FROM passwords WHERE user_id = ?').all(userId);
+    return rows.map(r => ({
+      ...r,
+      updated_at: Number(r.updated_at) || (r.created_at ? new Date(r.created_at).getTime() : Date.now())
+    }));
   }
 
   /**
    * Get all OTP secrets for a user
    */
   getOtpSecrets(userId) {
-    return this.getDb().prepare('SELECT * FROM otp_secrets WHERE user_id = ?').all(userId);
+    const rows = this.getDb().prepare('SELECT * FROM otp_secrets WHERE user_id = ?').all(userId);
+    return rows.map(r => ({
+      ...r,
+      updated_at: Number(r.updated_at) || (r.created_at ? new Date(r.created_at).getTime() : Date.now())
+    }));
   }
 
   /**
