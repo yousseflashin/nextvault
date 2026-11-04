@@ -448,8 +448,22 @@ export async function calculateTotpCode(secret: string, period = 30, digits = 6)
   }
 }
 
-function handleIncomingMobileSignal(from: string, payload: any, state: MobileVaultState, socket: WebSocket, callbacks?: GridCallbacks) {
+function handleIncomingMobileSignal(from: string, payload: any, socketOrState: any, socketOrCallbacks?: any, maybeCallbacks?: any) {
   if (!payload || typeof payload !== 'object') return;
+
+  const state = loadVault();
+  if (!state) return;
+
+  let socket: WebSocket | null = null;
+  let callbacks: GridCallbacks | undefined;
+
+  if (socketOrState && typeof socketOrState.send === 'function') {
+    socket = socketOrState;
+    callbacks = socketOrCallbacks;
+  } else {
+    socket = socketOrCallbacks;
+    callbacks = maybeCallbacks;
+  }
 
   // 1. Direct encrypted tunnel message
   if (payload.type === 'encrypted') {
@@ -458,9 +472,9 @@ function handleIncomingMobileSignal(from: string, payload: any, state: MobileVau
       const decryptedStr = decryptBox(payload.payload, mySecretKey);
       const decrypted = JSON.parse(decryptedStr);
       if (decrypted.type === 'vault-sync') {
-        applyVaultSync(decrypted.vaultData, state, callbacks, from, socket);
+        applyVaultSync(decrypted.vaultData, callbacks, from, socket || undefined);
       } else if (decrypted.type === 'credential-deleted') {
-        handleCredentialDeleted(decrypted, state);
+        handleCredentialDeleted(decrypted);
       }
       return;
     } catch (err: any) {
@@ -471,7 +485,7 @@ function handleIncomingMobileSignal(from: string, payload: any, state: MobileVau
 
   // 1b. Plain credential-deleted message
   if (payload.type === 'credential-deleted') {
-    handleCredentialDeleted(payload, state);
+    handleCredentialDeleted(payload);
     return;
   }
 
@@ -491,7 +505,9 @@ function handleIncomingMobileSignal(from: string, payload: any, state: MobileVau
 
     // Send our vault entries to the peer so both nodes are fully synced
     callbacks?.onLog?.('Synchronizing initial vault with mesh peer...');
-    broadcastVaultToPeer(from, state, socket, false);
+    if (socket) {
+      broadcastVaultToPeer(from, socket, false);
+    }
     return;
   }
 
@@ -512,11 +528,34 @@ function handleIncomingMobileSignal(from: string, payload: any, state: MobileVau
       if (Date.now() < activeMobilePairingCode.expiresAt) {
         activeMobilePairingCode = null;
         callbacks?.onLog?.(`✨ Valid pairing code matched from "${payload.fromDeviceName || from}". Auto-approving & syncing.`);
-        saveTrustedDevice({
+        addTrustedPeer({
           deviceId: from,
           publicKey: payload.publicKey,
           deviceName: payload.fromDeviceName || from
         }, state);
+        if (socket) {
+          socket.send(JSON.stringify({
+            type: 'signal',
+            to: from,
+            payload: {
+              type: 'pair-approved',
+              fromDeviceId: state.devicePublicKey,
+              fromDeviceName: 'NextVault Mobile Mesh Node',
+              publicKey: state.x25519PublicKey
+            }
+          }));
+          broadcastVaultToPeer(from, socket, false);
+        }
+        callbacks?.onStatusChange?.('paired');
+        callbacks?.onPairApproved?.({ deviceId: from, deviceName: payload.fromDeviceName || from, publicKey: payload.publicKey });
+        return;
+      }
+    }
+
+    // B. Check if peer is already trusted
+    if (isPeerTrusted(from, state)) {
+      callbacks?.onLog?.(`Mesh peer "${payload.fromDeviceName || from}" is already trusted. Auto-accepting.`);
+      if (socket) {
         socket.send(JSON.stringify({
           type: 'signal',
           to: from,
@@ -527,27 +566,8 @@ function handleIncomingMobileSignal(from: string, payload: any, state: MobileVau
             publicKey: state.x25519PublicKey
           }
         }));
-        broadcastVaultToPeer(from, state, socket, false);
-        callbacks?.onStatusChange?.('paired');
-        callbacks?.onPairApproved?.({ deviceId: from, deviceName: payload.fromDeviceName || from, publicKey: payload.publicKey });
-        return;
+        broadcastVaultToPeer(from, socket, false);
       }
-    }
-
-    // B. Check if peer is already trusted
-    if (isPeerTrusted(from, state)) {
-      callbacks?.onLog?.(`Mesh peer "${payload.fromDeviceName || from}" is already trusted. Auto-accepting.`);
-      socket.send(JSON.stringify({
-        type: 'signal',
-        to: from,
-        payload: {
-          type: 'pair-approved',
-          fromDeviceId: state.devicePublicKey,
-          fromDeviceName: 'NextVault Mobile Mesh Node',
-          publicKey: state.x25519PublicKey
-        }
-      }));
-      broadcastVaultToPeer(from, state, socket, false);
       return;
     }
 
@@ -569,13 +589,13 @@ function handleIncomingMobileSignal(from: string, payload: any, state: MobileVau
 
   // 5. Plain vault-sync payload
   if (payload.type === 'vault-sync') {
-    applyVaultSync(payload.vaultData, state, callbacks, from, socket);
+    applyVaultSync(payload.vaultData, callbacks, from, socket || undefined);
     return;
   }
 
   // 6. Peer requested vault sync from us
-  if (payload.type === 'vault-sync-request') {
-    broadcastVaultToPeer(from, state, socket, false);
+  if (payload.type === 'vault-sync-request' && socket) {
+    broadcastVaultToPeer(from, socket, false);
   }
 }
 
@@ -586,8 +606,11 @@ function notifyVaultUpdated() {
   });
 }
 
-function handleCredentialDeleted(data: { itemType: 'password' | 'otp'; service: string; deletedAt?: number; timestamp?: number }, state: MobileVaultState) {
+function handleCredentialDeleted(data: { itemType: 'password' | 'otp'; service: string; deletedAt?: number; timestamp?: number }) {
   if (!data || !data.service) return;
+  const state = loadVault();
+  if (!state) return;
+
   const target = normalizeDomain(data.service);
   const deletedAt = Number(data.deletedAt) || Number(data.timestamp) || Date.now();
   if (!state.deletedRecords) state.deletedRecords = [];
@@ -630,8 +653,10 @@ function handleCredentialDeleted(data: { itemType: 'password' | 'otp'; service: 
   }
 }
 
-function applyVaultSync(vaultData: any, state: MobileVaultState, callbacks?: GridCallbacks, fromPeerId?: string, socket?: WebSocket) {
+function applyVaultSync(vaultData: any, callbacks?: GridCallbacks, fromPeerId?: string, socket?: WebSocket) {
   if (!vaultData) return;
+  const state = loadVault();
+  if (!state) return;
   if (!state.deletedRecords) state.deletedRecords = [];
 
   let stateChanged = false;
@@ -643,7 +668,7 @@ function applyVaultSync(vaultData: any, state: MobileVaultState, callbacks?: Gri
     for (const d of vaultData.deleted) {
       if (!d || !d.service) continue;
       const target = normalizeDomain(d.service);
-      const remoteDeletedAt = Number(d.deletedAt) || Date.now();
+      const remoteDeletedAt = Number(d.deletedAt) || Number(d.deleted_at) || Date.now();
 
       if (d.type === 'otp') {
         const localIdx = state.otps.findIndex(o => normalizeDomain(o.service) === target);
@@ -770,9 +795,9 @@ function applyVaultSync(vaultData: any, state: MobileVaultState, callbacks?: Gri
     notifyVaultUpdated();
   }
 
-  // If this sync wasn't already a reply, sync back so peer gets all our active credentials and tombstones
-  if (fromPeerId && socket && !vaultData.isReply) {
-    broadcastVaultToPeer(fromPeerId, state, socket, true);
+  // If this sync wasn't already a reply and from a specific peer, reply back with our reconciled state
+  if (fromPeerId && fromPeerId !== '*' && socket && !vaultData.isReply) {
+    broadcastVaultToPeer(fromPeerId, socket, true);
   }
 }
 
@@ -791,6 +816,17 @@ function getActiveAndTrustedPeers(state: MobileVaultState): string[] {
 }
 
 function sendPeerMessage(peerId: string, payload: any, state: MobileVaultState, socket: WebSocket) {
+  if (peerId === '*') {
+    try {
+      socket.send(JSON.stringify({
+        type: 'signal',
+        to: '*',
+        payload
+      }));
+    } catch {}
+    return;
+  }
+
   // If recipient public key is registered, send encrypted tunnel envelope ONLY.
   // Otherwise send plaintext relay signal ONLY. No duplicate signals!
   const remotePubKey = remotePeerKeys.get(peerId);
@@ -817,15 +853,33 @@ function sendPeerMessage(peerId: string, payload: any, state: MobileVaultState, 
   } catch {}
 }
 
-function broadcastVaultToPeer(peerId: string, state: MobileVaultState, socket: WebSocket, isReply = false) {
+function broadcastVaultToPeer(peerId: string, arg2: any, arg3?: any, arg4?: any) {
+  let socket: WebSocket | null = null;
+  let isReply = false;
+  let state: MobileVaultState | null = null;
+
+  if (arg2 && typeof (arg2 as any).send === 'function') {
+    // Called as: (peerId, socket, isReply)
+    socket = arg2;
+    isReply = Boolean(arg3);
+    state = loadVault();
+  } else {
+    // Called as: (peerId, state, socket, isReply)
+    state = loadVault() || arg2;
+    socket = arg3;
+    isReply = Boolean(arg4);
+  }
+
+  if (!state || !socket || socket.readyState !== WebSocket.OPEN) return;
+
   const payloadData = {
     type: 'vault-sync',
     vaultData: {
-      passwords: state.passwords.map(p => ({
+      passwords: (state.passwords || []).map(p => ({
         ...p,
         updatedAt: Number(p.updatedAt) || (p.createdAt ? new Date(p.createdAt).getTime() : Date.now())
       })),
-      otps: state.otps.map(o => ({
+      otps: (state.otps || []).map(o => ({
         ...o,
         updatedAt: Number(o.updatedAt) || (o.createdAt ? new Date(o.createdAt).getTime() : Date.now())
       })),
@@ -972,8 +1026,18 @@ export function initMobileVault() {
       return { success: true, tokenId };
     },
 
-    async startNexGrid(options?: { relayUrl?: string }, callbacks?: GridCallbacks) {
+    async startNexGrid(arg1?: any, arg2?: any) {
+      let callbacks: GridCallbacks | undefined;
+      let options: { relayUrl?: string } | undefined;
+      if (arg1 && (typeof arg1.onLog === 'function' || typeof arg1.onStatusChange === 'function' || typeof arg1.onVaultSynced === 'function')) {
+        callbacks = arg1;
+        options = arg2;
+      } else {
+        options = arg1;
+        callbacks = arg2;
+      }
       currentCallbacks = callbacks || null;
+      isManuallyStopped = false;
       const state = loadVault();
       if (!state) throw new Error('Vault is locked or uninitialized');
 
@@ -1013,16 +1077,17 @@ export function initMobileVault() {
             callbacks?.onLog?.('Connected to relay. Authenticating with account token...');
             callbacks?.onStatusChange?.('connected');
 
+            const current = loadVault() || state;
             socket.send(JSON.stringify({
               type: 'device-auth',
               token: {
-                tokenId: state.tokenId,
-                publicKey: state.publicKey,
-                signature: state.signature,
-                expiresAt: state.expiresAt
+                tokenId: current.tokenId,
+                publicKey: current.publicKey,
+                signature: current.signature,
+                expiresAt: current.expiresAt
               },
-              deviceId: state.devicePublicKey,
-              publicKey: state.x25519PublicKey,
+              deviceId: current.devicePublicKey,
+              publicKey: current.x25519PublicKey,
               deviceName: 'NextVault Mobile Mesh Node'
             }));
           };
@@ -1044,11 +1109,14 @@ export function initMobileVault() {
                   if (peer.publicKey) remotePeerKeys.set(peer.deviceId, peer.publicKey);
                   callbacks?.onPeerDiscovered?.(peer);
 
-                  if (isPeerTrusted(peer.deviceId, state)) {
+                  const freshState = loadVault();
+                  if (!freshState) continue;
+
+                  if (isPeerTrusted(peer.deviceId, freshState)) {
                     callbacks?.onLog?.(`✨ Reconnected with paired device: "${peer.deviceName || peer.deviceId}". Syncing...`);
                     callbacks?.onStatusChange?.('paired');
                     callbacks?.onPairApproved?.({ deviceId: peer.deviceId, deviceName: peer.deviceName || peer.deviceId });
-                    broadcastVaultToPeer(peer.deviceId, state, socket, false);
+                    broadcastVaultToPeer(peer.deviceId, socket, false);
                   } else {
                     callbacks?.onLog?.(`Initiating automatic pairing with ${peer.deviceName || peer.deviceId}...`);
                     socket.send(JSON.stringify({
@@ -1056,9 +1124,9 @@ export function initMobileVault() {
                       to: peer.deviceId,
                       payload: {
                         type: 'pair-request',
-                        fromDeviceId: state.devicePublicKey,
+                        fromDeviceId: freshState.devicePublicKey,
                         fromDeviceName: 'NextVault Mobile Mesh Node',
-                        publicKey: state.x25519PublicKey,
+                        publicKey: freshState.x25519PublicKey,
                         timestamp: Date.now()
                       }
                     }));
@@ -1066,15 +1134,18 @@ export function initMobileVault() {
                   }
                 }
               } else if (message.type === 'peer-joined') {
-                const peer = message.peer;
+                const peer = message.peer || { deviceId: message.deviceId, deviceName: message.deviceName, publicKey: message.publicKey };
                 if (peer.publicKey) remotePeerKeys.set(peer.deviceId, peer.publicKey);
                 callbacks?.onPeerDiscovered?.(peer);
 
-                if (isPeerTrusted(peer.deviceId, state)) {
+                const freshState = loadVault();
+                if (!freshState) return;
+
+                if (isPeerTrusted(peer.deviceId, freshState)) {
                   callbacks?.onLog?.(`✨ Paired peer rejoined: "${peer.deviceName || peer.deviceId}". Syncing...`);
                   callbacks?.onStatusChange?.('paired');
                   callbacks?.onPairApproved?.({ deviceId: peer.deviceId, deviceName: peer.deviceName || peer.deviceId });
-                  broadcastVaultToPeer(peer.deviceId, state, socket, false);
+                  broadcastVaultToPeer(peer.deviceId, socket, false);
                 } else {
                   callbacks?.onLog?.(`📡 New peer joined network: ${peer.deviceName || peer.deviceId}`);
                   callbacks?.onLog?.(`Sending pairing request to ${peer.deviceName || peer.deviceId}...`);
@@ -1083,15 +1154,15 @@ export function initMobileVault() {
                     to: peer.deviceId,
                     payload: {
                       type: 'pair-request',
-                      fromDeviceId: state.devicePublicKey,
+                      fromDeviceId: freshState.devicePublicKey,
                       fromDeviceName: 'NextVault Mobile Mesh Node',
-                      publicKey: state.x25519PublicKey,
+                      publicKey: freshState.x25519PublicKey,
                       timestamp: Date.now()
                     }
                   }));
                 }
               } else if (message.type === 'signal') {
-                handleIncomingMobileSignal(message.from, message.payload, state, socket, callbacks);
+                handleIncomingMobileSignal(message.from, message.payload, socket, callbacks);
               }
             } catch (err: any) {
               console.error('[MobileGrid] Error parsing message:', err);
@@ -1113,6 +1184,14 @@ export function initMobileVault() {
             callbacks?.onLog?.('Disconnected from relay.');
             callbacks?.onStatusChange?.('disconnected');
             activeSocket = null;
+            if (!isManuallyStopped) {
+              setTimeout(() => {
+                if (!activeSocket && !isManuallyStopped) {
+                  callbacks?.onLog?.('Attempting auto-reconnect to relay...');
+                  (window as any).nexVault?.startNexGrid(options, callbacks).catch(() => {});
+                }
+              }, 3000);
+            }
           };
         } catch (err: any) {
           if (!resolved) {
@@ -1124,6 +1203,7 @@ export function initMobileVault() {
     },
 
     async stopNexGrid() {
+      isManuallyStopped = true;
       if (activeSocket) {
         activeSocket.close();
         activeSocket = null;
@@ -1173,10 +1253,12 @@ export function initMobileVault() {
         throw new Error('Not connected');
       }
       const req = pendingIncomingRequests.get(peerId);
-      if (!state.trustedPeers.includes(peerId)) {
-        state.trustedPeers.push(peerId);
-        saveVault(state);
-      }
+      addTrustedPeer({
+        deviceId: peerId,
+        publicKey: req?.publicKey,
+        deviceName: req?.deviceName || 'Mesh Peer'
+      }, state);
+
       activeSocket.send(JSON.stringify({
         type: 'signal',
         to: peerId,
@@ -1187,7 +1269,7 @@ export function initMobileVault() {
           publicKey: state.x25519PublicKey
         }
       }));
-      broadcastVaultToPeer(peerId, state, activeSocket);
+      broadcastVaultToPeer(peerId, activeSocket, false);
       pendingIncomingRequests.delete(peerId);
       currentCallbacks?.onLog?.(`Approved pair request for ${req?.deviceName || peerId}. Synchronizing vault...`);
       return { success: true };
@@ -1233,13 +1315,15 @@ export function initMobileVault() {
       }
 
       saveVault(state);
+      notifyVaultUpdated();
 
-      // Broadcast update to all active/trusted peers if connected
+      // Broadcast update to all active/trusted peers and room if connected
       if (activeSocket && activeSocket.readyState === WebSocket.OPEN) {
         const peers = getActiveAndTrustedPeers(state);
         for (const peerId of peers) {
-          broadcastVaultToPeer(peerId, state, activeSocket, false);
+          broadcastVaultToPeer(peerId, activeSocket, false);
         }
+        broadcastVaultToPeer('*', activeSocket, false);
       }
 
       return { success: true };
@@ -1277,13 +1361,29 @@ export function initMobileVault() {
         state.deletedRecords.push({ service: service.trim(), type: 'password', deletedAt: now });
       }
       saveVault(state);
+      notifyVaultUpdated();
 
       if (activeSocket && activeSocket.readyState === WebSocket.OPEN) {
         const peers = getActiveAndTrustedPeers(state);
         console.log(`[Mobile] Broadcasting password deletion of "${service}" to ${peers.length} peer(s):`, peers);
         for (const peerId of peers) {
-          broadcastVaultToPeer(peerId, state, activeSocket, false);
+          broadcastVaultToPeer(peerId, activeSocket, false);
+          sendPeerMessage(peerId, {
+            type: 'credential-deleted',
+            itemType: 'password',
+            service: service.trim(),
+            deletedAt: now,
+            timestamp: now
+          }, state, activeSocket);
         }
+        broadcastVaultToPeer('*', activeSocket, false);
+        sendPeerMessage('*', {
+          type: 'credential-deleted',
+          itemType: 'password',
+          service: service.trim(),
+          deletedAt: now,
+          timestamp: now
+        }, state, activeSocket);
       }
       return { success: true };
     },
@@ -1315,12 +1415,14 @@ export function initMobileVault() {
       }
 
       saveVault(state);
+      notifyVaultUpdated();
 
       if (activeSocket && activeSocket.readyState === WebSocket.OPEN) {
         const peers = getActiveAndTrustedPeers(state);
         for (const peerId of peers) {
-          broadcastVaultToPeer(peerId, state, activeSocket, false);
+          broadcastVaultToPeer(peerId, activeSocket, false);
         }
+        broadcastVaultToPeer('*', activeSocket, false);
       }
 
       return { success: true };
@@ -1366,13 +1468,29 @@ export function initMobileVault() {
         state.deletedRecords.push({ service: service.trim(), type: 'otp', deletedAt: now });
       }
       saveVault(state);
+      notifyVaultUpdated();
 
       if (activeSocket && activeSocket.readyState === WebSocket.OPEN) {
         const peers = getActiveAndTrustedPeers(state);
         console.log(`[Mobile] Broadcasting OTP deletion of "${service}" to ${peers.length} peer(s):`, peers);
         for (const peerId of peers) {
-          broadcastVaultToPeer(peerId, state, activeSocket, false);
+          broadcastVaultToPeer(peerId, activeSocket, false);
+          sendPeerMessage(peerId, {
+            type: 'credential-deleted',
+            itemType: 'otp',
+            service: service.trim(),
+            deletedAt: now,
+            timestamp: now
+          }, state, activeSocket);
         }
+        broadcastVaultToPeer('*', activeSocket, false);
+        sendPeerMessage('*', {
+          type: 'credential-deleted',
+          itemType: 'otp',
+          service: service.trim(),
+          deletedAt: now,
+          timestamp: now
+        }, state, activeSocket);
       }
       return { success: true };
     },
@@ -1413,8 +1531,9 @@ export function initMobileVault() {
       if (activeSocket && activeSocket.readyState === WebSocket.OPEN) {
         const peers = getActiveAndTrustedPeers(state);
         for (const peerId of peers) {
-          broadcastVaultToPeer(peerId, state, activeSocket, false);
+          broadcastVaultToPeer(peerId, activeSocket, false);
         }
+        broadcastVaultToPeer('*', activeSocket, false);
       }
 
       return { success: true, count: imported };
@@ -1456,8 +1575,9 @@ export function initMobileVault() {
       if (activeSocket && activeSocket.readyState === WebSocket.OPEN) {
         const peers = getActiveAndTrustedPeers(state);
         for (const peerId of peers) {
-          broadcastVaultToPeer(peerId, state, activeSocket, false);
+          broadcastVaultToPeer(peerId, activeSocket, false);
         }
+        broadcastVaultToPeer('*', activeSocket, false);
       }
 
       return { success: true, count: imported };

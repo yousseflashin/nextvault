@@ -258,15 +258,35 @@ function broadcastCredentialDeleted(itemType, service, deletedAt = Date.now()) {
     }
     const effectiveDeletedAt = Number(deletedAt) || Date.now();
     for (const pid of targetPeerIds) {
-      nexGrid.sendSecureMessage(pid, {
-        type: 'credential-deleted',
-        itemType,
-        service,
-        deletedAt: effectiveDeletedAt,
-        timestamp: effectiveDeletedAt
-      });
+      try {
+        nexGrid.sendSecureMessage(pid, {
+          type: 'credential-deleted',
+          itemType,
+          service,
+          deletedAt: effectiveDeletedAt,
+          timestamp: effectiveDeletedAt
+        });
+      } catch (err) {
+        console.warn(`[Desktop] Failed to send credential-deleted to peer ${pid}:`, err.message);
+      }
     }
-    console.log(`[Desktop] Broadcasted deletion of ${itemType} "${service}" to ${targetPeerIds.size} peer(s)`);
+
+    // Also broadcast to entire authenticated room via relay so any connected peer receives it immediately
+    if (nexGrid.relaySocket && nexGrid.relaySocket.readyState === 1) {
+      try {
+        nexGrid.sendRelaySignal('*', {
+          type: 'credential-deleted',
+          itemType,
+          service,
+          deletedAt: effectiveDeletedAt,
+          timestamp: effectiveDeletedAt
+        });
+      } catch (err) {
+        console.warn('[Desktop] Failed to broadcast deletion to relay room:', err.message);
+      }
+    }
+
+    console.log(`[Desktop] Broadcasted deletion of ${itemType} "${service}" to ${targetPeerIds.size} peer(s) + room`);
   } catch (err) {
     console.error('[Desktop] Failed to broadcast deletion:', err);
   }
@@ -298,14 +318,66 @@ function broadcastVaultToPeers(options = {}) {
       }
     }
 
-    if (targetPeerIds.size === 0) {
-      console.log('[Desktop] broadcastVaultToPeers: No peers registered or online yet.');
-      return;
-    }
-    console.log(`[Desktop] Broadcasting vault to ${targetPeerIds.size} peer(s): ${Array.from(targetPeerIds).join(', ')}`);
     for (const pid of targetPeerIds) {
-      syncVaultToPeer(pid, options);
+      try {
+        syncVaultToPeer(pid, options);
+      } catch (err) {
+        console.warn(`[Desktop] Failed to sync vault to peer ${pid}:`, err.message);
+      }
     }
+
+    // Also broadcast full vault state to all peers in room via relay
+    if (nexGrid.relaySocket && nexGrid.relaySocket.readyState === 1) {
+      try {
+        const context = nexVaultSecurity.getUserContext();
+        if (context) {
+          const user = nexVaultDatabase.getUser(context.username);
+          if (user) {
+            const rawPasswords = nexVaultDatabase.getPasswords(user.id) || [];
+            const decryptedPasswords = [];
+            for (const p of rawPasswords) {
+              try {
+                const credential = nexVaultDatabase.decryptData(p.encrypted_data, context.encryptionKey, p.iv);
+                decryptedPasswords.push({
+                  service: p.service_name,
+                  username: p.username || '',
+                  credential,
+                  createdAt: p.created_at,
+                  updatedAt: Number(p.updated_at) || (p.created_at ? new Date(p.created_at).getTime() : Date.now())
+                });
+              } catch {}
+            }
+            const rawOtps = nexVaultDatabase.getOtpSecrets(user.id) || [];
+            const decryptedOtps = [];
+            for (const o of rawOtps) {
+              try {
+                const secret = nexVaultDatabase.decryptData(o.encrypted_data, context.encryptionKey, o.iv);
+                decryptedOtps.push({
+                  service: o.service_name,
+                  secret,
+                  createdAt: o.created_at,
+                  updatedAt: Number(o.updated_at) || (o.created_at ? new Date(o.created_at).getTime() : Date.now())
+                });
+              } catch {}
+            }
+            const deletedRecords = nexVaultDatabase.getDeletedRecords(user.id) || [];
+            nexGrid.sendRelaySignal('*', {
+              type: 'vault-sync',
+              vaultData: {
+                passwords: decryptedPasswords,
+                otps: decryptedOtps,
+                deleted: deletedRecords,
+                timestamp: Date.now(),
+                isReply: Boolean(options?.isReply)
+              }
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('[Desktop] Failed to broadcast vault to room:', err.message);
+      }
+    }
+
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('vault-synced-to-peers', { count: targetPeerIds.size });
     }
@@ -333,6 +405,13 @@ async function autoStartNexGrid() {
     console.warn('[Desktop] autoStartNexGrid notice:', err.message);
   }
 }
+
+nexGrid.on('relay-disconnected', () => {
+  console.log('[Desktop] NexGrid disconnected from relay. Auto-reconnecting in 3s...');
+  setTimeout(() => {
+    autoStartNexGrid();
+  }, 3000);
+});
 
 nexGrid.on('peer-disconnected', (peerId) => {
   nexVaultSecurity.startSecurityCountdown();
