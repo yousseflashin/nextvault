@@ -302,6 +302,91 @@
       align-items: center;
       justify-content: space-between;
     }
+
+    /* Modal Dialog */
+    .nv-modal-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+      z-index: 1000;
+    }
+
+    .nv-modal {
+      background: var(--nv-surface);
+      border: 1px solid var(--nv-border);
+      border-radius: var(--nv-radius-md);
+      width: 100%;
+      max-width: 520px;
+      max-height: 85vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+      overflow: hidden;
+    }
+
+    .nv-modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid var(--nv-border);
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .nv-modal-title {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .nv-modal-body {
+      padding: 1.25rem;
+      overflow-y: auto;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .nv-modal-footer {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 0.75rem;
+      padding: 1rem 1.25rem;
+      border-top: 1px solid var(--nv-border);
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .nv-import-preview {
+      background: var(--nv-bg);
+      border: 1px solid var(--nv-border);
+      border-radius: var(--nv-radius-sm);
+      padding: 0.75rem;
+      max-height: 160px;
+      overflow-y: auto;
+      font-size: 0.78rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .nv-import-tag {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.35rem 0.6rem;
+      background: var(--nv-surface-hover);
+      border-radius: 4px;
+    }
   </style>
 </head>
 <body>
@@ -454,9 +539,14 @@
               <span>🔍</span>
               <input type="text" id="vault-search-input" placeholder="Search passwords..." oninput="filterVaultEntries()">
             </div>
-            <button class="nv-btn" onclick="toggleAddCredentialForm()">
-              <span id="add-cred-btn-text">+ Add Credential</span>
-            </button>
+            <div style="display: flex; gap: 0.5rem;">
+              <button class="nv-btn nv-btn-ghost" onclick="openBulkImportModal('vault')">
+                <span>📥 Import</span>
+              </button>
+              <button class="nv-btn" onclick="toggleAddCredentialForm()">
+                <span id="add-cred-btn-text">+ Add Credential</span>
+              </button>
+            </div>
           </div>
 
           <!-- Add Credential Card (Collapsible) -->
@@ -497,9 +587,14 @@
             <div>
               <span class="nv-badge" id="otp-timer-badge">Auto-refresh: 30s</span>
             </div>
-            <button class="nv-btn" onclick="toggleAddOtpForm()">
-              <span id="add-otp-btn-text">+ Add Authenticator</span>
-            </button>
+            <div style="display: flex; gap: 0.5rem;">
+              <button class="nv-btn nv-btn-ghost" onclick="openBulkImportModal('otp')">
+                <span>📥 Import 2FA</span>
+              </button>
+              <button class="nv-btn" onclick="toggleAddOtpForm()">
+                <span id="add-otp-btn-text">+ Add Authenticator</span>
+              </button>
+            </div>
           </div>
 
           <!-- Add OTP Form Card -->
@@ -641,6 +736,17 @@
             </div>
           </div>
 
+          <!-- Bulk Import Data Card -->
+          <div class="nv-card" style="margin-bottom: 1.25rem;">
+            <div style="font-weight: 600; color: #fff; margin-bottom: 0.4rem;">Data &amp; Migration</div>
+            <p style="font-size: 0.8rem; color: var(--nv-muted); margin-bottom: 1rem;">
+              Bulk import credentials and 2FA accounts from Chrome, Bitwarden, 1Password, or standard CSV/JSON files.
+            </p>
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+              <button class="nv-btn nv-btn-accent" onclick="openBulkImportModal('all')">📥 Bulk Import Passwords &amp; OTPs</button>
+            </div>
+          </div>
+
           <!-- Software Updates Card -->
           <div class="nv-card" style="margin-bottom: 1.25rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
@@ -669,6 +775,41 @@
 
       </div>
     </main>
+  </div>
+
+  <!-- Bulk Import Dialog Modal -->
+  <div id="desktop-import-modal" class="nv-modal-backdrop" style="display: none;">
+    <div class="nv-modal">
+      <div class="nv-modal-header">
+        <div class="nv-modal-title" id="desktop-import-title">Bulk Import Credentials</div>
+        <button class="nv-btn nv-btn-ghost nv-btn-sm" type="button" onclick="closeBulkImportModal()">✕</button>
+      </div>
+      <div class="nv-modal-body">
+        <div style="font-size: 0.8rem; color: var(--nv-muted); line-height: 1.4;">
+          Select a file (.csv, .json) exported from Google Chrome, Bitwarden, 1Password, or paste lines of <code>otpauth://</code> URIs.
+        </div>
+        <div style="display: flex; gap: 0.75rem; align-items: center; margin-top: 0.25rem;">
+          <input type="file" id="desktop-import-file" accept=".csv,.json,.txt" style="display: none;" onchange="handleDesktopImportFile(event)">
+          <button class="nv-btn nv-btn-accent nv-btn-sm" type="button" onclick="$('desktop-import-file').click()">Choose File (.csv, .json)</button>
+          <span id="desktop-import-filename" style="font-size: 0.8rem; color: var(--nv-muted);">No file selected</span>
+        </div>
+        <div>
+          <label class="nv-label">Or paste CSV, JSON, or otpauth:// links directly:</label>
+          <textarea class="nv-input nv-mono" id="desktop-import-textarea" rows="5" placeholder="Paste export data or otpauth:// links here..." oninput="handleDesktopImportTextChange()"></textarea>
+        </div>
+        <div id="desktop-import-preview-box" style="display: none;">
+          <div style="display: flex; justify-content: space-between; font-size: 0.8rem; font-weight: 600; color: #fff; margin-bottom: 0.4rem;">
+            <span>Detected Records:</span>
+            <span id="desktop-import-count-badge" class="nv-badge success">0 items</span>
+          </div>
+          <div class="nv-import-preview" id="desktop-import-preview-list"></div>
+        </div>
+      </div>
+      <div class="nv-modal-footer">
+        <button class="nv-btn nv-btn-ghost" type="button" onclick="closeBulkImportModal()">Cancel</button>
+        <button class="nv-btn" id="desktop-import-confirm-btn" type="button" disabled onclick="executeDesktopBulkImport()">Import to Vault &amp; Mesh</button>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -1433,6 +1574,154 @@
     window.applyAppUpdate = applyAppUpdate;
     window.dismissUpdate = dismissUpdate;
     window.copyTokenFromSettings = copyTokenFromSettings;
+    window.openBulkImportModal = openBulkImportModal;
+    window.closeBulkImportModal = closeBulkImportModal;
+    window.handleDesktopImportFile = handleDesktopImportFile;
+    window.handleDesktopImportTextChange = handleDesktopImportTextChange;
+    window.executeDesktopBulkImport = executeDesktopBulkImport;
+
+    let parsedImportData = { passwords: [], otps: [] };
+
+    function openBulkImportModal(type = 'all') {
+      parsedImportData = { passwords: [], otps: [] };
+      if ($('desktop-import-textarea')) $('desktop-import-textarea').value = '';
+      if ($('desktop-import-filename')) $('desktop-import-filename').textContent = 'No file selected';
+      if ($('desktop-import-file')) $('desktop-import-file').value = '';
+      if ($('desktop-import-preview-box')) $('desktop-import-preview-box').style.display = 'none';
+      if ($('desktop-import-confirm-btn')) $('desktop-import-confirm-btn').disabled = true;
+      if ($('desktop-import-title')) {
+        $('desktop-import-title').textContent = type === 'otp' ? 'Bulk Import 2FA Accounts' : (type === 'vault' ? 'Bulk Import Passwords' : 'Bulk Import Credentials & 2FA');
+      }
+      if ($('desktop-import-modal')) $('desktop-import-modal').style.display = 'flex';
+    }
+
+    function closeBulkImportModal() {
+      if ($('desktop-import-modal')) $('desktop-import-modal').style.display = 'none';
+    }
+
+    function handleDesktopImportFile(e) {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      if ($('desktop-import-filename')) {
+        $('desktop-import-filename').textContent = `${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+      }
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const text = event.target?.result;
+        if (typeof text === 'string') {
+          if ($('desktop-import-textarea')) $('desktop-import-textarea').value = text;
+          handleDesktopImportTextChange();
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    async function handleDesktopImportTextChange() {
+      const raw = $('desktop-import-textarea')?.value.trim() || '';
+      if (!raw) {
+        if ($('desktop-import-preview-box')) $('desktop-import-preview-box').style.display = 'none';
+        if ($('desktop-import-confirm-btn')) $('desktop-import-confirm-btn').disabled = true;
+        parsedImportData = { passwords: [], otps: [] };
+        return;
+      }
+
+      try {
+        let result;
+        if (window.nexVault?.parseBulkImport) {
+          result = await window.nexVault.parseBulkImport(raw);
+        }
+        if (!result || !result.success) {
+          if ($('desktop-import-preview-box')) $('desktop-import-preview-box').style.display = 'none';
+          if ($('desktop-import-confirm-btn')) $('desktop-import-confirm-btn').disabled = true;
+          return;
+        }
+
+        parsedImportData = {
+          passwords: result.passwords || [],
+          otps: result.otps || []
+        };
+
+        const total = parsedImportData.passwords.length + parsedImportData.otps.length;
+        if (total === 0) {
+          if ($('desktop-import-preview-box')) $('desktop-import-preview-box').style.display = 'none';
+          if ($('desktop-import-confirm-btn')) $('desktop-import-confirm-btn').disabled = true;
+          return;
+        }
+
+        if ($('desktop-import-count-badge')) {
+          $('desktop-import-count-badge').textContent = `${parsedImportData.passwords.length} Passwords, ${parsedImportData.otps.length} 2FA Accounts`;
+        }
+        const list = $('desktop-import-preview-list');
+        if (list) {
+          list.innerHTML = '';
+          parsedImportData.passwords.slice(0, 40).forEach(p => {
+            const item = document.createElement('div');
+            item.className = 'nv-import-tag';
+            item.innerHTML = `<span>🔑 <strong>${escapeHtml(p.service)}</strong> ${p.username ? '(' + escapeHtml(p.username) + ')' : ''}</span><span style="color:var(--nv-muted);">Password</span>`;
+            list.appendChild(item);
+          });
+
+          parsedImportData.otps.slice(0, 40).forEach(o => {
+            const item = document.createElement('div');
+            item.className = 'nv-import-tag';
+            item.innerHTML = `<span>⏳ <strong>${escapeHtml(o.service)}</strong></span><span style="color:var(--nv-primary);">2FA TOTP</span>`;
+            list.appendChild(item);
+          });
+
+          if (total > 80) {
+            const extra = document.createElement('div');
+            extra.style.textAlign = 'center';
+            extra.style.color = 'var(--nv-muted)';
+            extra.style.padding = '0.25rem';
+            extra.textContent = `+ ${total - 80} more items...`;
+            list.appendChild(extra);
+          }
+        }
+
+        if ($('desktop-import-preview-box')) $('desktop-import-preview-box').style.display = 'block';
+        if ($('desktop-import-confirm-btn')) $('desktop-import-confirm-btn').disabled = false;
+      } catch (err) {
+        console.error('Import preview error:', err);
+      }
+    }
+
+    async function executeDesktopBulkImport() {
+      const btn = $('desktop-import-confirm-btn');
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Importing...';
+      }
+
+      let totalImported = 0;
+      try {
+        if (parsedImportData.passwords.length > 0 && window.nexVault?.bulkImportPasswords) {
+          const rPass = await window.nexVault.bulkImportPasswords(parsedImportData.passwords);
+          if (rPass && rPass.success) totalImported += rPass.count || parsedImportData.passwords.length;
+        }
+        if (parsedImportData.otps.length > 0 && window.nexVault?.bulkImportOTPs) {
+          const rOtp = await window.nexVault.bulkImportOTPs(parsedImportData.otps);
+          if (rOtp && rOtp.success) totalImported += rOtp.count || parsedImportData.otps.length;
+        }
+
+        setStatus(`Successfully imported ${totalImported} items into vault.`);
+        gridLog(`Bulk imported ${totalImported} credentials and broadcasted to mesh.`);
+        closeBulkImportModal();
+        listPasswords();
+        listOTPs();
+      } catch (e) {
+        setStatus('Import error: ' + e.message);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = 'Import to Vault & Mesh';
+        }
+      }
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
   </script>
 </body>
 </html>

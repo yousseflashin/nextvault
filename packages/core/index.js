@@ -6,5 +6,7 @@ module.exports = {
   NexVaultDatabase: require('./database'),
   generateTotp: require('./otp').generateTotp,
   TrustLedger: require('./trustLedger'),
-  IntegrityMonitor: require('./integrity')
+  IntegrityMonitor: require('./integrity'),
+  parseBulkImport: require('./importParser').parseBulkImport,
+  parseOtpAuthUri: require('./importParser').parseOtpAuthUri
 };

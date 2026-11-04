@@ -2,7 +2,7 @@ const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage } = require('electr
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
-const { NexVaultToken, NexVaultCrypto, NexVaultSecurity, NexGrid, NexVaultDatabase, generateTotp } = require('@nexvault/core');
+const { NexVaultToken, NexVaultCrypto, NexVaultSecurity, NexGrid, NexVaultDatabase, generateTotp, parseBulkImport, parseOtpAuthUri } = require('@nexvault/core');
 const { WebSocketServer } = require('ws');
 const crypto = require('crypto');
 const { setupLinuxDesktopIntegration } = require('./linuxIntegration');
@@ -806,6 +806,58 @@ ipcMain.handle('get-password', async (event, serviceName) => {
       result.iv
     );
     return { success: true, password: decrypted, username: result.username || '' };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('bulk-import-passwords', async (event, items) => {
+  try {
+    const context = nexVaultSecurity.getUserContext();
+    if (!context) throw new Error('User is not authenticated');
+    const user = nexVaultDatabase.getUser(context.username);
+    if (!user) throw new Error('User not found');
+    if (!Array.isArray(items) || items.length === 0) return { success: true, count: 0 };
+
+    let imported = 0;
+    for (const item of items) {
+      if (!item.service || !item.credential) continue;
+      nexVaultDatabase.addPassword(user.id, item.service.trim(), item.credential, context.encryptionKey, (item.username || '').trim());
+      imported++;
+    }
+    broadcastVaultToPeers();
+    return { success: true, count: imported };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('bulk-import-otps', async (event, items) => {
+  try {
+    const context = nexVaultSecurity.getUserContext();
+    if (!context) throw new Error('User is not authenticated');
+    const user = nexVaultDatabase.getUser(context.username);
+    if (!user) throw new Error('User not found');
+    if (!Array.isArray(items) || items.length === 0) return { success: true, count: 0 };
+
+    let imported = 0;
+    for (const item of items) {
+      if (!item.service || !item.secret) continue;
+      const cleanSecret = item.secret.replace(/\s+/g, '').toUpperCase();
+      nexVaultDatabase.addOtpSecret(user.id, item.service.trim(), 'TOTP', cleanSecret, context.encryptionKey);
+      imported++;
+    }
+    broadcastVaultToPeers();
+    return { success: true, count: imported };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('parse-bulk-import', async (event, content) => {
+  try {
+    const result = parseBulkImport(content);
+    return { success: true, ...result };
   } catch (error) {
     return { success: false, error: error.message };
   }

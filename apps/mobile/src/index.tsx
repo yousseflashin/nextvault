@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './cyber/cyber.css';
 import './main.css';
-import { getDefaultRelayUrl, getSavedRelayUrl, CURRENT_VERSION } from './mobileVault';
+import { getDefaultRelayUrl, getSavedRelayUrl, CURRENT_VERSION, parseOtpAuthUri, parseBulkImport } from './mobileVault';
+import { startCameraQrScanner, scanQrFromImageSource } from './qrScanner';
 
 function Shield({ size = 32 }: { size?: number }) {
   return (
@@ -25,6 +26,260 @@ function StatusPill({ ok, label }: { ok: boolean; label: string }) {
 
 function Card({ children, style }: { children: ReactNode; style?: CSSProperties }) {
   return <div className="nv-card" style={style}>{children}</div>;
+}
+
+function QrScannerModal({
+  onDetected,
+  onClose,
+  showToast
+}: {
+  onDetected: (code: string) => void;
+  onClose: () => void;
+  showToast: (msg: string) => void;
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [camErr, setCamErr] = useState<string | null>(null);
+  const [manualUri, setManualUri] = useState('');
+
+  useEffect(() => {
+    let stopFn: (() => void) | null = null;
+    if (videoRef.current) {
+      startCameraQrScanner(
+        videoRef.current,
+        (detected) => {
+          onDetected(detected);
+        },
+        () => {
+          setCamErr('Camera access not available. You can upload an image/screenshot or paste the link below.');
+        }
+      ).then(stop => {
+        stopFn = stop;
+      });
+    }
+
+    return () => {
+      if (stopFn) stopFn();
+    };
+  }, []);
+
+  async function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    showToast('Scanning image for QR code...');
+    const result = await scanQrFromImageSource(file);
+    if (result) {
+      onDetected(result);
+    } else {
+      showToast('Could not detect a QR code in this image.');
+    }
+  }
+
+  function handleManualSubmit() {
+    if (!manualUri.trim()) return;
+    onDetected(manualUri.trim());
+  }
+
+  return (
+    <div className="nv-modal-backdrop" onClick={onClose}>
+      <div className="nv-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px' }}>
+        <div className="nv-modal-header">
+          <div className="nv-modal-title">📷 Scan 2FA QR Code</div>
+          <button className="nv-btn nv-btn-ghost nv-btn-sm" type="button" onClick={onClose}>✕</button>
+        </div>
+        <div className="nv-modal-body">
+          <div className="nv-qr-viewfinder">
+            <video ref={videoRef} className="nv-qr-video" playsInline autoPlay muted />
+            <div className="nv-qr-target" />
+          </div>
+
+          {camErr && (
+            <div style={{ color: 'var(--nv-danger)', fontSize: '0.75rem', textAlign: 'center' }}>
+              {camErr}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={handleFileSelected}
+            />
+            <button
+              className="nv-btn nv-btn-ghost nv-btn-sm"
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              📁 Choose QR Screenshot / Image
+            </button>
+
+            <div style={{ display: 'flex', gap: '0.4rem' }}>
+              <input
+                className="nv-input nv-mono"
+                style={{ fontSize: '0.75rem', padding: '0.4rem 0.6rem' }}
+                placeholder="Or paste otpauth:// link..."
+                value={manualUri}
+                onChange={e => setManualUri(e.target.value)}
+              />
+              <button
+                className="nv-btn nv-btn-sm"
+                type="button"
+                onClick={handleManualSubmit}
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+        </div>
+        <div className="nv-modal-footer">
+          <button className="nv-btn nv-btn-ghost nv-btn-sm" type="button" onClick={onClose}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BulkImportModal({
+  type,
+  onClose,
+  showToast,
+  onImportDone
+}: {
+  type: 'vault' | 'otp' | 'all';
+  onClose: () => void;
+  showToast: (msg: string) => void;
+  onImportDone: () => void;
+}) {
+  const [rawText, setRawText] = useState('');
+  const [fileName, setFileName] = useState('');
+  const [parsed, setParsed] = useState<{ passwords: any[]; otps: any[] }>({ passwords: [], otps: [] });
+  const [busy, setBusy] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  function onTextChange(val: string) {
+    setRawText(val);
+    if (!val.trim()) {
+      setParsed({ passwords: [], otps: [] });
+      return;
+    }
+    const res = parseBulkImport(val);
+    setParsed({ passwords: res.passwords || [], otps: res.otps || [] });
+  }
+
+  function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setFileName(`${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const text = ev.target?.result;
+      if (typeof text === 'string') {
+        onTextChange(text);
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  async function handleImport() {
+    setBusy(true);
+    let total = 0;
+    try {
+      if (parsed.passwords.length > 0 && (window as any).nexVault?.bulkImportPasswords) {
+        const r = await (window as any).nexVault.bulkImportPasswords(parsed.passwords);
+        if (r && r.success) total += r.count || parsed.passwords.length;
+      }
+      if (parsed.otps.length > 0 && (window as any).nexVault?.bulkImportOTPs) {
+        const r = await (window as any).nexVault.bulkImportOTPs(parsed.otps);
+        if (r && r.success) total += r.count || parsed.otps.length;
+      }
+      showToast(`✅ Successfully imported ${total} credentials into mesh!`);
+      onImportDone();
+      onClose();
+    } catch (err: any) {
+      showToast('Import error: ' + err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const title = type === 'otp' ? 'Bulk Import 2FA Accounts' : (type === 'vault' ? 'Bulk Import Passwords' : 'Bulk Import Credentials & 2FA');
+
+  return (
+    <div className="nv-modal-backdrop" onClick={onClose}>
+      <div className="nv-modal" onClick={e => e.stopPropagation()}>
+        <div className="nv-modal-header">
+          <div className="nv-modal-title">{title}</div>
+          <button className="nv-btn nv-btn-ghost nv-btn-sm" type="button" onClick={onClose}>✕</button>
+        </div>
+        <div className="nv-modal-body">
+          <div style={{ fontSize: '0.8rem', color: 'var(--nv-muted)', lineHeight: '1.4' }}>
+            Supports Chrome, Bitwarden, 1Password CSV/JSON exports, and <code>otpauth://</code> 2FA lists.
+          </div>
+
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <input type="file" ref={fileRef} accept=".csv,.json,.txt" style={{ display: 'none' }} onChange={onFileChange} />
+            <button className="nv-btn nv-btn-accent nv-btn-sm" type="button" onClick={() => fileRef.current?.click()}>
+              Choose File (.csv, .json)
+            </button>
+            <span style={{ fontSize: '0.75rem', color: 'var(--nv-muted)' }}>{fileName || 'No file selected'}</span>
+          </div>
+
+          <div>
+            <label className="nv-label">Or paste CSV, JSON, or otpauth:// links:</label>
+            <textarea
+              className="nv-input nv-mono"
+              rows={5}
+              style={{ fontSize: '0.75rem' }}
+              placeholder="Paste data here..."
+              value={rawText}
+              onChange={e => onTextChange(e.target.value)}
+            />
+          </div>
+
+          {(parsed.passwords.length > 0 || parsed.otps.length > 0) && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: 600, color: '#fff', marginBottom: '0.4rem' }}>
+                <span>Detected Records:</span>
+                <span className="nv-badge success">{parsed.passwords.length} Passwords, {parsed.otps.length} 2FA</span>
+              </div>
+              <div className="nv-import-preview">
+                {parsed.passwords.slice(0, 30).map((p, i) => (
+                  <div className="nv-import-tag" key={'p-' + i}>
+                    <span>🔑 <strong>{p.service}</strong> {p.username ? `(${p.username})` : ''}</span>
+                    <span style={{ color: 'var(--nv-muted)', fontSize: '0.7rem' }}>Password</span>
+                  </div>
+                ))}
+                {parsed.otps.slice(0, 30).map((o, i) => (
+                  <div className="nv-import-tag" key={'o-' + i}>
+                    <span>⏳ <strong>{o.service}</strong></span>
+                    <span style={{ color: 'var(--nv-primary)', fontSize: '0.7rem' }}>2FA TOTP</span>
+                  </div>
+                ))}
+                {(parsed.passwords.length + parsed.otps.length) > 60 && (
+                  <div style={{ textAlign: 'center', color: 'var(--nv-muted)', fontSize: '0.7rem', padding: '0.2rem' }}>
+                    + {(parsed.passwords.length + parsed.otps.length) - 60} more items...
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="nv-modal-footer">
+          <button className="nv-btn nv-btn-ghost nv-btn-sm" type="button" onClick={onClose} disabled={busy}>Cancel</button>
+          <button
+            className="nv-btn nv-btn-sm"
+            type="button"
+            onClick={handleImport}
+            disabled={busy || (parsed.passwords.length === 0 && parsed.otps.length === 0)}
+          >
+            {busy ? 'Importing...' : 'Import to Vault & Mesh'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 type TabType = 'vault' | 'otp' | 'grid' | 'settings';
@@ -71,9 +326,35 @@ function App() {
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [updateInfo, setUpdateInfo] = useState<{ hasUpdate: boolean; latestVersion: string; downloadUrl?: string } | null>(null);
 
+  // Bulk Import & QR Scanning State
+  const [isScanningQr, setIsScanningQr] = useState(false);
+  const [importModalType, setImportModalType] = useState<'vault' | 'otp' | 'all' | null>(null);
+
   function showToast(msg: string) {
     setToastMsg(msg);
     setTimeout(() => setToastMsg(null), 3500);
+  }
+
+  function onQrCodeDetected(rawCode: string) {
+    setIsScanningQr(false);
+    const parsed = parseOtpAuthUri(rawCode);
+    if (parsed) {
+      setOtpService(parsed.service);
+      setOtpSecret(parsed.secret);
+      setShowAddOtp(true);
+      setActiveTab('otp');
+      showToast(`Scanned QR for "${parsed.service}". Click Save to add.`);
+    } else {
+      const cleaned = rawCode.trim().replace(/\s+/g, '').toUpperCase();
+      if (/^[A-Z2-7]{16,64}$/.test(cleaned)) {
+        setOtpSecret(cleaned);
+        setShowAddOtp(true);
+        setActiveTab('otp');
+        showToast('Detected Base32 TOTP secret from QR code!');
+      } else {
+        showToast('Scanned code is not a valid otpauth:// URI');
+      }
+    }
   }
 
   async function onApplyMobileUpdate() {
@@ -638,6 +919,9 @@ function App() {
                       <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={() => refreshVault(true)}>
                         {isSyncing ? 'Syncing...' : 'Sync'}
                       </button>
+                      <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={() => setImportModalType('vault')}>
+                        📥 Import
+                      </button>
                       <button className="nv-btn nv-btn-sm" onClick={() => setShowAddVault(!showAddVault)}>
                         {showAddVault ? '✕ Close' : '+ Add'}
                       </button>
@@ -737,8 +1021,14 @@ function App() {
                       <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={() => refreshOTPs(true)}>
                         {isSyncing ? 'Syncing...' : 'Sync'}
                       </button>
+                      <button className="nv-btn nv-btn-accent nv-btn-sm" onClick={() => setIsScanningQr(true)}>
+                        📷 Scan QR
+                      </button>
+                      <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={() => setImportModalType('otp')}>
+                        📥 Import
+                      </button>
                       <button className="nv-btn nv-btn-sm" onClick={() => setShowAddOtp(!showAddOtp)}>
-                        {showAddOtp ? '✕ Close' : '+ Add TOTP'}
+                        {showAddOtp ? '✕ Close' : '+ Add'}
                       </button>
                     </div>
                   </div>
@@ -753,12 +1043,24 @@ function App() {
                           value={otpService}
                           onChange={e => setOtpService(e.target.value)}
                         />
-                        <input
-                          className="nv-input nv-mono"
-                          placeholder="Base32 Secret Key"
-                          value={otpSecret}
-                          onChange={e => setOtpSecret(e.target.value)}
-                        />
+                        <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                          <input
+                            className="nv-input nv-mono"
+                            placeholder="Base32 Secret Key"
+                            value={otpSecret}
+                            onChange={e => setOtpSecret(e.target.value)}
+                            style={{ flex: 1 }}
+                          />
+                          <button
+                            type="button"
+                            className="nv-btn nv-btn-accent nv-btn-sm"
+                            onClick={() => setIsScanningQr(true)}
+                            title="Scan QR Code"
+                            style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}
+                          >
+                            📷 Scan QR
+                          </button>
+                        </div>
                         <div className="nv-btn-row">
                           <button className="nv-btn" onClick={onSaveOTP}>Save TOTP</button>
                           <button className="nv-btn nv-btn-ghost" onClick={() => setShowAddOtp(false)}>Cancel</button>
@@ -989,6 +1291,16 @@ function App() {
                     </div>
                   </Card>
 
+                  <Card style={{ marginBottom: '1rem' }}>
+                    <div style={{ fontWeight: 600, color: '#fff', marginBottom: '0.35rem' }}>Data &amp; Migration</div>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--nv-muted)', margin: '0 0 0.75rem' }}>
+                      Import passwords and 2FA accounts from Chrome, Bitwarden, 1Password, or otpauth:// links.
+                    </p>
+                    <button className="nv-btn nv-btn-accent nv-btn-sm" onClick={() => setImportModalType('all')}>
+                      📥 Bulk Import Credentials &amp; 2FA
+                    </button>
+                  </Card>
+
                   <Card style={{ borderColor: 'rgba(239, 68, 68, 0.25)' }}>
                     <div style={{ fontWeight: 600, color: 'var(--nv-danger)', marginBottom: '0.35rem' }}>Session</div>
                     <p style={{ fontSize: '0.75rem', color: 'var(--nv-muted)', margin: '0 0 0.75rem' }}>
@@ -1051,6 +1363,28 @@ function App() {
               <span>Settings</span>
             </button>
           </nav>
+        )}
+
+        {/* QR Scanner Modal */}
+        {isScanningQr && (
+          <QrScannerModal
+            onClose={() => setIsScanningQr(false)}
+            onDetected={onQrCodeDetected}
+            showToast={showToast}
+          />
+        )}
+
+        {/* Bulk Import Modal */}
+        {importModalType && (
+          <BulkImportModal
+            type={importModalType}
+            onClose={() => setImportModalType(null)}
+            showToast={showToast}
+            onImportDone={() => {
+              refreshVault(false);
+              refreshOTPs(false);
+            }}
+          />
         )}
 
       </div>
