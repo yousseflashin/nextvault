@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('nexVault', {
     'initialize-existing-user', tokenId, publicKey, signature, password, expiresAt
   ),
   authenticate: (username, password) => ipcRenderer.invoke('authenticate-user', username, password),
+  lockVault: () => ipcRenderer.invoke('lock-vault'),
   getToken: () => ipcRenderer.invoke('get-token'),
   authorizeToken: (token) => ipcRenderer.invoke('authorize-token', token),
   getTrustHistory: () => ipcRenderer.invoke('get-trust-history'),

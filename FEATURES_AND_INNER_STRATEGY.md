@@ -57,7 +57,8 @@ Conventional password managers (Bitwarden, 1Password, LastPass) rely on centrali
 | **P2P Channel Encryption** | X25519 (ECDH) + XSalsa20-Poly1305 | `tweetnacl.box` | End-to-end encrypted peer-to-peer messages |
 | **Key Derivation (KDF)** | PBKDF2-HMAC-SHA256 (210,000 rounds) | WebCrypto / Node `crypto` | Master password to encryption key transformation |
 | **Desktop Storage Engine** | SQLCipher (AES-256-CBC, PBKDF2) | `better-sqlite3-multiple-ciphers` | Page-level transparent database encryption |
-| **Mobile & Memory Cipher** | AES-256-GCM / XSalsa20-Poly1305 | WebCrypto / TweetNaCl | Device local storage & secure memory envelopes |
+| **Mobile Vault Storage** | PBKDF2-HMAC-SHA256 (600,000 rounds, random salt) + XSalsa20-Poly1305 | WebCrypto / TweetNaCl `secretbox` | Encrypted-at-rest vault envelope; key and plaintext exist only in memory while unlocked |
+| **Android Autofill Store** | AES-256-GCM (Android Keystore) | `NativeCredentialStore.java` | Hardware-backed credential cache for the autofill service |
 | **Hash Chaining & Ledger** | SHA-256 | Native Crypto | Append-only trust ledger & file integrity baselines |
 
 ### 2.2 Master Key Derivation Strategy
@@ -70,6 +71,8 @@ When a user initializes or unlocks their vault:
    - All plaintext password variables and decrypted cache arrays are overwritten with zeroes or purged.
    - Database connections are closed.
    - Active decryption keys in memory are evicted.
+   - Desktop: `lock-vault` clears the session so the extension bridge stops serving credentials. Mobile: the vault key is zeroed; auto-lock fires after 2 min in background or 5 min idle.
+   - Clipboard is cleared 30 s after copying a password or OTP; Android screenshots are blocked (`FLAG_SECURE`).
 
 ### 2.3 Bootstrap Token Architecture
 
@@ -283,11 +286,11 @@ In high-risk scenarios (e.g., physical compromise), the user can trigger an emer
 +------------------------------------+---------------------------------------------------+
 | Cloud Database Compromise          | Non-existent. Vault data is strictly local.      |
 | Man-In-The-Middle (Relay Intercept)| Relay only sees encrypted blobs (TweetNaCl Box).  |
-| Brute-Force Master Password        | PBKDF2-HMAC-SHA256 with 210,000 iterations.       |
+| Brute-Force Master Password        | PBKDF2-HMAC-SHA256 (210k desktop / 600k mobile).  |
 | Malicious Extension Injection      | Origin verification + Pre-shared pairing tokens.  |
 | Stolen Physical Device             | SQLCipher AES-256-CBC + Auto-lock timeout.        |
 | File System Tampering              | Cryptographic SHA-256 Integrity Verification.     |
-| Unauthorized Device Pairing        | 6-digit ephemeral code + user manual confirmation.|
+| Unauthorized Device Pairing        | Ephemeral pairing code + user manual confirmation.|
 | Dormant Stolen Device              | 24-Hour Dead Man's switch & Heartbeat expiry.     |
 +------------------------------------+---------------------------------------------------+
 

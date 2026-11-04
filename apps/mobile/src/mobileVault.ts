@@ -319,7 +319,7 @@ export interface GridCallbacks {
   onVaultSynced?: (count: number) => void;
 }
 
-const STORAGE_KEY = 'nexvault_mobile_vault_v2';
+const STORAGE_KEY = 'nexvault_mobile_vault_v3';
 let activeSocket: WebSocket | null = null;
 let currentCallbacks: GridCallbacks | null = null;
 const remotePeerKeys = new Map<string, string>();
@@ -347,41 +347,151 @@ export function getSavedRelayUrl(): string {
   return getDefaultRelayUrl();
 }
 
-async function deriveKey(password: string, salt: string): Promise<string> {
-  const enc = new TextEncoder();
-  const baseKey = await crypto.subtle.importKey(
-    'raw',
-    enc.encode(password),
-    'PBKDF2',
-    false,
-    ['deriveBits', 'deriveKey']
-  );
+const LEGACY_STORAGE_KEY = 'nexvault_mobile_vault_v2';
+const PBKDF2_ITERATIONS = 600000;
+const LEGACY_PBKDF2_ITERATIONS = 100000;
 
-  const derivedBits = await crypto.subtle.deriveBits(
-    {
-      name: 'PBKDF2',
-      salt: enc.encode(salt),
-      iterations: 100000,
-      hash: 'SHA-256'
-    },
+interface VaultProfile {
+  username: string;
+  tokenId: string;
+  publicKey: string;
+  signature: string;
+  expiresAt: string;
+}
+
+interface VaultEnvelope {
+  v: 3;
+  iter: number;
+  salt: string;
+  nonce: string;
+  box: string;
+  profile: VaultProfile;
+}
+
+// Decrypted state and key live only in memory and are wiped on lock.
+let cachedState: MobileVaultState | null = null;
+let sessionKey: Uint8Array | null = null;
+let sessionSalt: Uint8Array | null = null;
+let sessionIter = PBKDF2_ITERATIONS;
+
+async function pbkdf2Bytes(password: string, salt: Uint8Array | string, iterations: number): Promise<Uint8Array> {
+  const enc = new TextEncoder();
+  const baseKey = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt: typeof salt === 'string' ? enc.encode(salt) : (salt as BufferSource), iterations, hash: 'SHA-256' },
     baseKey,
     256
   );
-
-  return btoa(String.fromCharCode(...new Uint8Array(derivedBits)));
+  return new Uint8Array(bits);
 }
 
-export function loadVault(): MobileVaultState | null {
+// Legacy (v2) password check value; only used to verify the password while migrating.
+async function legacyDeriveKey(password: string, salt: string): Promise<string> {
+  return btoa(String.fromCharCode(...(await pbkdf2Bytes(password, salt, LEGACY_PBKDF2_ITERATIONS))));
+}
+
+function readEnvelope(): VaultEnvelope | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
+    const env = raw ? JSON.parse(raw) : null;
+    return env && env.v === 3 ? env : null;
+  } catch {
+    return null;
+  }
+}
+
+function readLegacyVault(): MobileVaultState | null {
+  try {
+    const raw = localStorage.getItem(LEGACY_STORAGE_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
   }
 }
 
+function profileOf(state: MobileVaultState): VaultProfile {
+  return {
+    username: state.username,
+    tokenId: state.tokenId,
+    publicKey: state.publicKey,
+    signature: state.signature,
+    expiresAt: state.expiresAt
+  };
+}
+
+function persistEncrypted(state: MobileVaultState) {
+  if (!sessionKey || !sessionSalt) return;
+  const nonce = nacl.randomBytes(nacl.secretbox.nonceLength);
+  const box = nacl.secretbox(naclUtil.decodeUTF8(JSON.stringify(state)), nonce, sessionKey);
+  const envelope: VaultEnvelope = {
+    v: 3,
+    iter: sessionIter,
+    salt: naclUtil.encodeBase64(sessionSalt),
+    nonce: naclUtil.encodeBase64(nonce),
+    box: naclUtil.encodeBase64(box),
+    profile: profileOf(state)
+  };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(envelope));
+}
+
+/** Creates a fresh encryption session (new random salt) for the given password. */
+async function startSession(password: string, state: MobileVaultState) {
+  sessionSalt = nacl.randomBytes(16);
+  sessionIter = PBKDF2_ITERATIONS;
+  sessionKey = await pbkdf2Bytes(password, sessionSalt, sessionIter);
+  cachedState = state;
+  persistEncrypted(state);
+  localStorage.removeItem(LEGACY_STORAGE_KEY);
+}
+
+/** Decrypts the stored vault; throws 'Invalid master password' on failure. */
+async function unlockEnvelope(password: string, env: VaultEnvelope): Promise<MobileVaultState> {
+  const salt = naclUtil.decodeBase64(env.salt);
+  const key = await pbkdf2Bytes(password, salt, env.iter);
+  const plain = nacl.secretbox.open(naclUtil.decodeBase64(env.box), naclUtil.decodeBase64(env.nonce), key);
+  if (!plain) throw new Error('Invalid master password');
+  sessionKey = key;
+  sessionSalt = salt;
+  sessionIter = env.iter;
+  cachedState = JSON.parse(naclUtil.encodeUTF8(plain));
+  return cachedState as MobileVaultState;
+}
+
+export function isVaultUnlocked(): boolean {
+  return cachedState !== null;
+}
+
+export function hasStoredVault(): boolean {
+  return readEnvelope() !== null || readLegacyVault() !== null;
+}
+
+export function getStoredProfile(): VaultProfile | null {
+  const env = readEnvelope();
+  if (env) return env.profile;
+  const legacy = readLegacyVault();
+  return legacy ? profileOf(legacy) : null;
+}
+
+export function lockVault() {
+  isManuallyStopped = true;
+  try { activeSocket?.close(); } catch {}
+  activeSocket = null;
+  remotePeerKeys.clear();
+  pendingIncomingRequests.clear();
+  if (sessionKey) sessionKey.fill(0);
+  sessionKey = null;
+  sessionSalt = null;
+  cachedState = null;
+}
+
+export function loadVault(): MobileVaultState | null {
+  return cachedState;
+}
+
 export function saveVault(state: MobileVaultState) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  if (!sessionKey) return; // locked: never persist
+  cachedState = state;
+  persistEncrypted(state);
   syncAutofillCredentials(state);
 }
 
@@ -963,19 +1073,27 @@ export function initMobileVault() {
     __isMobileReady: true,
 
     async getVaultProfile() {
-      const state = loadVault();
-      if (!state) return { hasUser: false };
+      const prof = getStoredProfile();
+      if (!prof) return { hasUser: false };
       return {
         hasUser: true,
-        username: state.username,
-        tokenId: state.tokenId,
+        username: prof.username,
+        tokenId: prof.tokenId,
         bootstrapToken: {
-          tokenId: state.tokenId,
-          publicKey: state.publicKey,
-          signature: state.signature,
-          expiresAt: state.expiresAt
+          tokenId: prof.tokenId,
+          publicKey: prof.publicKey,
+          signature: prof.signature,
+          expiresAt: prof.expiresAt
         }
       };
+    },
+
+    isUnlocked() {
+      return isVaultUnlocked();
+    },
+
+    lock() {
+      lockVault();
     },
 
     async initializeNewUser(username: string, password: string) {
@@ -993,11 +1111,9 @@ export function initMobileVault() {
       const deviceXKeys = nacl.box.keyPair();
       const devicePublicKey = 'mobile-' + naclUtil.encodeBase64(deviceEdKeys.publicKey).slice(0, 16).replace(/[/+=]/g, '');
 
-      const derivedKeyHash = await deriveKey(password, authorityPub);
-
       const state: MobileVaultState = {
         username,
-        derivedKeyHash,
+        derivedKeyHash: '',
         tokenId,
         publicKey: authorityPub,
         signature,
@@ -1012,7 +1128,10 @@ export function initMobileVault() {
         otps: []
       };
 
-      saveVault(state);
+      lockVault();
+      isManuallyStopped = false;
+      await startSession(password, state);
+      syncAutofillCredentials(state);
 
       const bootstrapToken = {
         tokenId,
@@ -1055,17 +1174,29 @@ export function initMobileVault() {
         throw new Error('Bootstrap token is expired');
       }
 
-      const derivedKeyHash = await deriveKey(password, publicKey);
-      let state = loadVault();
+      lockVault();
+      isManuallyStopped = false;
+      const env = readEnvelope();
+      const legacy = env ? null : readLegacyVault();
 
-      if (!state) {
+      if (env) {
+        await unlockEnvelope(password, env);
+        // Re-save so the envelope picks up any newer fields.
+        persistEncrypted(cachedState as MobileVaultState);
+      } else if (legacy) {
+        // One-time migration of the old plaintext vault into the encrypted envelope.
+        const check = await legacyDeriveKey(password, legacy.publicKey);
+        if (legacy.derivedKeyHash !== check) throw new Error('Invalid master password');
+        legacy.derivedKeyHash = '';
+        await startSession(password, legacy);
+      } else {
         const deviceEdKeys = nacl.sign.keyPair();
         const deviceXKeys = nacl.box.keyPair();
         const devicePublicKey = 'mobile-' + naclUtil.encodeBase64(deviceEdKeys.publicKey).slice(0, 16).replace(/[/+=]/g, '');
 
-        state = {
+        await startSession(password, {
           username: `mobile-${tokenId.slice(-6)}`,
-          derivedKeyHash,
+          derivedKeyHash: '',
           tokenId,
           publicKey,
           signature,
@@ -1078,14 +1209,9 @@ export function initMobileVault() {
           trustedPeers: [],
           passwords: [],
           otps: []
-        };
-      } else {
-        if (state.derivedKeyHash !== derivedKeyHash) {
-          throw new Error('Invalid master password');
-        }
+        });
       }
 
-      saveVault(state);
       return { success: true, tokenId };
     },
 

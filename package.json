@@ -26,7 +26,8 @@
     "release:upload": "node scripts/upload-release.mjs",
     "release:builds": "npm run build:desktop && npm run build:mobile:android && npm run publish:builds && npm run build:website",
     "ext:firefox": "cp apps/extension/src/manifest.firefox.json apps/extension/src/manifest.json",
-    "ext:chrome": "cp apps/extension/src/manifest.chrome.json apps/extension/src/manifest.json"
+    "ext:chrome": "cp apps/extension/src/manifest.chrome.json apps/extension/src/manifest.json",
+    "pack:ext:firefox": "python3 scripts/pack-firefox-extension.py"
   },
   "devDependencies": {
     "jest": "^29.7.0"

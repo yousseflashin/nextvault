@@ -6,6 +6,18 @@ import './main.css';
 import { getSavedRelayUrl, CURRENT_VERSION, parseOtpAuthUri, parseBulkImport, clearAutofillCredentials, syncAutofillCredentials, mergeNativeAutofillCredentials, openAutofillSettings } from './mobileVault';
 import { startCameraQrScanner, scanQrFromImageSource, requestCameraPermission } from './qrScanner';
 
+/** Copies a secret and clears the clipboard after 30s if it still holds that value. */
+async function copySecret(value: string) {
+  await navigator.clipboard.writeText(value);
+  setTimeout(async () => {
+    try {
+      if ((await navigator.clipboard.readText()) === value) await navigator.clipboard.writeText('');
+    } catch {
+      try { await navigator.clipboard.writeText(''); } catch {}
+    }
+  }, 30000);
+}
+
 function Shield({ size = 32 }: { size?: number }) {
   return (
     <svg viewBox="0 0 64 74" fill="none" style={{ width: size, height: size * 1.15 }}>
@@ -428,7 +440,7 @@ function App() {
       const result = await (window as any).nexVault.getPassword(serviceName);
       const value = kind === 'password' ? result?.password : result?.username;
       if (!result?.success || !value) throw new Error(kind === 'password' ? 'Password unavailable' : 'Username unavailable');
-      await navigator.clipboard.writeText(value);
+      await copySecret(value);
       setQuickFillStatus(`${kind === 'password' ? 'Password' : 'Username'} copied`);
       showToast(`${kind === 'password' ? 'Password' : 'Username'} copied for ${serviceName}`);
     } catch (error: any) {
@@ -521,6 +533,36 @@ function App() {
     }
   }
 
+  // Auto-lock: after 2 minutes in the background, or 5 minutes of inactivity.
+  useEffect(() => {
+    if (!unlocked) return;
+    let hiddenAt: number | null = null;
+    let lastActive = Date.now();
+    const touch = () => { lastActive = Date.now(); };
+    const onVisibility = () => {
+      if (document.hidden) {
+        hiddenAt = Date.now();
+      } else if (hiddenAt && Date.now() - hiddenAt > 2 * 60 * 1000) {
+        onLockVault();
+      } else {
+        hiddenAt = null;
+        touch();
+      }
+    };
+    const idle = setInterval(() => {
+      if (Date.now() - lastActive > 5 * 60 * 1000) onLockVault();
+    }, 15000);
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('touchstart', touch, { passive: true });
+    window.addEventListener('keydown', touch);
+    return () => {
+      clearInterval(idle);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('touchstart', touch);
+      window.removeEventListener('keydown', touch);
+    };
+  }, [unlocked]);
+
   // TOTP countdown timer
   useEffect(() => {
     const timer = setInterval(() => {
@@ -541,7 +583,7 @@ function App() {
           setTokenJson(JSON.stringify(prof.bootstrapToken, null, 2));
           setAuthMode('existing');
 
-          const sessionActive = sessionStorage.getItem('nexvault_mobile_unlocked') === '1';
+          const sessionActive = Boolean((window as any).nexVault.isUnlocked?.());
           if (sessionActive) {
             setUnlocked(true);
             await mergeNativeAutofillCredentials();
@@ -577,7 +619,6 @@ function App() {
       if (!r.success) throw new Error(r.error);
       setStatus('Created identity: ' + r.tokenId);
       setTokenJson(JSON.stringify(r.bootstrapToken, null, 2));
-      sessionStorage.setItem('nexvault_mobile_unlocked', '1');
       setUnlocked(true);
       syncAutofillCredentials();
       showToast('Vault created successfully.');
@@ -599,7 +640,6 @@ function App() {
 
       const r = await (window as any).nexVault.initializeExistingUser(t.tokenId, t.publicKey, t.signature, password, t.expiresAt);
       if (!r.success) throw new Error(r.error);
-      sessionStorage.setItem('nexvault_mobile_unlocked', '1');
       setUnlocked(true);
       syncAutofillCredentials();
       await mergeNativeAutofillCredentials();
@@ -612,7 +652,7 @@ function App() {
   }
 
   function onLockVault() {
-    sessionStorage.removeItem('nexvault_mobile_unlocked');
+    (window as any).nexVault.lock?.();
     clearAutofillCredentials();
     setUnlocked(false);
     setPassword('');
@@ -784,7 +824,7 @@ function App() {
     try {
       const res = await (window as any).nexVault.getPassword(serviceName);
       if (res && res.success && res.password) {
-        await navigator.clipboard.writeText(res.password);
+        await copySecret(res.password);
         markCopied(`pass-${serviceName}`);
         showToast(`Copied password for ${serviceName}`);
       } else {
@@ -797,7 +837,7 @@ function App() {
 
   async function copyUsername(user: string) {
     try {
-      await navigator.clipboard.writeText(user);
+      await copySecret(user);
       markCopied(`user-${user}`);
       showToast(`Copied username: ${user}`);
     } catch {
@@ -870,7 +910,7 @@ function App() {
   async function copyOTP(code?: string, serviceName?: string) {
     if (!code) return;
     try {
-      await navigator.clipboard.writeText(code);
+      await copySecret(code);
       if (serviceName) markCopied(`otp-${serviceName}`);
       showToast(`Copied TOTP code: ${code}`);
     } catch {
@@ -1218,7 +1258,7 @@ function App() {
                       <div className="nv-btn-row">
                         <button className="nv-btn" onClick={() => refreshQuickFillPassword()}>Generate New</button>
                         <button className="nv-btn nv-btn-ghost" onClick={async () => {
-                          await navigator.clipboard.writeText(quickFillPassword);
+                          await copySecret(quickFillPassword);
                           setQuickFillStatus('Password copied');
                           showToast('Generated password copied');
                         }}>Copy</button>

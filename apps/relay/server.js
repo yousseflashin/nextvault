@@ -9,7 +9,7 @@ function createRelayServer({
 } = {}) {
   const app = express();
   const httpServer = http.createServer(app);
-  const wss = new WebSocketServer({ server: httpServer });
+  const wss = new WebSocketServer({ server: httpServer, maxPayload: 2 * 1024 * 1024 });
   const rooms = new Map();
 
   app.disable('x-powered-by');
@@ -20,9 +20,28 @@ function createRelayServer({
 
   wss.on('connection', (socket) => {
     let session;
+    let windowStart = Date.now();
+    let windowCount = 0;
+
+    // Drop sockets that never authenticate.
+    const authTimer = setTimeout(() => {
+      if (!session && socket.readyState === socket.OPEN) socket.close(1008, 'Authentication timeout');
+    }, 10000);
+    socket.on('close', () => clearTimeout(authTimer));
 
     socket.on('message', (raw) => {
       try {
+        // Per-connection rate limit: 300 messages per 10 seconds.
+        const now = Date.now();
+        if (now - windowStart > 10000) {
+          windowStart = now;
+          windowCount = 0;
+        }
+        if (++windowCount > 300) {
+          socket.close(1008, 'Rate limit exceeded');
+          return;
+        }
+
         const message = JSON.parse(raw.toString());
 
         if (!message || typeof message !== 'object' || Array.isArray(message)) {
@@ -72,6 +91,12 @@ function createRelayServer({
 
           const room = rooms.get(session.tokenId);
           const existing = room.get(session.deviceId);
+
+          if (!existing && room.size >= 16) {
+            session = undefined;
+            socket.close(1008, 'Room is full');
+            return;
+          }
 
           // Prevent two live connections from claiming the same device ID.
           if (existing && existing.socket !== socket) {

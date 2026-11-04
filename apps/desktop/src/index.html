@@ -984,8 +984,29 @@
       if (btn) btn.textContent = isHidden ? 'Hide Token' : 'Token JSON';
     }
 
+    // Copy a secret and clear the clipboard after 30s if it still holds that value
+    async function copySecret(value) {
+      await navigator.clipboard.writeText(value);
+      setTimeout(async () => {
+        try {
+          if ((await navigator.clipboard.readText()) === value) await navigator.clipboard.writeText('');
+        } catch (e) {}
+      }, 30000);
+    }
+
+    // Auto-lock after 5 minutes without interaction
+    (function setupAutoLock() {
+      let last = Date.now();
+      ['mousemove', 'keydown', 'click'].forEach(ev => window.addEventListener(ev, () => { last = Date.now(); }, { passive: true }));
+      setInterval(() => {
+        const ws = document.getElementById('main-workspace');
+        if (ws && ws.style.display !== 'none' && Date.now() - last > 5 * 60 * 1000) lockVault();
+      }, 15000);
+    })();
+
     // Lock Vault
     function lockVault() {
+      try { window.nexVault.lockVault(); } catch (e) {}
       $('main-workspace').style.display = 'none';
       $('auth-container').style.display = 'flex';
       $('existing-password').value = '';
@@ -1143,7 +1164,7 @@
       try {
         const r = await window.nexVault.getPassword(service);
         if (r.success) {
-          await navigator.clipboard.writeText(r.password);
+          await copySecret(r.password);
           setStatus('Password copied for ' + service);
           const b = document.getElementById(`btn-pass-${encodeURIComponent(service)}`);
           if (b) {
@@ -1251,7 +1272,7 @@
       try {
         const r = await window.nexVault.getOTP(service);
         if (r.success) {
-          await navigator.clipboard.writeText(r.code);
+          await copySecret(r.code);
           setStatus('Copied OTP: ' + r.code);
           const b = document.getElementById(`btn-otp-${encodeURIComponent(service)}`);
           if (b) {

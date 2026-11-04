@@ -19,6 +19,8 @@ class NexVaultSecurity {
       encryptionKey: getStoreKey(this.userDataPath)
     });
     this.token = new NexVaultToken();
+    // In-memory session flag: the vault is locked on every launch until the password is verified.
+    this.unlocked = false;
     this.securityCountdown = null;
     this.isCountdownActive = false;
     this.remainingSeconds = 24 * 60 * 60;
@@ -40,6 +42,7 @@ class NexVaultSecurity {
       if (checkKey === existingDerived) {
         this.store.set('security.lastActive', new Date().toISOString());
         this.store.set('security.lastVerifiedAt', new Date().toISOString());
+        this.unlocked = true;
         return {
           publicKey: existingPub,
           bootstrapToken: existingBootstrap,
@@ -70,6 +73,7 @@ class NexVaultSecurity {
     this.store.set('security.absoluteOfflineDeadline', new Date(Date.now() + ABSOLUTE_OFFLINE_SECONDS * 1000).toISOString());
     this.ledger = new TrustLedger(this.store, identity.publicKey);
     this.ledger.append('application-created', { username });
+    this.unlocked = true;
     
     return {
       publicKey: identity.publicKey,
@@ -121,6 +125,7 @@ class NexVaultSecurity {
     this.ledger = new TrustLedger(this.store, this.store.get('device.publicKey'));
     this.ledger.append('application-added', { sourceTokenId: tokenId });
     this.authorizeToken({ tokenId, publicKey, signature });
+    this.unlocked = true;
     return { success: true, tokenId };
   }
 
@@ -143,7 +148,16 @@ class NexVaultSecurity {
     this.store.set('security.lastActive', new Date().toISOString());
     this.store.set('security.lastVerifiedAt', new Date().toISOString());
     this.resetCountdown();
+    this.unlocked = true;
     
+    return { success: true };
+  }
+
+  lock() {
+    this.unlocked = false;
+    if (this.ledger) {
+      try { this.ledger.append('vault-locked', {}); } catch {}
+    }
     return { success: true };
   }
 
@@ -160,6 +174,7 @@ class NexVaultSecurity {
   }
 
   getUserContext() {
+    if (!this.unlocked) return null;
     const username = this.store.get('user.username');
     const publicKey = this.store.get('device.publicKey');
     const encryptionKey = this.store.get('user.derivedKey');

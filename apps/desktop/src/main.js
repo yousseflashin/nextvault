@@ -922,6 +922,16 @@ ipcMain.handle('get-vault-profile', async () => {
   }
 });
 
+ipcMain.handle('lock-vault', async () => {
+  try {
+    nexVaultSecurity.lock();
+    nexGrid.closeAll();
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
 ipcMain.handle('get-token', async () => {
   return nexVaultSecurity.getToken();
 });
@@ -1865,7 +1875,8 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      sandbox: true
     }
   });
 
