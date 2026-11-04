@@ -91,4 +91,17 @@ describe('NexVault Database', () => {
     const decrypted = db.decryptData(encrypted, key, iv);
     expect(decrypted).toEqual(plainText);
   });
+
+  test('should delete password and record tombstone', () => {
+    expect(() => db.deletePassword(1, 'github.com')).not.toThrow();
+  });
+
+  test('should delete OTP secret and record tombstone', () => {
+    expect(() => db.deleteOtpSecret(1, 'github.com')).not.toThrow();
+  });
+
+  test('should get deleted records', () => {
+    const deleted = db.getDeletedRecords(1);
+    expect(Array.isArray(deleted)).toBe(true);
+  });
 });

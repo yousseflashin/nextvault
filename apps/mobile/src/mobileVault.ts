@@ -43,6 +43,7 @@ export interface MobileVaultState {
   trustedPeers: (string | TrustedPeerInfo)[];
   passwords: StoredCredential[];
   otps: StoredOTP[];
+  deletedRecords?: { service: string; type: 'password' | 'otp'; deletedAt: number }[];
 }
 
 export const CURRENT_VERSION = '0.1.14';
@@ -451,12 +452,20 @@ function handleIncomingMobileSignal(from: string, payload: any, state: MobileVau
       const decrypted = JSON.parse(decryptedStr);
       if (decrypted.type === 'vault-sync') {
         applyVaultSync(decrypted.vaultData, state, callbacks);
+      } else if (decrypted.type === 'credential-deleted') {
+        handleCredentialDeleted(decrypted, state);
       }
       return;
     } catch (err: any) {
       console.error('[MobileGrid] Error decrypting signal:', err);
       return;
     }
+  }
+
+  // 1b. Plain credential-deleted message
+  if (payload.type === 'credential-deleted') {
+    handleCredentialDeleted(payload, state);
+    return;
   }
 
   // 2. Pairing approved by peer!
@@ -580,15 +589,55 @@ function notifyVaultUpdated() {
   });
 }
 
+function handleCredentialDeleted(data: { itemType: 'password' | 'otp'; service: string }, state: MobileVaultState) {
+  if (!data || !data.service) return;
+  const target = data.service.toLowerCase().trim();
+  if (!state.deletedRecords) state.deletedRecords = [];
+  state.deletedRecords = state.deletedRecords.filter(d => !(d.service.toLowerCase().trim() === target && d.type === data.itemType));
+  state.deletedRecords.push({ service: data.service, type: data.itemType, deletedAt: Date.now() });
+
+  if (data.itemType === 'otp') {
+    state.otps = state.otps.filter(o => o.service.toLowerCase().trim() !== target);
+  } else {
+    state.passwords = state.passwords.filter(p => p.service.toLowerCase().trim() !== target);
+  }
+  saveVault(state);
+  console.log(`[MobileGrid] Processed remote deletion of ${data.itemType}: "${data.service}"`);
+  notifyVaultUpdated();
+}
+
 function applyVaultSync(vaultData: any, state: MobileVaultState, callbacks?: GridCallbacks) {
   if (!vaultData) return;
+  if (!state.deletedRecords) state.deletedRecords = [];
+
+  // 1. Process any incoming tombstones / deletions
+  if (Array.isArray(vaultData.deleted)) {
+    for (const d of vaultData.deleted) {
+      if (!d || !d.service) continue;
+      const target = d.service.toLowerCase().trim();
+      if (!state.deletedRecords.some(r => r.service.toLowerCase().trim() === target && r.type === d.type)) {
+        state.deletedRecords.push({ service: d.service, type: d.type, deletedAt: d.deletedAt || Date.now() });
+      }
+      if (d.type === 'otp') {
+        state.otps = state.otps.filter(o => o.service.toLowerCase().trim() !== target);
+      } else {
+        state.passwords = state.passwords.filter(p => p.service.toLowerCase().trim() !== target);
+      }
+    }
+  }
+
   let importedPasswords = 0;
   let importedOTPs = 0;
 
   if (Array.isArray(vaultData.passwords)) {
     for (const p of vaultData.passwords) {
       if (!p.service || !p.credential) continue;
-      const idx = state.passwords.findIndex(x => x.service.toLowerCase() === p.service.toLowerCase());
+      const target = p.service.toLowerCase().trim();
+      // Skip if deleted
+      if (state.deletedRecords.some(r => r.service.toLowerCase().trim() === target && r.type === 'password')) {
+        continue;
+      }
+      const idx = state.passwords.findIndex(x => x.service.toLowerCase().trim() === target);
       const entry: StoredCredential = {
         service: p.service,
         credential: p.credential,
@@ -604,7 +653,12 @@ function applyVaultSync(vaultData: any, state: MobileVaultState, callbacks?: Gri
   if (Array.isArray(vaultData.otps)) {
     for (const o of vaultData.otps) {
       if (!o.service || !o.secret) continue;
-      const idx = state.otps.findIndex(x => x.service.toLowerCase() === o.service.toLowerCase());
+      const target = o.service.toLowerCase().trim();
+      // Skip if deleted
+      if (state.deletedRecords.some(r => r.service.toLowerCase().trim() === target && r.type === 'otp')) {
+        continue;
+      }
+      const idx = state.otps.findIndex(x => x.service.toLowerCase().trim() === target);
       const entry: StoredOTP = {
         service: o.service,
         secret: o.secret,
@@ -623,31 +677,56 @@ function applyVaultSync(vaultData: any, state: MobileVaultState, callbacks?: Gri
   notifyVaultUpdated();
 }
 
-function broadcastVaultToPeer(peerId: string, state: MobileVaultState, socket: WebSocket) {
+function getActiveAndTrustedPeers(state: MobileVaultState): string[] {
+  const ids = new Set<string>();
+  if (state.trustedPeers) {
+    for (const p of state.trustedPeers) {
+      const pid = typeof p === 'string' ? p : p.deviceId;
+      if (pid) ids.add(pid);
+    }
+  }
+  for (const pid of remotePeerKeys.keys()) {
+    if (pid && pid !== state.devicePublicKey) ids.add(pid);
+  }
+  return Array.from(ids);
+}
+
+function sendPeerMessage(peerId: string, payload: any, state: MobileVaultState, socket: WebSocket) {
+  // 1. Direct message over authenticated relay tunnel
+  try {
+    socket.send(JSON.stringify({
+      type: 'signal',
+      to: peerId,
+      payload
+    }));
+  } catch {}
+
+  // 2. Also send encrypted tunnel envelope if recipient public key is registered
   const remotePubKey = remotePeerKeys.get(peerId);
+  if (remotePubKey) {
+    try {
+      const encrypted = encryptBox(JSON.stringify(payload), remotePubKey);
+      socket.send(JSON.stringify({
+        type: 'signal',
+        to: peerId,
+        payload: { type: 'encrypted', payload: encrypted }
+      }));
+    } catch {}
+  }
+}
+
+function broadcastVaultToPeer(peerId: string, state: MobileVaultState, socket: WebSocket) {
   const payloadData = {
     type: 'vault-sync',
     vaultData: {
       passwords: state.passwords,
       otps: state.otps,
+      deleted: state.deletedRecords || [],
       timestamp: Date.now()
     }
   };
 
-  if (remotePubKey) {
-    const encrypted = encryptBox(JSON.stringify(payloadData), remotePubKey);
-    socket.send(JSON.stringify({
-      type: 'signal',
-      to: peerId,
-      payload: { type: 'encrypted', payload: encrypted }
-    }));
-  } else {
-    socket.send(JSON.stringify({
-      type: 'signal',
-      to: peerId,
-      payload: payloadData
-    }));
-  }
+  sendPeerMessage(peerId, payloadData, state, socket);
 }
 
 export function initMobileVault() {
@@ -1051,12 +1130,17 @@ export function initMobileVault() {
         state.passwords.push(entry);
       }
 
+      // Remove from tombstones if previously deleted
+      if (state.deletedRecords) {
+        state.deletedRecords = state.deletedRecords.filter(d => !(d.service.toLowerCase().trim() === service.toLowerCase().trim() && d.type === 'password'));
+      }
+
       saveVault(state);
 
-      // Broadcast update to all trusted peers if connected
+      // Broadcast update to all active/trusted peers if connected
       if (activeSocket && activeSocket.readyState === WebSocket.OPEN) {
-        for (const p of state.trustedPeers) {
-          const peerId = typeof p === 'string' ? p : p.deviceId;
+        const peers = getActiveAndTrustedPeers(state);
+        for (const peerId of peers) {
           broadcastVaultToPeer(peerId, state, activeSocket);
         }
       }
@@ -1084,11 +1168,18 @@ export function initMobileVault() {
     async deletePassword(service: string) {
       const state = loadVault();
       if (!state) throw new Error('Vault is locked');
-      state.passwords = state.passwords.filter(p => p.service.toLowerCase() !== service.toLowerCase());
+      const target = service.trim().toLowerCase();
+      state.passwords = state.passwords.filter(p => p.service.toLowerCase().trim() !== target);
+      if (!state.deletedRecords) state.deletedRecords = [];
+      state.deletedRecords = state.deletedRecords.filter(d => !(d.service.toLowerCase().trim() === target && d.type === 'password'));
+      state.deletedRecords.push({ service: service.trim(), type: 'password', deletedAt: Date.now() });
       saveVault(state);
+
       if (activeSocket && activeSocket.readyState === WebSocket.OPEN) {
-        for (const p of state.trustedPeers) {
-          const peerId = typeof p === 'string' ? p : p.deviceId;
+        const peers = getActiveAndTrustedPeers(state);
+        console.log(`[Mobile] Broadcasting password deletion of "${service}" to ${peers.length} peer(s):`, peers);
+        for (const peerId of peers) {
+          sendPeerMessage(peerId, { type: 'credential-deleted', itemType: 'password', service: service.trim() }, state, activeSocket);
           broadcastVaultToPeer(peerId, state, activeSocket);
         }
       }
@@ -1112,11 +1203,16 @@ export function initMobileVault() {
         state.otps.push(entry);
       }
 
+      // Remove from tombstones if previously deleted
+      if (state.deletedRecords) {
+        state.deletedRecords = state.deletedRecords.filter(d => !(d.service.toLowerCase().trim() === service.toLowerCase().trim() && d.type === 'otp'));
+      }
+
       saveVault(state);
 
       if (activeSocket && activeSocket.readyState === WebSocket.OPEN) {
-        for (const p of state.trustedPeers) {
-          const peerId = typeof p === 'string' ? p : p.deviceId;
+        const peers = getActiveAndTrustedPeers(state);
+        for (const peerId of peers) {
           broadcastVaultToPeer(peerId, state, activeSocket);
         }
       }
@@ -1152,11 +1248,18 @@ export function initMobileVault() {
     async deleteOTP(service: string) {
       const state = loadVault();
       if (!state) throw new Error('Vault is locked');
-      state.otps = state.otps.filter(o => o.service.toLowerCase() !== service.toLowerCase());
+      const target = service.trim().toLowerCase();
+      state.otps = state.otps.filter(o => o.service.toLowerCase().trim() !== target);
+      if (!state.deletedRecords) state.deletedRecords = [];
+      state.deletedRecords = state.deletedRecords.filter(d => !(d.service.toLowerCase().trim() === target && d.type === 'otp'));
+      state.deletedRecords.push({ service: service.trim(), type: 'otp', deletedAt: Date.now() });
       saveVault(state);
+
       if (activeSocket && activeSocket.readyState === WebSocket.OPEN) {
-        for (const p of state.trustedPeers) {
-          const peerId = typeof p === 'string' ? p : p.deviceId;
+        const peers = getActiveAndTrustedPeers(state);
+        console.log(`[Mobile] Broadcasting OTP deletion of "${service}" to ${peers.length} peer(s):`, peers);
+        for (const peerId of peers) {
+          sendPeerMessage(peerId, { type: 'credential-deleted', itemType: 'otp', service: service.trim() }, state, activeSocket);
           broadcastVaultToPeer(peerId, state, activeSocket);
         }
       }
@@ -1184,6 +1287,9 @@ export function initMobileVault() {
         } else {
           state.passwords.push(entry);
         }
+        if (state.deletedRecords) {
+          state.deletedRecords = state.deletedRecords.filter(d => !(d.service.toLowerCase().trim() === cleanService.toLowerCase() && d.type === 'password'));
+        }
         imported++;
       }
 
@@ -1191,8 +1297,8 @@ export function initMobileVault() {
       notifyVaultUpdated();
 
       if (activeSocket && activeSocket.readyState === WebSocket.OPEN) {
-        for (const p of state.trustedPeers) {
-          const peerId = typeof p === 'string' ? p : p.deviceId;
+        const peers = getActiveAndTrustedPeers(state);
+        for (const peerId of peers) {
           broadcastVaultToPeer(peerId, state, activeSocket);
         }
       }
@@ -1221,6 +1327,9 @@ export function initMobileVault() {
         } else {
           state.otps.push(entry);
         }
+        if (state.deletedRecords) {
+          state.deletedRecords = state.deletedRecords.filter(d => !(d.service.toLowerCase().trim() === cleanService.toLowerCase() && d.type === 'otp'));
+        }
         imported++;
       }
 
@@ -1228,8 +1337,8 @@ export function initMobileVault() {
       notifyVaultUpdated();
 
       if (activeSocket && activeSocket.readyState === WebSocket.OPEN) {
-        for (const p of state.trustedPeers) {
-          const peerId = typeof p === 'string' ? p : p.deviceId;
+        const peers = getActiveAndTrustedPeers(state);
+        for (const peerId of peers) {
           broadcastVaultToPeer(peerId, state, activeSocket);
         }
       }
@@ -1241,9 +1350,9 @@ export function initMobileVault() {
       const state = loadVault();
       if (!state) return { success: false, error: 'Vault is locked' };
       let sentCount = 0;
-      if (activeSocket && activeSocket.readyState === WebSocket.OPEN && state.trustedPeers && state.trustedPeers.length) {
-        for (const p of state.trustedPeers) {
-          const peerId = typeof p === 'string' ? p : p.deviceId;
+      const peers = getActiveAndTrustedPeers(state);
+      if (activeSocket && activeSocket.readyState === WebSocket.OPEN && peers.length > 0) {
+        for (const peerId of peers) {
           activeSocket.send(JSON.stringify({
             type: 'signal',
             to: peerId,

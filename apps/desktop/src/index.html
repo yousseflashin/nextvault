@@ -747,6 +747,28 @@
             </div>
           </div>
 
+          <!-- Browser Extension Integration Card -->
+          <div class="nv-card" style="margin-bottom: 1.25rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+              <div style="font-weight: 600; color: #fff;">Browser Extension Integration</div>
+              <span class="nv-badge success" id="extension-status-badge">Auto-Installed</span>
+            </div>
+            <p style="font-size: 0.8rem; color: var(--nv-muted); margin-bottom: 1rem;">
+              NextVault automatically registers its extension into your default and installed browsers (Google Chrome, Chromium, Brave, Microsoft Edge, Vivaldi, and Mozilla Firefox).
+            </p>
+            <div style="font-size: 0.75rem; color: var(--nv-muted); margin-bottom: 0.6rem;">
+              Extension ID: <code class="nv-mono" style="color: var(--nv-primary);">ajnjodilfppgppkekhgmkahlnjngampj</code>
+            </div>
+            <div id="extension-detected-browsers" style="font-size: 0.75rem; color: #fff; margin-bottom: 0.75rem;">
+              Integrated with system default browsers.
+            </div>
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+              <button class="nv-btn nv-btn-ghost nv-btn-sm" onclick="reinstallBrowserExtension()">
+                🔄 Re-Register Extension to Browsers
+              </button>
+            </div>
+          </div>
+
           <!-- Software Updates Card -->
           <div class="nv-card" style="margin-bottom: 1.25rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
@@ -1022,9 +1044,9 @@
             </div>
           </div>
           <div class="vault-actions">
-            <button class="nv-btn nv-btn-ghost nv-btn-sm" onclick="copyPassword('${escapeHtml(e.service)}')">Copy Pass</button>
-            ${e.username ? `<button class="nv-btn nv-btn-ghost nv-btn-sm" onclick="copyUsername('${escapeHtml(e.username)}')">Copy User</button>` : ''}
-            <button class="nv-btn nv-btn-ghost nv-btn-sm" style="color: var(--nv-danger);" onclick="deletePassword('${escapeHtml(e.service)}')">Delete</button>
+            <button class="nv-btn nv-btn-ghost nv-btn-sm" onclick="copyPassword(decodeURIComponent('${encodeURIComponent(e.service)}'))">Copy Pass</button>
+            ${e.username ? `<button class="nv-btn nv-btn-ghost nv-btn-sm" onclick="copyUsername(decodeURIComponent('${encodeURIComponent(e.username)}'))">Copy User</button>` : ''}
+            <button class="nv-btn nv-btn-ghost nv-btn-sm" style="color: var(--nv-danger);" onclick="deletePassword(decodeURIComponent('${encodeURIComponent(e.service)}'))">Delete</button>
           </div>
         </div>
       `).join('');
@@ -1108,8 +1130,8 @@
             <div class="vault-meta otp-countdown">Refreshes in ${remaining}s</div>
           </div>
           <div class="vault-actions">
-            <button class="nv-btn nv-btn-accent nv-btn-sm" onclick="copyOTP('${escapeHtml(e.service)}')">Copy 6-Digit Code</button>
-            <button class="nv-btn nv-btn-ghost nv-btn-sm" style="color: var(--nv-danger);" onclick="deleteOTP('${escapeHtml(e.service)}')">Delete</button>
+            <button class="nv-btn nv-btn-accent nv-btn-sm" onclick="copyOTP(decodeURIComponent('${encodeURIComponent(e.service)}'))">Copy 6-Digit Code</button>
+            <button class="nv-btn nv-btn-ghost nv-btn-sm" style="color: var(--nv-danger);" onclick="deleteOTP(decodeURIComponent('${encodeURIComponent(e.service)}'))">Delete</button>
           </div>
         </div>
       `).join('');
@@ -1478,6 +1500,7 @@
           setTimeout(() => { $('existing-password')?.focus(); }, 100);
         }
         checkForUpdates(false);
+        checkExtensionStatus();
       } catch (err) {
         console.error('Startup profile check notice:', err);
       }
@@ -1576,6 +1599,42 @@
     window.copyTokenFromSettings = copyTokenFromSettings;
     window.openBulkImportModal = openBulkImportModal;
     window.closeBulkImportModal = closeBulkImportModal;
+    window.reinstallBrowserExtension = reinstallBrowserExtension;
+
+    async function checkExtensionStatus() {
+      if (window.nexVault?.getBrowserExtensionStatus) {
+        try {
+          const res = await window.nexVault.getBrowserExtensionStatus();
+          if (res && res.success && $('extension-detected-browsers')) {
+            if (Array.isArray(res.browsers) && res.browsers.length > 0) {
+              $('extension-detected-browsers').textContent = 'Active integration: ' + res.browsers.join(', ');
+            } else {
+              $('extension-detected-browsers').textContent = 'Registered for system default browsers.';
+            }
+          }
+        } catch {}
+      }
+    }
+
+    async function reinstallBrowserExtension() {
+      if (window.nexVault?.installBrowserExtension) {
+        try {
+          setStatus('Registering extension in browsers...');
+          const res = await window.nexVault.installBrowserExtension();
+          if (res && res.success) {
+            const count = res.browsers?.length || 0;
+            setStatus(`Extension registered for ${count} browser(s)!`);
+            if ($('extension-detected-browsers')) {
+              $('extension-detected-browsers').textContent = count > 0 ? ('Active integration: ' + res.browsers.join(', ')) : 'Registered for system default Chromium & Firefox profiles.';
+            }
+          } else {
+            setStatus('Registration completed.');
+          }
+        } catch (e) {
+          setStatus('Error: ' + e.message);
+        }
+      }
+    }
     window.handleDesktopImportFile = handleDesktopImportFile;
     window.handleDesktopImportTextChange = handleDesktopImportTextChange;
     window.executeDesktopBulkImport = executeDesktopBulkImport;
@@ -1716,11 +1775,6 @@
           btn.textContent = 'Import to Vault & Mesh';
         }
       }
-    }
-
-    function escapeHtml(str) {
-      if (!str) return '';
-      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
   </script>
 </body>

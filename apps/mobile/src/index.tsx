@@ -4,7 +4,7 @@ import { createRoot } from 'react-dom/client';
 import './cyber/cyber.css';
 import './main.css';
 import { getDefaultRelayUrl, getSavedRelayUrl, CURRENT_VERSION, parseOtpAuthUri, parseBulkImport } from './mobileVault';
-import { startCameraQrScanner, scanQrFromImageSource } from './qrScanner';
+import { startCameraQrScanner, scanQrFromImageSource, requestCameraPermission } from './qrScanner';
 
 function Shield({ size = 32 }: { size?: number }) {
   return (
@@ -41,27 +41,73 @@ function QrScannerModal({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [camErr, setCamErr] = useState<string | null>(null);
   const [manualUri, setManualUri] = useState('');
+  const [isRequestingPerm, setIsRequestingPerm] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     let stopFn: (() => void) | null = null;
-    if (videoRef.current) {
-      startCameraQrScanner(
-        videoRef.current,
-        (detected) => {
-          onDetected(detected);
-        },
-        () => {
-          setCamErr('Camera access not available. You can upload an image/screenshot or paste the link below.');
+    let isMounted = true;
+
+    async function initCamera() {
+      // Proactively ensure permission is requested
+      await requestCameraPermission();
+
+      if (!isMounted) return;
+
+      if (videoRef.current) {
+        try {
+          const stop = await startCameraQrScanner(
+            videoRef.current,
+            (detected) => {
+              onDetected(detected);
+            },
+            (err) => {
+              if (isMounted) {
+                setCamErr(err?.message?.includes('Permission') || err?.name === 'NotAllowedError'
+                  ? 'Camera permission was denied. Tap "Grant Camera Permission" below or select an image screenshot.'
+                  : 'Camera access not available on this device. You can upload an image or paste the link below.');
+              }
+            }
+          );
+          if (isMounted) {
+            stopFn = stop;
+            setCamErr(null);
+          } else {
+            stop();
+          }
+        } catch {
+          if (isMounted) {
+            setCamErr('Camera permission needed to scan QR code.');
+          }
         }
-      ).then(stop => {
-        stopFn = stop;
-      });
+      }
     }
 
+    initCamera();
+
     return () => {
+      isMounted = false;
       if (stopFn) stopFn();
     };
-  }, []);
+  }, [retryKey]);
+
+  async function handleGrantPermission() {
+    setIsRequestingPerm(true);
+    try {
+      const granted = await requestCameraPermission();
+      if (granted) {
+        showToast('Camera permission granted! Connecting camera...');
+        setCamErr(null);
+        setRetryKey(k => k + 1);
+      } else {
+        setCamErr('Permission not granted yet. Please allow Camera in device Settings > Apps > NextVault.');
+      }
+    } catch (e: any) {
+      setCamErr('Permission request error: ' + (e?.message || e));
+    } finally {
+      setIsRequestingPerm(false);
+    }
+  }
 
   async function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -94,8 +140,18 @@ function QrScannerModal({
           </div>
 
           {camErr && (
-            <div style={{ color: 'var(--nv-danger)', fontSize: '0.75rem', textAlign: 'center' }}>
-              {camErr}
+            <div style={{ background: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.35)', borderRadius: 'var(--nv-radius-sm)', padding: '0.65rem', textAlign: 'center' }}>
+              <div style={{ color: 'var(--nv-danger)', fontSize: '0.78rem', marginBottom: '0.45rem', lineHeight: '1.4' }}>
+                {camErr}
+              </div>
+              <button
+                type="button"
+                className="nv-btn nv-btn-accent nv-btn-sm"
+                disabled={isRequestingPerm}
+                onClick={handleGrantPermission}
+              >
+                {isRequestingPerm ? 'Requesting Permission...' : '📷 Grant Camera Permission'}
+              </button>
             </div>
           )}
 
@@ -689,7 +745,8 @@ function App() {
     if (!confirm(`Delete credential for ${serviceName}?`)) return;
     try {
       await (window as any).nexVault.deletePassword(serviceName);
-      refreshVault(false);
+      const r = await (window as any).nexVault.listPasswords();
+      setVaultItems(r.entries || []);
       showToast(`Deleted ${serviceName}`);
     } catch (err: any) {
       showToast('Error: ' + err.message);
@@ -741,7 +798,8 @@ function App() {
     if (!confirm(`Delete TOTP for ${serviceName}?`)) return;
     try {
       await (window as any).nexVault.deleteOTP(serviceName);
-      refreshOTPs(false);
+      const r = await (window as any).nexVault.listOTPs();
+      setOtpItems(r.entries || []);
       showToast(`Deleted ${serviceName}`);
     } catch (err: any) {
       showToast('Error: ' + err.message);
@@ -1299,6 +1357,19 @@ function App() {
                     <button className="nv-btn nv-btn-accent nv-btn-sm" onClick={() => setImportModalType('all')}>
                       📥 Bulk Import Credentials &amp; 2FA
                     </button>
+                  </Card>
+
+                  <Card style={{ marginBottom: '1rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                      <div style={{ fontWeight: 600, color: '#fff' }}>Browser &amp; System Autofill</div>
+                      <span className="nv-badge success">Integrated</span>
+                    </div>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--nv-muted)', margin: '0 0 0.75rem' }}>
+                      NextVault uses Android's system Autofill service to fill logins and 2FA across mobile browsers (Chrome, Firefox, Brave) and installed apps. On desktop, the extension is registered automatically to default browsers upon installation and launch.
+                    </p>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--nv-text-secondary)', background: 'var(--nv-bg-2)', padding: '0.5rem 0.65rem', borderRadius: 'var(--nv-radius-sm)', border: '1px solid var(--nv-border)' }}>
+                      💡 Link this mobile node with Desktop via NexGrid to keep credentials synchronized across all your devices.
+                    </div>
                   </Card>
 
                   <Card style={{ borderColor: 'rgba(239, 68, 68, 0.25)' }}>

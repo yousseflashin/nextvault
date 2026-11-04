@@ -6,6 +6,7 @@ const { NexVaultToken, NexVaultCrypto, NexVaultSecurity, NexGrid, NexVaultDataba
 const { WebSocketServer } = require('ws');
 const crypto = require('crypto');
 const { setupLinuxDesktopIntegration } = require('./linuxIntegration');
+const { setupBrowserExtensionIntegration } = require('./browserExtensionIntegration');
 
 function loadDesktopDotenv() {
   const envCandidates = [
@@ -216,17 +217,53 @@ function syncVaultToPeer(peerId) {
       }
     }
 
+    const deletedRecords = nexVaultDatabase.getDeletedRecords(user.id) || [];
+
     nexGrid.sendSecureMessage(peerId, {
       type: 'vault-sync',
       vaultData: {
         passwords: decryptedPasswords,
         otps: decryptedOtps,
+        deleted: deletedRecords,
         timestamp: Date.now()
       }
     });
-    console.log(`[Desktop] Successfully synchronized vault (${decryptedPasswords.length} passwords, ${decryptedOtps.length} OTPs) to peer: ${peerId}`);
+    console.log(`[Desktop] Successfully synchronized vault (${decryptedPasswords.length} passwords, ${decryptedOtps.length} OTPs, ${deletedRecords.length} tombstones) to peer: ${peerId}`);
   } catch (err) {
     console.error(`[Desktop] Error syncing vault to peer "${peerId}":`, err);
+  }
+}
+
+function broadcastCredentialDeleted(itemType, service) {
+  try {
+    const targetPeerIds = new Set();
+    const list = getTrustedDevices();
+    for (const d of list) {
+      if (d.deviceId) targetPeerIds.add(d.deviceId);
+    }
+    for (const p of trustedPeers) {
+      if (p && typeof p === 'string' && !p.includes('=') && !p.includes('/')) {
+        targetPeerIds.add(p);
+      }
+    }
+    if (nexGrid.connectedRelayPeers) {
+      for (const [peerId] of nexGrid.connectedRelayPeers.entries()) {
+        if (peerId && peerId !== nexGrid.deviceId) {
+          targetPeerIds.add(peerId);
+        }
+      }
+    }
+    for (const pid of targetPeerIds) {
+      nexGrid.sendSecureMessage(pid, {
+        type: 'credential-deleted',
+        itemType,
+        service,
+        timestamp: Date.now()
+      });
+    }
+    console.log(`[Desktop] Broadcasted deletion of ${itemType} "${service}" to ${targetPeerIds.size} peer(s)`);
+  } catch (err) {
+    console.error('[Desktop] Failed to broadcast deletion:', err);
   }
 }
 
@@ -403,17 +440,37 @@ nexGrid.on('vault-sync-received', (fromPeerId, vaultData) => {
     const user = nexVaultDatabase.getUser(context.username);
     if (!user) return;
 
+    // 1. Process tombstoned/deleted items first
+    if (Array.isArray(vaultData.deleted)) {
+      for (const d of vaultData.deleted) {
+        if (!d || !d.service) continue;
+        if (d.type === 'otp') {
+          nexVaultDatabase.deleteOtpSecret(user.id, d.service);
+        } else {
+          nexVaultDatabase.deletePassword(user.id, d.service);
+        }
+        console.log(`[Desktop] Reconciled tombstone from peer ${fromPeerId}: ${d.type} "${d.service}"`);
+      }
+    }
+
+    // 2. Insert/update passwords, skipping any that are tombstoned
     if (Array.isArray(vaultData.passwords)) {
       for (const p of vaultData.passwords) {
         if (p.service && p.credential) {
-          nexVaultDatabase.addPassword(user.id, p.service, p.credential, context.encryptionKey, p.username || '');
+          if (!nexVaultDatabase.isDeleted(user.id, p.service, 'password')) {
+            nexVaultDatabase.addPassword(user.id, p.service, p.credential, context.encryptionKey, p.username || '');
+          }
         }
       }
     }
+
+    // 3. Insert/update OTPs, skipping any that are tombstoned
     if (Array.isArray(vaultData.otps)) {
       for (const o of vaultData.otps) {
         if (o.service && o.secret) {
-          nexVaultDatabase.addOTP(user.id, o.service, o.secret, context.encryptionKey);
+          if (!nexVaultDatabase.isDeleted(user.id, o.service, 'otp')) {
+            nexVaultDatabase.addOTP(user.id, o.service, o.secret, context.encryptionKey);
+          }
         }
       }
     }
@@ -425,8 +482,43 @@ nexGrid.on('vault-sync-received', (fromPeerId, vaultData) => {
   }
 });
 
+function handleRemoteCredentialDeleted(peerId, message) {
+  try {
+    if (!message || !message.service) return;
+    const context = nexVaultSecurity.getUserContext();
+    if (!context) return;
+    const user = nexVaultDatabase.getUser(context.username);
+    if (!user) return;
+
+    if (message.itemType === 'otp') {
+      nexVaultDatabase.deleteOtpSecret(user.id, message.service);
+      console.log(`[Desktop] Successfully deleted OTP "${message.service}" requested by peer ${peerId}`);
+    } else {
+      nexVaultDatabase.deletePassword(user.id, message.service);
+      console.log(`[Desktop] Successfully deleted password "${message.service}" requested by peer ${peerId}`);
+    }
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('vault-updated');
+    }
+  } catch (err) {
+    console.error('[Desktop] Failed to process remote credential deletion:', err);
+  }
+}
+
+nexGrid.on('credential-deleted', (peerId, message) => {
+  handleRemoteCredentialDeleted(peerId, message);
+});
+
+nexGrid.on('message', (peerId, message) => {
+  if (message && message.type === 'credential-deleted') {
+    handleRemoteCredentialDeleted(peerId, message);
+  }
+});
+
 nexGrid.on('secure-message', (peerId, message) => {
-  if (message.type === 'extension-approval-request') {
+  if (message.type === 'credential-deleted') {
+    handleRemoteCredentialDeleted(peerId, message);
+  } else if (message.type === 'extension-approval-request') {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('peer-requests-approval', { peerId, duration: message.duration });
     }
@@ -783,6 +875,7 @@ ipcMain.handle('delete-password', async (event, serviceName) => {
     const user = nexVaultDatabase.getUser(context.username);
     if (!user) throw new Error('User not found');
     nexVaultDatabase.deletePassword(user.id, serviceName);
+    broadcastCredentialDeleted('password', serviceName);
     broadcastVaultToPeers();
     return { success: true };
   } catch (error) {
@@ -912,6 +1005,7 @@ ipcMain.handle('delete-otp', async (event, serviceName) => {
     const user = nexVaultDatabase.getUser(context.username);
     if (!user) throw new Error('User not found');
     nexVaultDatabase.deleteOtpSecret(user.id, serviceName);
+    broadcastCredentialDeleted('otp', serviceName);
     broadcastVaultToPeers();
     return { success: true };
   } catch (error) {
@@ -986,6 +1080,14 @@ ipcMain.handle('approve-extension', async (event, peerId) => {
   } catch (error) {
     return { success: false, error: error.message };
   }
+});
+
+ipcMain.handle('install-browser-extension', async () => {
+  return setupBrowserExtensionIntegration();
+});
+
+ipcMain.handle('get-browser-extension-status', async () => {
+  return setupBrowserExtensionIntegration();
 });
 
 ipcMain.handle('nuke', async () => {
@@ -1561,6 +1663,7 @@ function createWindow() {
 app.whenReady().then(() => {
   app.setAppUserModelId('nexvault');
   setupLinuxDesktopIntegration();
+  setupBrowserExtensionIntegration();
   createWindow();
   setupTray();
 

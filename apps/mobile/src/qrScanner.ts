@@ -29,6 +29,37 @@ export async function isBarcodeDetectorSupported(): Promise<boolean> {
 }
 
 /**
+ * Request camera permission from native Android or browser environment
+ */
+export async function requestCameraPermission(): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+
+  // 1. Check native Capacitor plugin
+  const plugins = (window as any).Capacitor?.Plugins;
+  if (plugins?.CameraPermission?.requestCameraPermission) {
+    try {
+      const res = await plugins.CameraPermission.requestCameraPermission();
+      if (res && res.granted) return true;
+    } catch (err) {
+      console.warn('[QR] Capacitor CameraPermission error:', err);
+    }
+  }
+
+  // 2. Standard Web mediaDevices permission request
+  try {
+    if (navigator?.mediaDevices?.getUserMedia) {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      stream.getTracks().forEach(t => t.stop());
+      return true;
+    }
+  } catch (err: any) {
+    console.warn('[QR] getUserMedia permission check error:', err?.message || err);
+  }
+
+  return false;
+}
+
+/**
  * Scan a QR code from a File / Blob / Image element
  */
 export async function scanQrFromImageSource(source: File | Blob | HTMLImageElement | HTMLCanvasElement): Promise<string | null> {

@@ -53,6 +53,16 @@ class NexVaultDatabase {
         if (Array.isArray(passCols) && !passCols.some(c => c.name === 'username')) {
           db.exec('ALTER TABLE passwords ADD COLUMN username TEXT DEFAULT ""');
         }
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS deleted_records (
+            user_id INTEGER NOT NULL,
+            service_name TEXT NOT NULL,
+            item_type TEXT NOT NULL,
+            deleted_at INTEGER NOT NULL,
+            PRIMARY KEY (user_id, service_name, item_type),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+          );
+        `);
       } catch {}
       db.close();
     } catch {
@@ -102,6 +112,15 @@ class NexVaultDatabase {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         iv TEXT NOT NULL,
         encrypted_data TEXT NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS deleted_records (
+        user_id INTEGER NOT NULL,
+        service_name TEXT NOT NULL,
+        item_type TEXT NOT NULL,
+        deleted_at INTEGER NOT NULL,
+        PRIMARY KEY (user_id, service_name, item_type),
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       );
     `);
@@ -204,7 +223,7 @@ class NexVaultDatabase {
     if (existing) {
       this.getDb().prepare(`
         UPDATE passwords SET username = ?, password_hash = ?, iv = ?, encrypted_data = ?, created_at = CURRENT_TIMESTAMP
-        WHERE user_id = ? AND service_name = ?
+        WHERE user_id = ? AND LOWER(TRIM(service_name)) = LOWER(TRIM(?))
       `).run(username, passwordHash, iv, encryptedData, userId, serviceName);
     } else {
       this.getDb().prepare(`
@@ -212,13 +231,81 @@ class NexVaultDatabase {
         VALUES (?, ?, ?, ?, ?, ?)
       `).run(userId, serviceName, username, passwordHash, iv, encryptedData);
     }
+
+    // Clear any tombstone for this service name
+    try {
+      this.getDb().prepare("DELETE FROM deleted_records WHERE user_id = ? AND item_type = 'password' AND LOWER(TRIM(service_name)) = LOWER(TRIM(?))").run(userId, serviceName);
+    } catch {}
   }
 
   /**
    * Delete password for user and service
    */
   deletePassword(userId, serviceName) {
-    return this.getDb().prepare('DELETE FROM passwords WHERE user_id = ? AND service_name = ?').run(userId, serviceName);
+    if (!serviceName) return;
+    const raw = String(serviceName).trim();
+    const clean = raw.toLowerCase().replace(/^(https?:\/\/)?(www\.)?/, '').replace(/\/.*$/, '');
+    const baseName = clean.includes('.') ? clean.split('.')[0] : clean;
+
+    this.getDb().prepare(`
+      DELETE FROM passwords 
+      WHERE user_id = ? AND (
+        LOWER(TRIM(service_name)) = LOWER(?)
+        OR LOWER(TRIM(service_name)) = LOWER(?)
+        OR LOWER(TRIM(service_name)) = LOWER(?)
+        OR LOWER(service_name) LIKE '%' || LOWER(?) || '%'
+      )
+    `).run(userId, raw, clean, baseName, clean);
+
+    try {
+      this.getDb().prepare(`
+        INSERT INTO deleted_records (user_id, service_name, item_type, deleted_at)
+        VALUES (?, LOWER(TRIM(?)), 'password', ?)
+        ON CONFLICT(user_id, service_name, item_type) DO UPDATE SET deleted_at = excluded.deleted_at
+      `).run(userId, clean, Date.now());
+      if (raw.toLowerCase() !== clean) {
+        this.getDb().prepare(`
+          INSERT INTO deleted_records (user_id, service_name, item_type, deleted_at)
+          VALUES (?, LOWER(TRIM(?)), 'password', ?)
+          ON CONFLICT(user_id, service_name, item_type) DO UPDATE SET deleted_at = excluded.deleted_at
+        `).run(userId, raw, Date.now());
+      }
+    } catch {}
+  }
+
+  /**
+   * Get all tombstones / deleted records for a user
+   */
+  getDeletedRecords(userId) {
+    try {
+      const rows = this.getDb().prepare('SELECT service_name as service, item_type as type, deleted_at as deletedAt FROM deleted_records WHERE user_id = ?').all(userId);
+      return rows || [];
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Check if a service has been marked deleted
+   */
+  isDeleted(userId, serviceName, itemType) {
+    try {
+      const raw = String(serviceName).trim().toLowerCase();
+      const clean = raw.replace(/^(https?:\/\/)?(www\.)?/, '').replace(/\/.*$/, '');
+      const baseName = clean.includes('.') ? clean.split('.')[0] : clean;
+
+      const row = this.getDb().prepare(`
+        SELECT deleted_at FROM deleted_records 
+        WHERE user_id = ? AND item_type = ? AND (
+          LOWER(TRIM(service_name)) = ?
+          OR LOWER(TRIM(service_name)) = ?
+          OR LOWER(TRIM(service_name)) = ?
+        )
+      `).get(userId, itemType, raw, clean, baseName);
+      return !!row;
+    } catch {
+      return false;
+    }
   }
 
   /**
@@ -282,9 +369,36 @@ class NexVaultDatabase {
    * Delete OTP secret by service
    */
   deleteOtpSecret(userId, serviceName) {
-    return this.getDb().prepare(
-      'DELETE FROM otp_secrets WHERE user_id = ? AND (service_name = ? OR otp_type = ?)'
-    ).run(userId, serviceName, serviceName);
+    if (!serviceName) return;
+    const raw = String(serviceName).trim();
+    const clean = raw.toLowerCase().replace(/^(https?:\/\/)?(www\.)?/, '').replace(/\/.*$/, '');
+    const baseName = clean.includes('.') ? clean.split('.')[0] : clean;
+
+    this.getDb().prepare(`
+      DELETE FROM otp_secrets 
+      WHERE user_id = ? AND (
+        LOWER(TRIM(service_name)) = LOWER(?)
+        OR LOWER(TRIM(service_name)) = LOWER(?)
+        OR LOWER(TRIM(service_name)) = LOWER(?)
+        OR LOWER(TRIM(otp_type)) = LOWER(?)
+        OR LOWER(service_name) LIKE '%' || LOWER(?) || '%'
+      )
+    `).run(userId, raw, clean, baseName, raw, clean);
+
+    try {
+      this.getDb().prepare(`
+        INSERT INTO deleted_records (user_id, service_name, item_type, deleted_at)
+        VALUES (?, LOWER(TRIM(?)), 'otp', ?)
+        ON CONFLICT(user_id, service_name, item_type) DO UPDATE SET deleted_at = excluded.deleted_at
+      `).run(userId, clean, Date.now());
+      if (raw.toLowerCase() !== clean) {
+        this.getDb().prepare(`
+          INSERT INTO deleted_records (user_id, service_name, item_type, deleted_at)
+          VALUES (?, LOWER(TRIM(?)), 'otp', ?)
+          ON CONFLICT(user_id, service_name, item_type) DO UPDATE SET deleted_at = excluded.deleted_at
+        `).run(userId, raw, Date.now());
+      }
+    } catch {}
   }
 
   /**
@@ -343,6 +457,11 @@ class NexVaultDatabase {
         VALUES (?, ?, ?, ?, ?, ?)
       `).run(userId, serviceName, otpType, this.hashWithSalt(secretPlainText, iv), iv, encryptedData);
     }
+
+    // Clear any tombstone for this OTP service
+    try {
+      this.getDb().prepare("DELETE FROM deleted_records WHERE user_id = ? AND item_type = 'otp' AND (LOWER(TRIM(service_name)) = LOWER(?) OR LOWER(TRIM(service_name)) = LOWER(?))").run(userId, serviceName.trim(), otpType.trim());
+    } catch {}
   }
 
   /**

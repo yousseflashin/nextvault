@@ -370,8 +370,11 @@ class NexGrid extends EventEmitter {
             this.emit('vault-sync-received', fromPeerId, decrypted.vaultData);
           } else if (decrypted && decrypted.type === 'vault-sync-request') {
             this.emit('vault-sync-requested', fromPeerId, decrypted);
+          } else if (decrypted && decrypted.type === 'credential-deleted') {
+            this.emit('credential-deleted', fromPeerId, decrypted);
           }
           this.emit('secure-message', fromPeerId, decrypted);
+          this.emit('message', fromPeerId, decrypted);
           return;
         }
       } catch (err) {
@@ -405,6 +408,10 @@ class NexGrid extends EventEmitter {
       this.emit('vault-sync-received', fromPeerId, payload.vaultData);
     } else if (payload.type === 'vault-sync-request') {
       this.emit('vault-sync-requested', fromPeerId, payload);
+    } else if (payload.type === 'credential-deleted') {
+      this.emit('credential-deleted', fromPeerId, payload);
+      this.emit('secure-message', fromPeerId, payload);
+      this.emit('message', fromPeerId, payload);
     } else {
       this.emit('message', fromPeerId, payload);
     }
