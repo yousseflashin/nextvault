@@ -3,7 +3,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './cyber/cyber.css';
 import './main.css';
-import { getSavedRelayUrl, CURRENT_VERSION, parseOtpAuthUri, parseBulkImport, clearAutofillCredentials, syncAutofillCredentials, openAutofillSettings } from './mobileVault';
+import { getSavedRelayUrl, CURRENT_VERSION, parseOtpAuthUri, parseBulkImport, clearAutofillCredentials, syncAutofillCredentials, mergeNativeAutofillCredentials, openAutofillSettings } from './mobileVault';
 import { startCameraQrScanner, scanQrFromImageSource, requestCameraPermission } from './qrScanner';
 
 function Shield({ size = 32 }: { size?: number }) {
@@ -362,6 +362,7 @@ function App() {
   const [quickFillPassword, setQuickFillPassword] = useState('');
   const [quickFillPasswordLength, setQuickFillPasswordLength] = useState(24);
   const [showAddVault, setShowAddVault] = useState(false);
+  const [editingVaultService, setEditingVaultService] = useState<string | null>(null);
   const [service, setService] = useState('');
   const [vaultUsername, setVaultUsername] = useState('');
   const [credential, setCredential] = useState('');
@@ -369,6 +370,7 @@ function App() {
   // OTP State
   const [otpItems, setOtpItems] = useState<{ service: string; code?: string }[]>([]);
   const [showAddOtp, setShowAddOtp] = useState(false);
+  const [editingOtpService, setEditingOtpService] = useState<string | null>(null);
   const [otpService, setOtpService] = useState('');
   const [otpSecret, setOtpSecret] = useState('');
   const [countdown, setCountdown] = useState(30);
@@ -542,6 +544,7 @@ function App() {
           const sessionActive = sessionStorage.getItem('nexvault_mobile_unlocked') === '1';
           if (sessionActive) {
             setUnlocked(true);
+            await mergeNativeAutofillCredentials();
             syncAutofillCredentials();
             refreshVault(false);
             refreshOTPs(false);
@@ -599,6 +602,7 @@ function App() {
       sessionStorage.setItem('nexvault_mobile_unlocked', '1');
       setUnlocked(true);
       syncAutofillCredentials();
+      await mergeNativeAutofillCredentials();
       setStatus('Unlocked: ' + r.tokenId);
       refreshVault(false);
       refreshOTPs(false);
@@ -748,12 +752,16 @@ function App() {
     try {
       const r = await (window as any).nexVault.addPassword(service, credential, vaultUsername);
       if (r.success) {
+        if (editingVaultService && editingVaultService !== service) {
+          await (window as any).nexVault.deletePassword(editingVaultService);
+        }
         setService('');
         setVaultUsername('');
         setCredential('');
+        setEditingVaultService(null);
         setShowAddVault(false);
         refreshVault(false);
-        showToast('Password saved.');
+        showToast(editingVaultService ? 'Credential updated.' : 'Password saved.');
       } else throw new Error(r.error);
     } catch (e: any) { setStatus('Error: ' + e.message); }
   }
@@ -809,6 +817,21 @@ function App() {
     }
   }
 
+  async function editPassword(serviceName: string) {
+    try {
+      const result = await (window as any).nexVault.getPassword(serviceName);
+      if (!result?.success) throw new Error(result?.error || 'Credential not found');
+      setEditingVaultService(serviceName);
+      setService(serviceName);
+      setVaultUsername(result.username || '');
+      setCredential(result.password || '');
+      setShowAddVault(true);
+      setActiveTab('vault');
+    } catch (err: any) {
+      showToast('Edit error: ' + err.message);
+    }
+  }
+
   // OTP Handlers
   async function onSaveOTP() {
     const s = otpService.trim();
@@ -817,11 +840,15 @@ function App() {
     try {
       const r = await (window as any).nexVault.addOTP(s, sec);
       if (r.success) {
+        if (editingOtpService && editingOtpService !== s) {
+          await (window as any).nexVault.deleteOTP(editingOtpService);
+        }
         setOtpService('');
         setOtpSecret('');
+        setEditingOtpService(null);
         setShowAddOtp(false);
         refreshOTPs(false);
-        showToast('TOTP authenticator added.');
+        showToast(editingOtpService ? 'Authenticator updated.' : 'TOTP authenticator added.');
       } else throw new Error(r.error);
     } catch (e: any) { setStatus('Error: ' + e.message); }
   }
@@ -860,6 +887,20 @@ function App() {
       showToast(`Deleted ${serviceName}`);
     } catch (err: any) {
       showToast('Error: ' + err.message);
+    }
+  }
+
+  async function editOTP(serviceName: string) {
+    try {
+      const entry = await (window as any).nexVault.getOTPDetails(serviceName);
+      if (!entry?.success) throw new Error(entry?.error || 'Authenticator not found');
+      setEditingOtpService(serviceName);
+      setOtpService(serviceName);
+      setOtpSecret(entry.secret || '');
+      setShowAddOtp(true);
+      setActiveTab('otp');
+    } catch (err: any) {
+      showToast('Edit error: ' + err.message);
     }
   }
 
@@ -1227,7 +1268,15 @@ function App() {
                       <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={() => setImportModalType('vault')}>
                         📥 Import
                       </button>
-                      <button className="nv-btn nv-btn-sm" onClick={() => setShowAddVault(!showAddVault)}>
+                      <button className="nv-btn nv-btn-sm" onClick={() => {
+                        if (!showAddVault) {
+                          setEditingVaultService(null);
+                          setService('');
+                          setVaultUsername('');
+                          setCredential('');
+                        }
+                        setShowAddVault(!showAddVault);
+                      }}>
                         {showAddVault ? '✕ Close' : '+ Add'}
                       </button>
                     </div>
@@ -1249,7 +1298,7 @@ function App() {
 
                   {showAddVault && (
                     <Card style={{ marginBottom: '1rem' }}>
-                      <div style={{ fontWeight: 600, color: '#fff', marginBottom: '0.75rem' }}>Add Credential</div>
+                      <div style={{ fontWeight: 600, color: '#fff', marginBottom: '0.75rem' }}>{editingVaultService ? 'Edit Credential' : 'Add Credential'}</div>
                       <div className="nv-form">
                         <input
                           className="nv-input"
@@ -1270,8 +1319,14 @@ function App() {
                           onChange={e => setCredential(e.target.value)}
                         />
                         <div className="nv-btn-row">
-                          <button className="nv-btn" onClick={onSavePassword}>Save Credential</button>
-                          <button className="nv-btn nv-btn-ghost" onClick={() => setShowAddVault(false)}>Cancel</button>
+                          <button className="nv-btn" onClick={onSavePassword}>{editingVaultService ? 'Update Credential' : 'Save Credential'}</button>
+                          <button className="nv-btn nv-btn-ghost" onClick={() => {
+                            setShowAddVault(false);
+                            setEditingVaultService(null);
+                            setService('');
+                            setVaultUsername('');
+                            setCredential('');
+                          }}>Cancel</button>
                         </div>
                       </div>
                     </Card>
@@ -1312,6 +1367,13 @@ function App() {
                               {copiedKey === `user-${v.username}` ? '✓ User' : 'User'}
                             </button>
                           )}
+                          <button
+                            className="nv-btn nv-btn-ghost nv-btn-sm"
+                            onClick={() => editPassword(v.service)}
+                            title="Edit credential"
+                          >
+                            Edit
+                          </button>
                           <button
                             className="nv-btn nv-btn-ghost nv-btn-sm"
                             style={{ color: 'var(--nv-danger)', padding: '0.35rem 0.55rem' }}
@@ -1355,7 +1417,14 @@ function App() {
                       <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={() => setImportModalType('otp')}>
                         📥 Import
                       </button>
-                      <button className="nv-btn nv-btn-sm" onClick={() => setShowAddOtp(!showAddOtp)}>
+                      <button className="nv-btn nv-btn-sm" onClick={() => {
+                        if (!showAddOtp) {
+                          setEditingOtpService(null);
+                          setOtpService('');
+                          setOtpSecret('');
+                        }
+                        setShowAddOtp(!showAddOtp);
+                      }}>
                         {showAddOtp ? '✕ Close' : '+ Add'}
                       </button>
                     </div>
@@ -1363,7 +1432,7 @@ function App() {
 
                   {showAddOtp && (
                     <Card style={{ marginBottom: '1rem' }}>
-                      <div style={{ fontWeight: 600, color: '#fff', marginBottom: '0.75rem' }}>New Authenticator</div>
+                      <div style={{ fontWeight: 600, color: '#fff', marginBottom: '0.75rem' }}>{editingOtpService ? 'Edit Authenticator' : 'New Authenticator'}</div>
                       <div className="nv-form">
                         <input
                           className="nv-input"
@@ -1390,8 +1459,13 @@ function App() {
                           </button>
                         </div>
                         <div className="nv-btn-row">
-                          <button className="nv-btn" onClick={onSaveOTP}>Save TOTP</button>
-                          <button className="nv-btn nv-btn-ghost" onClick={() => setShowAddOtp(false)}>Cancel</button>
+                          <button className="nv-btn" onClick={onSaveOTP}>{editingOtpService ? 'Update TOTP' : 'Save TOTP'}</button>
+                          <button className="nv-btn nv-btn-ghost" onClick={() => {
+                            setShowAddOtp(false);
+                            setEditingOtpService(null);
+                            setOtpService('');
+                            setOtpSecret('');
+                          }}>Cancel</button>
                         </div>
                       </div>
                     </Card>
@@ -1433,6 +1507,13 @@ function App() {
                               onClick={() => copyOTP(codeClean || o.code, o.service)}
                             >
                               {isCopied ? '✓ Copied' : 'Copy'}
+                            </button>
+                            <button
+                              className="nv-btn nv-btn-ghost nv-btn-sm"
+                              onClick={() => editOTP(o.service)}
+                              title="Edit authenticator"
+                            >
+                              Edit
                             </button>
                             <button
                               className="nv-btn nv-btn-ghost nv-btn-sm"

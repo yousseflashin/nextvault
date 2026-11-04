@@ -11,22 +11,27 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 
 @CapacitorPlugin(name = "AutofillBridge")
 public class AutofillBridgePlugin extends Plugin {
-    private static final String PREFS = "nexvault_autofill";
-
     @PluginMethod
     public void syncCredentials(PluginCall call) {
         String credentialsJson = call.getString("credentialsJson", "[]");
-        getContext().getSharedPreferences(PREFS, 0)
-            .edit()
-            .putString("credentials", credentialsJson)
-            .apply();
-        call.resolve();
+        try {
+            NativeCredentialStore.write(getContext(), credentialsJson);
+            call.resolve();
+        } catch (Exception error) {
+            call.reject("Could not protect autofill credentials");
+        }
     }
 
     @PluginMethod
     public void clearCredentials(PluginCall call) {
-        getContext().getSharedPreferences(PREFS, 0).edit().clear().apply();
+        NativeCredentialStore.clear(getContext());
         call.resolve();
+    }
+    @PluginMethod
+    public void readCredentials(PluginCall call) {
+        JSObject result = new JSObject();
+        result.put("credentialsJson", NativeCredentialStore.readCredentials(getContext()));
+        call.resolve(result);
     }
 
     @PluginMethod

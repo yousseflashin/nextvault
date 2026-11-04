@@ -10,6 +10,7 @@ import { registerPlugin } from '@capacitor/core';
 
 const AutofillBridge = registerPlugin<{
   syncCredentials(options: { credentialsJson: string }): Promise<void>;
+    readCredentials(): Promise<{ credentialsJson: string }>;
   clearCredentials(): Promise<void>;
   openSettings(): Promise<void>;
   isEnabled(): Promise<{ enabled: boolean }>;
@@ -397,6 +398,39 @@ export function syncAutofillCredentials(state = loadVault()) {
 export function clearAutofillCredentials() {
   if (typeof window === 'undefined' || (window as any).Capacitor?.getPlatform?.() !== 'android') return;
   AutofillBridge.clearCredentials().catch(() => {});
+}
+
+export async function mergeNativeAutofillCredentials() {
+  if (typeof window === 'undefined' || (window as any).Capacitor?.getPlatform?.() !== 'android') return;
+  const result = await AutofillBridge.readCredentials();
+  const nativeCredentials = JSON.parse(result.credentialsJson || '[]');
+  const state = loadVault();
+  if (!state || !Array.isArray(nativeCredentials)) return;
+
+  let changed = false;
+  for (const nativeCredential of nativeCredentials) {
+    const service = String(nativeCredential.service || '').trim();
+    const password = String(nativeCredential.password || '');
+    if (!service || !password) continue;
+    const target = normalizeDomain(service);
+    const existing = state.passwords.find(entry => normalizeDomain(entry.service) === target);
+    if (existing && existing.credential === password && (existing.username || '') === (nativeCredential.username || '')) continue;
+    if (existing) {
+      existing.credential = password;
+      existing.username = nativeCredential.username || '';
+      existing.updatedAt = Date.now();
+    } else {
+      state.passwords.push({
+        service,
+        credential: password,
+        username: nativeCredential.username || '',
+        createdAt: new Date().toISOString(),
+        updatedAt: Date.now()
+      });
+    }
+    changed = true;
+  }
+  if (changed) saveVault(state);
 }
 
 export async function openAutofillSettings() {
@@ -1512,6 +1546,15 @@ export function initMobileVault() {
       if (!entry) return { success: false, error: 'Not found' };
       const code = await calculateTotpCode(entry.secret);
       return { success: true, code };
+    },
+
+    async getOTPDetails(service: string) {
+      const state = loadVault();
+      if (!state) return { success: false, error: 'Vault is locked' };
+      const target = normalizeDomain(service);
+      const entry = state.otps.find(o => normalizeDomain(o.service) === target);
+      if (!entry) return { success: false, error: 'Not found' };
+      return { success: true, service: entry.service, secret: entry.secret };
     },
 
     async deleteOTP(service: string) {
