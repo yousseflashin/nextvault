@@ -316,6 +316,7 @@ let currentCallbacks: GridCallbacks | null = null;
 const remotePeerKeys = new Map<string, string>();
 const pendingIncomingRequests = new Map<string, { from: string; deviceName: string; publicKey: string; code?: string }>();
 let activeMobilePairingCode: { code: string; expiresAt: number } | null = null;
+let isManuallyStopped = false;
 
 export function getDefaultRelayUrl(): string {
   if (typeof window === 'undefined') return 'ws://127.0.0.1:46123';
