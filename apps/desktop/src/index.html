@@ -605,12 +605,12 @@
         <!-- ==================== PAGE 1: VAULT ==================== -->
         <div class="app-page active" id="page-vault">
           
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
             <div class="search-box" style="flex: 1; max-width: 400px; margin-bottom: 0;">
               <span>🔍</span>
               <input type="text" id="vault-search-input" placeholder="Search passwords..." oninput="filterVaultEntries()">
             </div>
-            <div style="display: flex; gap: 0.5rem;">
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
               <button class="nv-btn nv-btn-danger" onclick="deleteAllPasswords()" title="Delete all saved passwords from vault and mesh">
                 <span>🗑 Delete All</span>
               </button>
@@ -621,6 +621,41 @@
                 <span id="add-cred-btn-text">+ Add Credential</span>
               </button>
             </div>
+          </div>
+
+          <!-- Sorting, Filtering & Grouping Toolbar -->
+          <div class="nv-filter-bar">
+            <div style="display: flex; align-items: center; gap: 0.35rem;">
+              <span style="font-size: 0.72rem; color: var(--nv-muted);">Sort:</span>
+              <select id="vault-sort-select" class="nv-select nv-select-sm" onchange="filterVaultEntries()">
+                <option value="name-asc">Site Name (A → Z)</option>
+                <option value="name-desc">Site Name (Z → A)</option>
+                <option value="user-asc">Username (A → Z)</option>
+                <option value="date-desc" selected>Date Added (Newest)</option>
+                <option value="date-asc">Date Added (Oldest)</option>
+              </select>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 0.35rem;">
+              <span style="font-size: 0.72rem; color: var(--nv-muted);">Filter:</span>
+              <select id="vault-filter-select" class="nv-select nv-select-sm" onchange="filterVaultEntries()">
+                <option value="all" selected>All Credentials</option>
+                <option value="has-user">With Username</option>
+                <option value="no-user">Without Username</option>
+              </select>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 0.35rem;">
+              <span style="font-size: 0.72rem; color: var(--nv-muted);">Group By:</span>
+              <select id="vault-group-select" class="nv-select nv-select-sm" onchange="filterVaultEntries()">
+                <option value="none" selected>No Grouping</option>
+                <option value="site">Site / Domain</option>
+                <option value="account">Account / User</option>
+                <option value="letter">First Letter (A-Z)</option>
+              </select>
+            </div>
+
+            <span class="nv-badge" id="vault-count-badge" style="margin-left: auto; font-size: 0.7rem;">0 items</span>
           </div>
 
           <!-- Add Credential Card (Collapsible) -->
@@ -657,7 +692,7 @@
 
         <!-- ==================== PAGE 2: AUTHENTICATOR (OTP) ==================== -->
         <div class="app-page" id="page-otp">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.75rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.75rem;">
             <div style="display: flex; align-items: center; gap: 0.75rem;">
               <div id="otp-circular-timer-wrap"></div>
               <span class="nv-badge" id="otp-timer-badge">Auto-refresh: 30s</span>
@@ -677,6 +712,18 @@
                 <span id="add-otp-btn-text">+ Add Authenticator</span>
               </button>
             </div>
+          </div>
+
+          <!-- OTP Filter Bar -->
+          <div class="nv-filter-bar">
+            <div style="display: flex; align-items: center; gap: 0.35rem;">
+              <span style="font-size: 0.72rem; color: var(--nv-muted);">Sort:</span>
+              <select id="otp-sort-select" class="nv-select nv-select-sm" onchange="filterOTPEntries()">
+                <option value="name-asc" selected>Service (A → Z)</option>
+                <option value="name-desc">Service (Z → A)</option>
+              </select>
+            </div>
+            <span class="nv-badge" id="otp-count-badge" style="margin-left: auto; font-size: 0.7rem;">0 items</span>
           </div>
 
           <!-- Add OTP Form Card -->
@@ -1358,21 +1405,39 @@
 
     function filterVaultEntries() {
       const q = ($('vault-search-input')?.value || '').toLowerCase().trim();
-      const filtered = cachedVaultEntries.filter(e => {
-        if (!q) return true;
-        return (e.service && e.service.toLowerCase().includes(q)) ||
-               (e.username && e.username.toLowerCase().includes(q));
+      const filterType = $('vault-filter-select')?.value || 'all';
+      const sortType = $('vault-sort-select')?.value || 'date-desc';
+      const groupMode = $('vault-group-select')?.value || 'none';
+
+      let filtered = cachedVaultEntries.filter(e => {
+        if (q) {
+          const match = (e.service && e.service.toLowerCase().includes(q)) ||
+                        (e.username && e.username.toLowerCase().includes(q));
+          if (!match) return false;
+        }
+        if (filterType === 'has-user' && !e.username) return false;
+        if (filterType === 'no-user' && e.username) return false;
+        return true;
       });
-      renderVaultList(filtered);
+
+      filtered.sort((a, b) => {
+        if (sortType === 'name-asc') return (a.service || '').localeCompare(b.service || '');
+        if (sortType === 'name-desc') return (b.service || '').localeCompare(a.service || '');
+        if (sortType === 'user-asc') return (a.username || '').localeCompare(b.username || '');
+        if (sortType === 'date-asc') return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
+        return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+      });
+
+      const countBadge = $('vault-count-badge');
+      if (countBadge) {
+        countBadge.textContent = `${filtered.length} of ${cachedVaultEntries.length} items`;
+      }
+
+      renderVaultList(filtered, groupMode);
     }
 
-    function renderVaultList(entries) {
-      const el = $('vault-list');
-      if (!entries.length) {
-        el.innerHTML = '<div class="nv-empty">No credentials found.</div>';
-        return;
-      }
-      el.innerHTML = entries.map(e => `
+    function renderVaultItemHtml(e) {
+      return `
         <div class="vault-item">
           <div style="display: flex; align-items: center; gap: 0.85rem; flex: 1; min-width: 0;">
             <div class="nv-avatar-monogram">${escapeHtml((e.service.charAt(0) || 'V').toUpperCase())}</div>
@@ -1391,7 +1456,67 @@
             <button class="nv-btn nv-btn-ghost nv-btn-sm" style="color: var(--nv-danger);" onclick="deletePassword(decodeURIComponent('${encodeURIComponent(e.service)}'))">Delete</button>
           </div>
         </div>
-      `).join('');
+      `;
+    }
+
+    function renderVaultList(entries, groupMode = 'none') {
+      const el = $('vault-list');
+      if (!entries.length) {
+        el.innerHTML = '<div class="nv-empty">No credentials found matching filter.</div>';
+        return;
+      }
+
+      if (groupMode === 'none') {
+        el.innerHTML = entries.map(renderVaultItemHtml).join('');
+        return;
+      }
+
+      const groups = new Map();
+      entries.forEach(e => {
+        let key = '';
+        let label = '';
+        if (groupMode === 'site') {
+          key = (e.service || 'unknown').toLowerCase().trim();
+          label = e.service || 'Unknown Site';
+        } else if (groupMode === 'account') {
+          key = (e.username || '').toLowerCase().trim() || '__empty__';
+          label = e.username ? `👤 ${e.username}` : '(No Username Specified)';
+        } else if (groupMode === 'letter') {
+          const firstChar = (e.service || '').charAt(0).toUpperCase();
+          key = /^[A-Z]$/.test(firstChar) ? firstChar : '#';
+          label = key === '#' ? '# (Symbols & Numbers)' : `Letter ${key}`;
+        }
+        if (!groups.has(key)) {
+          groups.set(key, { label, items: [] });
+        }
+        groups.get(key).items.push(e);
+      });
+
+      const sortedKeys = Array.from(groups.keys()).sort((a, b) => {
+        if (a === '__empty__') return 1;
+        if (b === '__empty__') return -1;
+        return a.localeCompare(b);
+      });
+
+      el.innerHTML = sortedKeys.map(k => {
+        const grp = groups.get(k);
+        const count = grp.items.length;
+        const countText = count === 1 ? '1 credential' : `${count} credentials`;
+        return `
+          <div class="nv-group-card">
+            <div class="nv-group-header">
+              <div class="nv-group-title">
+                <span>📁</span>
+                <span>${escapeHtml(grp.label)}</span>
+              </div>
+              <span class="nv-badge" style="font-size: 0.68rem;">${countText}</span>
+            </div>
+            <div class="nv-group-items">
+              ${grp.items.map(renderVaultItemHtml).join('')}
+            </div>
+          </div>
+        `;
+      }).join('');
     }
 
     async function copyUsername(user) {
@@ -1567,11 +1692,23 @@
 
     function filterOTPEntries() {
       const q = ($('otp-search-input')?.value || '').toLowerCase().trim();
-      const filtered = cachedOTPEntries.filter(e => {
+      const sortType = $('otp-sort-select')?.value || 'name-asc';
+      let filtered = cachedOTPEntries.filter(e => {
         if (!q) return true;
         return (e.service && e.service.toLowerCase().includes(q)) ||
                (e.otpType && e.otpType.toLowerCase().includes(q));
       });
+
+      filtered.sort((a, b) => {
+        if (sortType === 'name-desc') return (b.service || '').localeCompare(a.service || '');
+        return (a.service || '').localeCompare(b.service || '');
+      });
+
+      const countBadge = $('otp-count-badge');
+      if (countBadge) {
+        countBadge.textContent = `${filtered.length} of ${cachedOTPEntries.length} items`;
+      }
+
       renderOTPList(filtered);
     }
 

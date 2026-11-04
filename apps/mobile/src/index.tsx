@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './cyber/cyber.css';
@@ -429,6 +429,9 @@ function App() {
   // Vault State
   const [vaultItems, setVaultItems] = useState<{ service: string; username?: string; createdAt: string }[]>([]);
   const [vaultSearch, setVaultSearch] = useState('');
+  const [vaultSort, setVaultSort] = useState<'date-desc' | 'date-asc' | 'name-asc' | 'name-desc' | 'user-asc'>('date-desc');
+  const [vaultFilter, setVaultFilter] = useState<'all' | 'has-user' | 'no-user'>('all');
+  const [vaultGroup, setVaultGroup] = useState<'none' | 'site' | 'account' | 'letter'>('none');
   const [quickFillView, setQuickFillView] = useState<QuickFillView>('vault');
   const [quickFillSearch, setQuickFillSearch] = useState('');
   const [quickFillStatus, setQuickFillStatus] = useState('Ready');
@@ -1213,11 +1216,58 @@ function App() {
     showToast('Token copied to clipboard');
   }
 
-  const filteredVaultItems = vaultItems.filter(v => {
-    if (!vaultSearch) return true;
-    const q = vaultSearch.toLowerCase();
-    return v.service.toLowerCase().includes(q) || (v.username && v.username.toLowerCase().includes(q));
-  });
+  const filteredVaultItems = useMemo(() => {
+    let items = vaultItems.filter(v => {
+      if (vaultSearch) {
+        const q = vaultSearch.toLowerCase();
+        const match = v.service.toLowerCase().includes(q) || (v.username && v.username.toLowerCase().includes(q));
+        if (!match) return false;
+      }
+      if (vaultFilter === 'has-user' && !v.username) return false;
+      if (vaultFilter === 'no-user' && v.username) return false;
+      return true;
+    });
+
+    items = [...items].sort((a, b) => {
+      if (vaultSort === 'name-asc') return a.service.localeCompare(b.service);
+      if (vaultSort === 'name-desc') return b.service.localeCompare(a.service);
+      if (vaultSort === 'user-asc') return (a.username || '').localeCompare(b.username || '');
+      if (vaultSort === 'date-asc') return new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime();
+      return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+    });
+
+    return items;
+  }, [vaultItems, vaultSearch, vaultFilter, vaultSort]);
+
+  const groupedVaultItems = useMemo(() => {
+    if (vaultGroup === 'none') return null;
+    const map = new Map<string, { label: string; items: typeof vaultItems }>();
+    for (const v of filteredVaultItems) {
+      let key = '';
+      let label = '';
+      if (vaultGroup === 'site') {
+        key = (v.service || 'unknown').toLowerCase().trim();
+        label = v.service || 'Unknown Site';
+      } else if (vaultGroup === 'account') {
+        key = (v.username || '').toLowerCase().trim() || '__empty__';
+        label = v.username ? `👤 ${v.username}` : '(No Username)';
+      } else if (vaultGroup === 'letter') {
+        const first = (v.service || '').charAt(0).toUpperCase();
+        key = /^[A-Z]$/.test(first) ? first : '#';
+        label = key === '#' ? '# (Other)' : `Letter ${key}`;
+      }
+      if (!map.has(key)) {
+        map.set(key, { label, items: [] });
+      }
+      map.get(key)!.items.push(v);
+    }
+    const sortedKeys = Array.from(map.keys()).sort((a, b) => {
+      if (a === '__empty__') return 1;
+      if (b === '__empty__') return -1;
+      return a.localeCompare(b);
+    });
+    return sortedKeys.map(k => ({ key: k, label: map.get(k)!.label, items: map.get(k)!.items }));
+  }, [filteredVaultItems, vaultGroup]);
 
   return (
     <div className="nv-app">
@@ -1599,6 +1649,49 @@ function App() {
                     )}
                   </div>
 
+                  {/* Sorting, Filtering & Grouping Toolbar */}
+                  <div className="nv-filter-bar" style={{ marginTop: '0.5rem', marginBottom: '0.75rem' }}>
+                    <select
+                      className="nv-select nv-select-sm"
+                      value={vaultSort}
+                      onChange={e => setVaultSort(e.target.value as any)}
+                      title="Sort order"
+                    >
+                      <option value="name-asc">Site (A → Z)</option>
+                      <option value="name-desc">Site (Z → A)</option>
+                      <option value="user-asc">User (A → Z)</option>
+                      <option value="date-desc">Newest</option>
+                      <option value="date-asc">Oldest</option>
+                    </select>
+
+                    <select
+                      className="nv-select nv-select-sm"
+                      value={vaultFilter}
+                      onChange={e => setVaultFilter(e.target.value as any)}
+                      title="Filter credentials"
+                    >
+                      <option value="all">All</option>
+                      <option value="has-user">With User</option>
+                      <option value="no-user">Without User</option>
+                    </select>
+
+                    <select
+                      className="nv-select nv-select-sm"
+                      value={vaultGroup}
+                      onChange={e => setVaultGroup(e.target.value as any)}
+                      title="Group credentials"
+                    >
+                      <option value="none">No Grouping</option>
+                      <option value="site">By Site</option>
+                      <option value="account">By Account</option>
+                      <option value="letter">By Letter</option>
+                    </select>
+
+                    <span className="nv-badge" style={{ marginLeft: 'auto', fontSize: '0.65rem' }}>
+                      {filteredVaultItems.length} of {vaultItems.length}
+                    </span>
+                  </div>
+
                   {showAddVault && (
                     <Card style={{ marginBottom: '1rem' }}>
                       <div style={{ fontWeight: 600, color: '#fff', marginBottom: '0.75rem' }}>{editingVaultService ? 'Edit Credential' : 'Add Credential'}</div>
@@ -1637,8 +1730,72 @@ function App() {
 
                   {filteredVaultItems.length === 0 ? (
                     <div className="nv-empty">
-                      No credentials found. Connect to Desktop via NexGrid to sync your logins!
+                      No credentials found matching filter. Connect to Desktop via NexGrid to sync your logins!
                     </div>
+                  ) : groupedVaultItems ? (
+                    groupedVaultItems.map(grp => (
+                      <div className="nv-group-card" key={grp.key}>
+                        <div className="nv-group-header">
+                          <div className="nv-group-title">
+                            <span>📁</span>
+                            <span>{grp.label}</span>
+                          </div>
+                          <span className="nv-badge" style={{ fontSize: '0.65rem' }}>
+                            {grp.items.length} {grp.items.length === 1 ? 'item' : 'items'}
+                          </span>
+                        </div>
+                        <div className="nv-group-items">
+                          {grp.items.map(v => (
+                            <div className="nv-vault-item" key={v.service}>
+                              <div className="nv-vault-left">
+                                <div className="nv-avatar-monogram">
+                                  {(v.service.charAt(0) || 'V').toUpperCase()}
+                                </div>
+                                <div className="nv-vault-info">
+                                  <span className="nv-vault-service">{v.service}</span>
+                                  <span className="nv-vault-meta">
+                                    {v.username ? `👤 ${v.username}` : `Saved ${new Date(v.createdAt).toLocaleDateString()}`}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="nv-vault-actions">
+                                <button
+                                  className="nv-btn nv-btn-sm"
+                                  style={copiedKey === `pass-${v.service}` ? { background: 'rgba(16, 185, 129, 0.2)', borderColor: 'var(--nv-primary)', color: 'var(--nv-primary)' } : { background: 'transparent' }}
+                                  onClick={() => copyPassword(v.service)}
+                                >
+                                  {copiedKey === `pass-${v.service}` ? '✓ Copied' : 'Copy'}
+                                </button>
+                                {v.username && (
+                                  <button
+                                    className="nv-btn nv-btn-sm"
+                                    style={copiedKey === `user-${v.username}` ? { background: 'rgba(16, 185, 129, 0.2)', borderColor: 'var(--nv-primary)', color: 'var(--nv-primary)' } : { background: 'transparent' }}
+                                    onClick={() => copyUsername(v.username!)}
+                                  >
+                                    {copiedKey === `user-${v.username}` ? '✓ User' : 'User'}
+                                  </button>
+                                )}
+                                <button
+                                  className="nv-btn nv-btn-ghost nv-btn-sm"
+                                  onClick={() => editPassword(v.service)}
+                                  title="Edit credential"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  className="nv-btn nv-btn-ghost nv-btn-sm"
+                                  style={{ color: 'var(--nv-danger)', padding: '0.35rem 0.55rem' }}
+                                  onClick={() => deletePassword(v.service)}
+                                  title="Delete credential"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))
                   ) : (
                     filteredVaultItems.map(v => (
                       <div className="nv-vault-item" key={v.service}>

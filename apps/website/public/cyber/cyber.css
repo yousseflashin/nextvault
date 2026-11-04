@@ -146,6 +146,13 @@ html, body {
   outline: none;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
+.nv-select-sm {
+  width: auto;
+  padding: 0.32rem 0.65rem;
+  font-size: 0.75rem;
+  background: var(--nv-surface);
+  cursor: pointer;
+}
 .nv-input.nv-mono, .nv-textarea.nv-mono {
   font-family: var(--nv-font-mono);
 }
@@ -280,4 +287,55 @@ html, body {
   padding: 2.5rem 1rem;
   color: var(--nv-muted);
   font-size: 0.85rem;
+}
+
+/* ---------- Grouping & Toolbar ---------- */
+.nv-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.nv-group-card {
+  background: var(--nv-surface);
+  border: 1px solid var(--nv-border);
+  border-radius: var(--nv-radius);
+  margin-bottom: 0.85rem;
+  overflow: hidden;
+}
+
+.nv-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.65rem 0.95rem;
+  background: var(--nv-bg-2);
+  border-bottom: 1px solid var(--nv-border);
+  font-weight: 600;
+  font-size: 0.82rem;
+  color: #ffffff;
+}
+
+.nv-group-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.nv-group-items {
+  display: flex;
+  flex-direction: column;
+}
+
+.nv-group-items > :not(:last-child) {
+  border-bottom: 1px solid var(--nv-border);
+}
+
+.nv-group-items > .vault-item,
+.nv-group-items > .nv-vault-item {
+  margin-bottom: 0;
+  border-radius: 0;
+  border: none;
 }
