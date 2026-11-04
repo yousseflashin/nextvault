@@ -45,7 +45,7 @@ export interface MobileVaultState {
   otps: StoredOTP[];
 }
 
-export const CURRENT_VERSION = '0.1.13';
+export const CURRENT_VERSION = '0.1.14';
 export const GITHUB_REPO = 'yousseflashin/nextvault';
 
 export function parseOtpAuthUri(uri: string): { service: string; account: string; secret: string; algorithm?: string; digits?: number; period?: number } | null {
