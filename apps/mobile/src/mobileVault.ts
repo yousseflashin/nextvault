@@ -6,6 +6,14 @@
 
 import nacl from 'tweetnacl';
 import naclUtil from 'tweetnacl-util';
+import { registerPlugin } from '@capacitor/core';
+
+const AutofillBridge = registerPlugin<{
+  syncCredentials(options: { credentialsJson: string }): Promise<void>;
+  clearCredentials(): Promise<void>;
+  openSettings(): Promise<void>;
+  isEnabled(): Promise<{ enabled: boolean }>;
+}>('AutofillBridge');
 
 export interface StoredCredential {
   service: string;
@@ -373,6 +381,26 @@ export function loadVault(): MobileVaultState | null {
 
 export function saveVault(state: MobileVaultState) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  syncAutofillCredentials(state);
+}
+
+export function syncAutofillCredentials(state = loadVault()) {
+  if (!state || typeof window === 'undefined' || (window as any).Capacitor?.getPlatform?.() !== 'android') return;
+  const credentials = state.passwords.map(entry => ({
+    service: normalizeDomain(entry.service),
+    username: entry.username || '',
+    password: entry.credential
+  }));
+  AutofillBridge.syncCredentials({ credentialsJson: JSON.stringify(credentials) }).catch(() => {});
+}
+
+export function clearAutofillCredentials() {
+  if (typeof window === 'undefined' || (window as any).Capacitor?.getPlatform?.() !== 'android') return;
+  AutofillBridge.clearCredentials().catch(() => {});
+}
+
+export async function openAutofillSettings() {
+  return AutofillBridge.openSettings();
 }
 
 // Sealed box encryption (X25519)

@@ -3,7 +3,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './cyber/cyber.css';
 import './main.css';
-import { getSavedRelayUrl, CURRENT_VERSION, parseOtpAuthUri, parseBulkImport } from './mobileVault';
+import { getSavedRelayUrl, CURRENT_VERSION, parseOtpAuthUri, parseBulkImport, clearAutofillCredentials, syncAutofillCredentials, openAutofillSettings } from './mobileVault';
 import { startCameraQrScanner, scanQrFromImageSource, requestCameraPermission } from './qrScanner';
 
 function Shield({ size = 32 }: { size?: number }) {
@@ -542,6 +542,7 @@ function App() {
           const sessionActive = sessionStorage.getItem('nexvault_mobile_unlocked') === '1';
           if (sessionActive) {
             setUnlocked(true);
+            syncAutofillCredentials();
             refreshVault(false);
             refreshOTPs(false);
             loadDevices();
@@ -575,6 +576,7 @@ function App() {
       setTokenJson(JSON.stringify(r.bootstrapToken, null, 2));
       sessionStorage.setItem('nexvault_mobile_unlocked', '1');
       setUnlocked(true);
+      syncAutofillCredentials();
       showToast('Vault created successfully.');
     } catch (e: any) { setStatus('Error: ' + e.message); }
   }
@@ -596,6 +598,7 @@ function App() {
       if (!r.success) throw new Error(r.error);
       sessionStorage.setItem('nexvault_mobile_unlocked', '1');
       setUnlocked(true);
+      syncAutofillCredentials();
       setStatus('Unlocked: ' + r.tokenId);
       refreshVault(false);
       refreshOTPs(false);
@@ -606,6 +609,7 @@ function App() {
 
   function onLockVault() {
     sessionStorage.removeItem('nexvault_mobile_unlocked');
+    clearAutofillCredentials();
     setUnlocked(false);
     setPassword('');
     setStatus('Vault locked.');
@@ -1191,6 +1195,10 @@ function App() {
                         Quick Fill is powered by this unlocked mobile vault. It uses the same credentials as Vault and syncs through NexGrid.
                       </div>
                       <button className="nv-btn nv-btn-ghost" onClick={copyBootstrapToken}>Copy Account Token</button>
+                      <button className="nv-btn nv-btn-ghost" onClick={async () => {
+                        await openAutofillSettings();
+                        setQuickFillStatus('Choose NexVault as Autofill service');
+                      }}>Enable Browser Autofill</button>
                       <button className="nv-btn nv-btn-danger" onClick={onLockVault}>Lock Mobile Vault</button>
                     </div>
                   )}

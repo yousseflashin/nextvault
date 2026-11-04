@@ -8,6 +8,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(AppUpdaterPlugin.class);
         registerPlugin(CameraPermissionPlugin.class);
+        registerPlugin(AutofillBridgePlugin.class);
         super.onCreate(savedInstanceState);
     }
 }
