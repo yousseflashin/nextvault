@@ -53,7 +53,7 @@ export interface MobileVaultState {
   deletedRecords?: { service: string; type: 'password' | 'otp'; deletedAt: number }[];
 }
 
-export const CURRENT_VERSION = '0.1.17';
+export const CURRENT_VERSION = '0.1.18';
 export const GITHUB_REPO = 'yousseflashin/nextvault';
 
 export function parseOtpAuthUri(uri: string): { service: string; account: string; secret: string; algorithm?: string; digits?: number; period?: number } | null {
