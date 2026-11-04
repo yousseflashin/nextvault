@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "NexVault Password Manager",
-  "version": "0.1.23",
+  "version": "0.1.24",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3OATSiU1APSZOfKIXQjqAttxiBgpPRgyKVOLTiRP3BoAfXg6iqEhLLWt+QqXaS2ksk3CjQF7exadolZ4iZA/O5PypsdqiYkRpGqjYvbE4ZM/q2lIeoypOSEigFi9jMMNaN2vvSFETPpVkVlD/0x8Yw3oXcyIBQ2SF1rXfEfWFpe9oxl/9rcgiRapSladEsWa0gzRbO34mHQlNeHqMcNdYRtOZaOsorS/K8EyXatJoIif1oBWStqo9+zw2a07U1FX9IQtAOwBhU4GIQLAPxLH7C71WO8kg65Lo8Xb2WqVlWX6uoj8VIQoehtHEAq0DkHv7q9Vyd7wxi1OEYpJBVQlxwIDAQAB",
   "description": "Connects browser autofill workflows to your local NextVault mesh node.",
   "permissions": [
