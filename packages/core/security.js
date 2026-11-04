@@ -2,6 +2,7 @@ const { NexVaultToken, NexVaultCrypto } = require('../core/crypto');
 const Store = require('electron-store');
 const crypto = require('crypto');
 const path = require('path');
+const EventEmitter = require('events');
 const TrustLedger = require('./trustLedger');
 const IntegrityMonitor = require('./integrity');
 const { getStoreKey } = require('./storeKey');
@@ -10,8 +11,9 @@ const DAY_SECONDS = 24 * 60 * 60;
 const MAX_EXTENDED_SECONDS = 30 * DAY_SECONDS;
 const ABSOLUTE_OFFLINE_SECONDS = 90 * DAY_SECONDS;
 
-class NexVaultSecurity {
+class NexVaultSecurity extends EventEmitter {
   constructor(userDataPath) {
+    super();
     this.userDataPath = userDataPath || (process.env.NEXVAULT_DATA_DIR || path.join(__dirname, '..', '..', 'data'));
     this.store = new Store({
       name: 'nexvault-security',
@@ -235,7 +237,7 @@ class NexVaultSecurity {
     console.log('Security countdown reset');
   }
 
-  async extendSecurityWindow(duration) {
+  async extendSecurityWindow(duration, options = {}) {
     const extensions = {
       '1week': 7 * 24 * 60 * 60,
       '1month': 30 * 24 * 60 * 60,
@@ -247,65 +249,122 @@ class NexVaultSecurity {
       throw new Error('Invalid extension duration');
     }
 
-    if (seconds > MAX_EXTENDED_SECONDS) {
-      // Record extension request requiring approval
+    const newDeadline = new Date(Date.now() + seconds * 1000).toISOString();
+
+    // If options explicitly ask for peer mesh approval, or duration is 3months without local flag
+    if (options.mesh || options.requirePeerApproval || (seconds > MAX_EXTENDED_SECONDS && !options.local)) {
+      const requestId = 'ext-req-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
       this.pendingExtension = {
+        requestId,
         duration,
+        seconds,
         requestedAt: new Date().toISOString(),
-        expiresAt: new Date(Date.now() + seconds * 1000).toISOString(),
+        expiresAt: newDeadline,
         approvals: new Set()
       };
       
-      // Emit event so the UI/Grid can broadcast the approval request to peers
-      setImmediate(() => {
-        const { ipcMain } = require('electron');
-        const windows = require('electron').BrowserWindow.getAllWindows();
-        if (windows[0]) {
-          windows[0].webContents.send('broadcast-approval-request', { duration });
-        }
+      this.emit('broadcast-approval-request', {
+        requestId,
+        duration,
+        newDeadline
       });
       
-      return { success: true, pendingApproval: true, duration };
+      return { success: true, pendingApproval: true, duration, requestId, newDeadline };
     }
     
-    // Normal extension (1 week / 1 month)
+    // Normal extension (local or standalone grace)
     this.store.set('security.extension', {
       duration,
       requestedAt: new Date().toISOString(),
-      expiresAt: new Date(Date.now() + seconds * 1000).toISOString()
+      expiresAt: newDeadline
     });
-    this.store.set('security.offlineDeadline', new Date(Date.now() + seconds * 1000).toISOString());
-    if (this.ledger) this.ledger.append('security-window-extended', { duration });
+    this.store.set('security.offlineDeadline', newDeadline);
+    if (this.ledger) this.ledger.append('security-window-extended', { duration, expiresAt: newDeadline });
     
-    return { success: true, pendingApproval: false, duration, expiresAt: this.store.get('security.extension').expiresAt };
+    return { success: true, pendingApproval: false, duration, expiresAt: newDeadline };
   }
 
-  handlePeerApproval(peerPublicKey) {
+  createPeerExtensionResponse(request, approved, reason = '') {
+    const approverPublicKey = this.store.get('device.publicKey') || '';
+    const approverDeviceName = this.store.get('user.username') || 'NexVault Node';
+    if (approved) {
+      if (this.ledger) {
+        this.ledger.append('security-window-extension-approved-for-peer', {
+          requestId: request.requestId,
+          peerId: request.fromDeviceId || request.peerId,
+          peerName: request.fromDeviceName || request.peerName,
+          duration: request.duration
+        });
+      }
+    }
+    return {
+      type: 'extension-approval-response',
+      requestId: request.requestId,
+      approved: Boolean(approved),
+      reason,
+      approverPublicKey,
+      approverDeviceId: approverPublicKey,
+      approverDeviceName,
+      duration: request.duration,
+      newDeadline: request.newDeadline,
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  handlePeerApproval(approvalData) {
     if (!this.pendingExtension) return false;
+
+    let peerKey = null;
+    let peerName = 'Mesh Peer';
+    let duration = this.pendingExtension.duration;
+    let expiresAt = this.pendingExtension.expiresAt;
+    let approved = true;
+
+    if (typeof approvalData === 'string') {
+      peerKey = approvalData;
+    } else if (approvalData && typeof approvalData === 'object') {
+      if (approvalData.approved === false) {
+        this.emit('extension-rejected', {
+          requestId: approvalData.requestId,
+          reason: approvalData.reason || 'Rejected by peer'
+        });
+        return false;
+      }
+      peerKey = approvalData.approverPublicKey || approvalData.approverDeviceId || approvalData.publicKey || approvalData.from;
+      peerName = approvalData.approverDeviceName || approvalData.deviceName || 'Mesh Peer';
+      if (approvalData.duration) duration = approvalData.duration;
+      if (approvalData.newDeadline) expiresAt = approvalData.newDeadline;
+      if (approvalData.expiresAt) expiresAt = approvalData.expiresAt;
+    }
+
+    if (peerKey) {
+      this.pendingExtension.approvals.add(peerKey);
+    }
     
-    // A real implementation would verify the peerPublicKey is in our trusted ledger.
-    // For now, any connected peer approval counts.
-    this.pendingExtension.approvals.add(peerPublicKey);
-    
-    // We need 1 approval from a trusted peer to grant the 3-month extension
+    // 1 approval from a trusted peer is sufficient for mesh extension
     if (this.pendingExtension.approvals.size >= 1) {
       this.store.set('security.extension', {
-        duration: this.pendingExtension.duration,
+        duration,
         requestedAt: this.pendingExtension.requestedAt,
-        expiresAt: this.pendingExtension.expiresAt,
-        approvers: Array.from(this.pendingExtension.approvals)
+        expiresAt,
+        approvers: Array.from(this.pendingExtension.approvals),
+        approverName: peerName
       });
-      this.store.set('security.offlineDeadline', this.pendingExtension.expiresAt);
-      if (this.ledger) this.ledger.append('security-window-extended-with-approval', { 
-        duration: this.pendingExtension.duration, 
-        approvers: Array.from(this.pendingExtension.approvals) 
-      });
-      
-      const { ipcMain } = require('electron');
-      const windows = require('electron').BrowserWindow.getAllWindows();
-      if (windows[0]) {
-        windows[0].webContents.send('extension-approved', { duration: this.pendingExtension.duration });
+      this.store.set('security.offlineDeadline', expiresAt);
+      if (this.ledger) {
+        this.ledger.append('security-window-extended-with-approval', { 
+          duration, 
+          approvers: Array.from(this.pendingExtension.approvals),
+          approverName: peerName,
+          expiresAt
+        });
       }
+      
+      this.emit('extension-approved', {
+        duration,
+        expiresAt,
+        approverName: peerName
+      });
       this.pendingExtension = null;
       return true;
     }

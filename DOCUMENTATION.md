@@ -250,14 +250,15 @@ sequenceDiagram
    - Click **Validate & Unlock**.
 3. Both devices connect to the signaling relay with their device tokens, identify peer presence under the same `tokenId`, and establish an end-to-end encrypted WebRTC data channel.
 
-### Using Browser Autofill
+### Using Browser Autofill (Desktop & Android Chrome)
 
-1. Ensure the Desktop app is running and unlocked.
-2. Ensure the Browser Extension is connected.
-3. When visiting a login page (e.g., `github.com`):
-   - Click the NexVault extension icon in the browser toolbar.
-   - Click **Autofill Current Page** (or search for the domain in the search bar).
-   - NexVault matches the current domain, retrieves the decrypted credential from the local desktop vault over the encrypted `127.0.0.1:46124` bridge, and safely injects the password into the password field.
+1. **Desktop**:
+   - Ensure the Desktop app is running and unlocked.
+   - The native bridge runs on `127.0.0.1:46124`. The browser extension detects input fields on active web pages and provides seamless autofill upon user click.
+2. **Android Mobile (Native Apps & Chrome Browsers)**:
+   - Ensure NexVault is selected as your system Autofill service under **Android Settings → System → Languages & Input → Autofill service**.
+   - In **Google Chrome** on Android: Tap **⋮ (Menu) → Settings → Autofill options → Autofill using another service**.
+   - NexVault's native autofill service detects website domains, URL address bar text, and login forms across Chrome, Chromium, Brave, Firefox, and native Android apps, delivering instant credential datasets.
 
 ### TOTP Two-Factor Authentication & Google Authenticator-Style UI
 
@@ -291,9 +292,11 @@ NexVault includes an active security countdown timer:
 
 ### Offline Window Extensions & Peer Approvals
 
-Users who plan to travel or operate offline can request a window extension directly from Settings on Desktop or Mobile:
-- Extensions of **1 week** or **1 month** are granted locally.
-- Extensions of **3 months** trigger a **multisig peer approval request** across the WebRTC mesh, requiring at least one paired trusted device to cryptographically sign the extension.
+Users planning to travel or operate offline can request an offline security deadline extension directly from the Security Center on Desktop or the Security tab on Mobile:
+- Extensions (1 week, 1 month, 3 months) broadcast an `extension-approval-request` over the NexGrid peer mesh to paired devices.
+- Paired nodes surface an actionable approval notification, allowing users to authorize or decline the request.
+- When authorized, cryptographic signatures and audit events are committed to the local Trust Ledger, updating the offline deadline.
+- For standalone single-device vaults without peers yet paired, a Standalone Grace option is available.
 
 ### Storage Integrity Monitor
 

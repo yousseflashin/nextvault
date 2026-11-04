@@ -659,15 +659,67 @@ nexGrid.on('message', (peerId, message) => {
   }
 });
 
+nexGrid.on('extension-approval-request', (peerId, message) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('peer-requests-approval', {
+      peerId,
+      requestId: message.requestId,
+      deviceName: message.fromDeviceName || message.deviceName || 'Mesh Peer',
+      duration: message.duration,
+      newDeadline: message.newDeadline,
+      requestedAt: message.requestedAt
+    });
+  }
+});
+
+nexGrid.on('extension-approval-response', (peerId, message) => {
+  nexVaultSecurity.handlePeerApproval(message);
+});
+
+nexVaultSecurity.on('broadcast-approval-request', (data) => {
+  const broadcastPayload = {
+    type: 'extension-approval-request',
+    requestId: data.requestId,
+    fromDeviceId: nexVaultSecurity.getToken().publicKey,
+    fromDeviceName: 'NextVault Desktop',
+    duration: data.duration,
+    newDeadline: data.newDeadline,
+    requestedAt: new Date().toISOString()
+  };
+  nexGrid.broadcastSecureMessage(broadcastPayload);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('broadcast-approval-request', data);
+  }
+});
+
+nexVaultSecurity.on('extension-approved', (data) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('extension-approved', data);
+  }
+});
+
+nexVaultSecurity.on('extension-rejected', (data) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('extension-rejected', data);
+  }
+});
+
 nexGrid.on('secure-message', (peerId, message) => {
   if (message.type === 'credential-deleted') {
     handleRemoteCredentialDeleted(peerId, message);
   } else if (message.type === 'extension-approval-request') {
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('peer-requests-approval', { peerId, duration: message.duration });
+      mainWindow.webContents.send('peer-requests-approval', {
+        peerId,
+        requestId: message.requestId,
+        deviceName: message.fromDeviceName || message.deviceName || 'Mesh Peer',
+        duration: message.duration,
+        newDeadline: message.newDeadline,
+        requestedAt: message.requestedAt
+      });
     }
-  } else if (message.type === 'extension-approval') {
-    nexVaultSecurity.handlePeerApproval(message.publicKey);
+  } else if (message.type === 'extension-approval-response' || message.type === 'extension-approval') {
+    nexVaultSecurity.handlePeerApproval(message);
   } else if (message.type === 'vault-sync') {
     // Handled by vault-sync-received
   } else if (mainWindow && !mainWindow.isDestroyed()) {
@@ -1316,18 +1368,50 @@ ipcMain.handle('get-security-status', async () => {
   return nexVaultSecurity.getSecurityStatus();
 });
 
-ipcMain.handle('extend-security-window', async (event, duration) => {
+ipcMain.handle('extend-security-window', async (event, duration, options = {}) => {
   try {
-    const result = await nexVaultSecurity.extendSecurityWindow(duration);
+    const result = await nexVaultSecurity.extendSecurityWindow(duration, options);
+    if (result.pendingApproval) {
+      const broadcastPayload = {
+        type: 'extension-approval-request',
+        requestId: result.requestId,
+        fromDeviceId: nexVaultSecurity.getToken().publicKey,
+        fromDeviceName: 'NexVault Desktop',
+        duration: result.duration,
+        newDeadline: result.newDeadline,
+        requestedAt: new Date().toISOString()
+      };
+      const count = nexGrid.broadcastSecureMessage(broadcastPayload);
+      result.broadcastCount = count;
+    }
     return { success: true, ...result };
   } catch (error) {
     return { success: false, error: error.message };
   }
 });
 
-ipcMain.handle('approve-extension', async (event, peerId) => {
+ipcMain.handle('approve-extension', async (event, peerId, requestId, duration, newDeadline) => {
   try {
-    nexGrid.sendSecureMessage(peerId, { type: 'extension-approval', publicKey: nexVaultSecurity.getToken().publicKey });
+    const responsePayload = nexVaultSecurity.createPeerExtensionResponse({
+      requestId,
+      fromDeviceId: peerId,
+      duration,
+      newDeadline
+    }, true);
+    nexGrid.sendSecureMessage(peerId, responsePayload);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('reject-extension', async (event, peerId, requestId, reason) => {
+  try {
+    const responsePayload = nexVaultSecurity.createPeerExtensionResponse({
+      requestId,
+      fromDeviceId: peerId
+    }, false, reason || 'Declined by desktop user');
+    nexGrid.sendSecureMessage(peerId, responsePayload);
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };

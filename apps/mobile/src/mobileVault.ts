@@ -310,6 +310,15 @@ function compareVersions(v1: string, v2: string): number {
   return 0;
 }
 
+export interface PeerExtensionRequest {
+  requestId: string;
+  from: string;
+  deviceName: string;
+  duration: string;
+  newDeadline: string;
+  requestedAt: string;
+}
+
 export interface GridCallbacks {
   onLog?: (msg: string) => void;
   onStatusChange?: (status: 'disconnected' | 'connecting' | 'connected' | 'paired') => void;
@@ -317,6 +326,9 @@ export interface GridCallbacks {
   onPairApproved?: (peer: { deviceId: string; deviceName: string }) => void;
   onIncomingPairRequest?: (request: { from: string; deviceName: string; publicKey: string; code?: string }) => void;
   onVaultSynced?: (count: number) => void;
+  onIncomingExtensionRequest?: (request: PeerExtensionRequest) => void;
+  onExtensionApproved?: (response: { duration: string; expiresAt: string; approverName: string }) => void;
+  onExtensionRejected?: (response: { reason: string }) => void;
 }
 
 const STORAGE_KEY = 'nexvault_mobile_vault_v3';
@@ -562,6 +574,89 @@ export function extendOfflineSecurityWindow(duration: string): { success: boolea
   return { success: true, duration, expiresAt };
 }
 
+export function requestPeerSecurityExtension(duration: string): { success: boolean; pendingApproval: boolean; requestId: string; duration: string; expiresAt: string; peersCount: number } {
+  const durations: Record<string, number> = {
+    '1week': 7 * 24 * 60 * 60 * 1000,
+    '1month': 30 * 24 * 60 * 60 * 1000,
+    '3months': 90 * 24 * 60 * 60 * 1000
+  };
+  const ms = durations[duration] || durations['1week'];
+  const newDeadline = Date.now() + ms;
+  const expiresAt = new Date(newDeadline).toISOString();
+  const state = loadVault();
+
+  const requestId = 'ext-req-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+  const payload = {
+    type: 'extension-approval-request',
+    requestId,
+    fromDeviceId: state?.devicePublicKey || 'mobile-node',
+    fromDeviceName: 'NexVault Mobile (Android)',
+    duration,
+    newDeadline: expiresAt,
+    requestedAt: new Date().toISOString()
+  };
+
+  let sentCount = 0;
+  if (activeSocket && activeSocket.readyState === WebSocket.OPEN && state) {
+    const peers = getKnownPeerIds(state);
+    for (const peerId of peers) {
+      try {
+        sendPeerMessage(peerId, payload, state, activeSocket);
+        sentCount++;
+      } catch {}
+    }
+  }
+
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem('nexvault_pending_extension_request', JSON.stringify({
+      requestId,
+      duration,
+      expiresAt,
+      requestedAt: new Date().toISOString()
+    }));
+  }
+
+  return {
+    success: true,
+    pendingApproval: true,
+    requestId,
+    duration,
+    expiresAt,
+    peersCount: sentCount
+  };
+}
+
+export function respondToPeerSecurityExtension(peerId: string, requestId: string, duration: string, approved: boolean, reason?: string) {
+  const state = loadVault();
+  if (!state || !activeSocket || activeSocket.readyState !== WebSocket.OPEN) {
+    return { success: false, error: 'Mesh relay socket is not active' };
+  }
+
+  const durations: Record<string, number> = {
+    '1week': 7 * 24 * 60 * 60 * 1000,
+    '1month': 30 * 24 * 60 * 60 * 1000,
+    '3months': 90 * 24 * 60 * 60 * 1000
+  };
+  const ms = durations[duration] || durations['1week'];
+  const newDeadline = new Date(Date.now() + ms).toISOString();
+
+  const responsePayload = {
+    type: 'extension-approval-response',
+    requestId,
+    approved: Boolean(approved),
+    reason: reason || (approved ? '' : 'Declined by mobile user'),
+    approverDeviceId: state.devicePublicKey,
+    approverDeviceName: 'NexVault Mobile',
+    approverPublicKey: state.x25519PublicKey,
+    duration,
+    newDeadline,
+    timestamp: new Date().toISOString()
+  };
+
+  sendPeerMessage(peerId, responsePayload, state, activeSocket);
+  return { success: true };
+}
+
 export function emergencyNukeVault() {
   try {
     clearAutofillCredentials();
@@ -693,6 +788,32 @@ export async function calculateTotpCode(secret: string, period = 30, digits = 6)
   }
 }
 
+function handleExtensionResponse(payload: any, callbacks?: GridCallbacks) {
+  if (payload.approved) {
+    const expiresAt = payload.newDeadline || payload.expiresAt;
+    const duration = payload.duration || '1month';
+    const approverName = payload.approverDeviceName || payload.deviceName || 'Mesh Peer';
+    if (expiresAt && typeof localStorage !== 'undefined') {
+      localStorage.setItem('nexvault_offline_deadline', expiresAt);
+      localStorage.setItem('nexvault_extension_info', JSON.stringify({
+        duration,
+        expiresAt,
+        approverName,
+        approvedAt: new Date().toISOString()
+      }));
+      localStorage.removeItem('nexvault_pending_extension_request');
+    }
+    callbacks?.onLog?.(`🎉 Security window extended (${duration}) by ${approverName}!`);
+    callbacks?.onExtensionApproved?.({ duration, expiresAt, approverName });
+  } else {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem('nexvault_pending_extension_request');
+    }
+    callbacks?.onLog?.(`❌ Security window extension was declined: ${payload.reason || 'Declined'}`);
+    callbacks?.onExtensionRejected?.({ reason: payload.reason || 'Declined by peer' });
+  }
+}
+
 function handleIncomingMobileSignal(from: string, payload: any, socketOrState: any, socketOrCallbacks?: any, maybeCallbacks?: any) {
   if (!payload || typeof payload !== 'object') return;
 
@@ -720,6 +841,19 @@ function handleIncomingMobileSignal(from: string, payload: any, socketOrState: a
         applyVaultSync(decrypted.vaultData, callbacks, from, socket || undefined);
       } else if (decrypted.type === 'credential-deleted') {
         handleCredentialDeleted(decrypted);
+      } else if (decrypted.type === 'extension-approval-request') {
+        const req: PeerExtensionRequest = {
+          requestId: decrypted.requestId,
+          from,
+          deviceName: decrypted.fromDeviceName || decrypted.deviceName || 'Mesh Peer',
+          duration: decrypted.duration || '1month',
+          newDeadline: decrypted.newDeadline || '',
+          requestedAt: decrypted.requestedAt || new Date().toISOString()
+        };
+        callbacks?.onLog?.(`🔔 Extension request received from "${req.deviceName}" (${req.duration})`);
+        callbacks?.onIncomingExtensionRequest?.(req);
+      } else if (decrypted.type === 'extension-approval-response' || decrypted.type === 'extension-approval') {
+        handleExtensionResponse(decrypted, callbacks);
       }
       return;
     } catch (err: any) {
@@ -731,6 +865,26 @@ function handleIncomingMobileSignal(from: string, payload: any, socketOrState: a
   // 1b. Plain credential-deleted message
   if (payload.type === 'credential-deleted') {
     handleCredentialDeleted(payload);
+    return;
+  }
+
+  // 1c. Plain extension requests & responses
+  if (payload.type === 'extension-approval-request') {
+    const req: PeerExtensionRequest = {
+      requestId: payload.requestId,
+      from,
+      deviceName: payload.fromDeviceName || payload.deviceName || 'Mesh Peer',
+      duration: payload.duration || '1month',
+      newDeadline: payload.newDeadline || '',
+      requestedAt: payload.requestedAt || new Date().toISOString()
+    };
+    callbacks?.onLog?.(`🔔 Extension request received from "${req.deviceName}" (${req.duration})`);
+    callbacks?.onIncomingExtensionRequest?.(req);
+    return;
+  }
+
+  if (payload.type === 'extension-approval-response' || payload.type === 'extension-approval') {
+    handleExtensionResponse(payload, callbacks);
     return;
   }
 
@@ -2114,6 +2268,14 @@ export function initMobileVault() {
 
     async extendSecurityWindow(duration: string) {
       return extendOfflineSecurityWindow(duration);
+    },
+
+    async requestPeerSecurityExtension(duration: string) {
+      return requestPeerSecurityExtension(duration);
+    },
+
+    async respondToPeerSecurityExtension(peerId: string, requestId: string, duration: string, approved: boolean, reason?: string) {
+      return respondToPeerSecurityExtension(peerId, requestId, duration, approved, reason);
     },
 
     getAutoLockMinutes(): number | 'never' {

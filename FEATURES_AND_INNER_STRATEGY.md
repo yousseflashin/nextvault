@@ -278,13 +278,18 @@ $$\text{hash} = \text{SHA-256}(\text{index} + \text{timestamp} + \text{eventType
   - A real-time countdown timer in Settings and Security tabs displays the exact time remaining before the security window lapses.
   - If a device remains offline past the threshold, the vault locks down and evicts all cached authorization tokens.
 
-### 8.4 Quorum Peer Approvals for Offline Extensions
+### 8.4 Quorum Peer Approvals for Offline Extensions (`extension-approval-request`)
 
-- If a user anticipates traveling offline for an extended duration, they can request an offline security window extension directly from the Settings or Security tabs on either Desktop or Mobile:
-  - **1 Week** (`1week`): Extends window locally by 7 days.
-  - **1 Month** (`1month`): Extends window locally by 30 days.
-  - **3 Months Quorum** (`3months`): Broadcasts an approval request across the NexGrid mesh requiring at least one paired trusted peer node to cryptographically sign and authorize the offline extension.
-- Once authorized, the offline security deadline updates in the local trust ledger and persistent storage.
+- If a user anticipates traveling offline for an extended duration, they can request an offline security window extension directly from the Security Center on Desktop or the dedicated Security tab on Mobile:
+  - **1 Week** (`1week`): Extends window by 7 days.
+  - **1 Month** (`1month`): Extends window by 30 days.
+  - **3 Months Quorum** (`3months`): Extends window by 90 days.
+- **Bidirectional Mesh Protocol**:
+  1. The requesting node generates a signed `extension-approval-request` envelope containing a unique `requestId`, duration, and target deadline, broadcasting it across NexGrid to paired peers.
+  2. The peer device (Desktop or Mobile) immediately surfaces an incoming approval alert banner: *"Device [PeerName] is requesting an extension of its offline security window by [Duration]. Approve / Decline?"*
+  3. When approved by the user, the approving node cryptographically signs and transmits an `extension-approval-response` (approved: true) back to the requesting device and appends the authorization to its append-only trust ledger.
+  4. The requesting node validates the approving peer's identity in `trustedDevices`, updates its persistent `offlineDeadline`, records `security-window-extended-with-approval` in its local trust ledger, and transitions to extended status.
+  5. **Standalone Grace Fallback**: For standalone vaults without paired peers yet enrolled, an advisory grace extension is permitted while recommending pairing secondary devices.
 
 ### 8.5 Emergency Cryptographic Nuke (Self-Destruct Protocol)
 

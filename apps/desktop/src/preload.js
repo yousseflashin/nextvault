@@ -46,7 +46,8 @@ contextBridge.exposeInMainWorld('nexVault', {
   runIntegrityCheck: () => ipcRenderer.invoke('run-integrity-check'),
   checkIntegrity: () => ipcRenderer.invoke('check-integrity'),
   triggerEmergencyNuke: () => ipcRenderer.invoke('trigger-emergency-nuke'),
-  approveExtension: (peerId) => ipcRenderer.invoke('approve-extension', peerId),
+  approveExtension: (peerId, requestId, duration, newDeadline) => ipcRenderer.invoke('approve-extension', peerId, requestId, duration, newDeadline),
+  rejectExtension: (peerId, requestId, reason) => ipcRenderer.invoke('reject-extension', peerId, requestId, reason),
   onSecurityCountdownStarted: (callback) => ipcRenderer.on(
     'security-countdown-started', (event, status) => callback(status)
   ),
@@ -54,15 +55,18 @@ contextBridge.exposeInMainWorld('nexVault', {
     'security-countdown-stopped', () => callback()
   ),
   onPeerRequestsApproval: (callback) => ipcRenderer.on(
-    'peer-requests-approval', (event, { peerId, duration }) => callback(peerId, duration)
+    'peer-requests-approval', (event, data) => callback(data)
   ),
   onBroadcastApprovalRequest: (callback) => ipcRenderer.on(
-    'broadcast-approval-request', (event, { duration }) => callback(duration)
+    'broadcast-approval-request', (event, data) => callback(data)
   ),
   onExtensionApproved: (callback) => ipcRenderer.on(
-    'extension-approved', (event, { duration }) => callback(duration)
+    'extension-approved', (event, data) => callback(data)
   ),
-  extendSecurityWindow: (duration) => ipcRenderer.invoke('extend-security-window', duration),
+  onExtensionRejected: (callback) => ipcRenderer.on(
+    'extension-rejected', (event, data) => callback(data)
+  ),
+  extendSecurityWindow: (duration, options) => ipcRenderer.invoke('extend-security-window', duration, options),
   nuke: () => ipcRenderer.invoke('nuke'),
   onPeerData: (callback) => ipcRenderer.on('peer-data', (event, data) => callback(data)),
   onExtensionMessage: (callback) => ipcRenderer.on('extension-message', (event, data) => callback(data)),

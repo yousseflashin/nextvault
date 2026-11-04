@@ -549,6 +549,7 @@
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
           </span>
           <span>Security</span>
+          <span class="nv-badge danger" id="sidebar-security-badge" style="display: none; margin-left: auto; font-size: 0.65rem; padding: 1px 6px;">0</span>
         </a>
         <a class="nav-item" data-page="settings" onclick="navigateTo('settings')">
           <span class="nav-icon">
@@ -777,26 +778,125 @@
           </div>
         </div>
 
-        <!-- ==================== PAGE 4: SECURITY TOOLS ==================== -->
+        <!-- ==================== PAGE 4: SECURITY CENTER ==================== -->
         <div class="app-page" id="page-security">
+          
+          <!-- Incoming Peer Extension Approval Requests Container -->
+          <div id="incoming-extension-requests-container" style="display: none; margin-bottom: 1.25rem;">
+            <!-- Populated dynamically when mesh peers request offline window extension -->
+          </div>
+
+          <!-- Pending Local Request Banner -->
+          <div id="pending-extension-banner" style="display: none; margin-bottom: 1.25rem; padding: 1rem 1.25rem; background: rgba(14, 165, 233, 0.12); border: 1px solid var(--nv-accent); border-radius: var(--nv-radius);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+              <div style="font-weight: 600; color: #fff; display: flex; align-items: center; gap: 0.5rem;">
+                <span class="nv-spinner" style="display: inline-block; width: 14px; height: 14px; border: 2px solid var(--nv-accent); border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></span>
+                <span>Extension Request Awaiting Mesh Peer Approval</span>
+              </div>
+              <span class="nv-badge" id="pending-extension-duration-badge" style="background: var(--nv-accent); color: #fff;">1 Month</span>
+            </div>
+            <p style="font-size: 0.78rem; color: var(--nv-text-secondary); margin: 0 0 0.75rem;">
+              Broadcasted request to your paired devices across NexGrid. Please tap <strong>"Approve"</strong> on your mobile or secondary desktop device.
+            </p>
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+              <span style="font-size: 0.75rem; color: var(--nv-muted);" id="pending-extension-details">Target deadline: Calculating...</span>
+              <button class="nv-btn nv-btn-ghost nv-btn-sm" style="margin-left: auto;" onclick="cancelPendingExtensionRequest()">Dismiss</button>
+            </div>
+          </div>
+
+          <!-- Dead Man's Switch & Offline Deadline Card -->
           <div class="nv-card" style="margin-bottom: 1.25rem;">
-            <div style="font-weight: 600; color: #fff; margin-bottom: 0.5rem;">Cryptographic Security &amp; Integrity</div>
-            <p style="font-size: 0.8rem; color: var(--nv-muted); margin-bottom: 1.25rem;">
-              Verify cryptographic hash chains, tamper detection monitors, and hardware-bound secret state.
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+              <div style="font-weight: 600; color: #fff; font-size: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                <span>🛡️</span>
+                <span>Dead Man's Switch &amp; Offline Security Window</span>
+              </div>
+              <span class="nv-badge success" id="security-window-badge">24h Heartbeat Active</span>
+            </div>
+            <p style="font-size: 0.8rem; color: var(--nv-muted); margin-bottom: 1rem;">
+              Enforces a cryptographic check-in schedule. If this device remains offline past the deadline without a peer-approved extension, memory secrets zero out and database access locks down.
+            </p>
+            
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; padding: 1rem 1.25rem; background: var(--nv-bg-2); border-radius: var(--nv-radius-sm); border: 1px solid var(--nv-border);">
+              <div style="display: flex; align-items: center; gap: 1rem;">
+                <div style="font-size: 2rem;">⏳</div>
+                <div>
+                  <div style="font-size: 0.72rem; color: var(--nv-muted); text-transform: uppercase; letter-spacing: 0.05em;">Security Window Remaining</div>
+                  <div style="font-size: 1.35rem; font-weight: 700; color: var(--nv-primary); font-family: var(--nv-font-mono);" id="security-deadline-countdown">24 hours remaining</div>
+                  <div style="font-size: 0.72rem; color: var(--nv-muted); margin-top: 2px;" id="security-deadline-target">Deadline: Calculating...</div>
+                </div>
+              </div>
+              <button class="nv-btn nv-btn-sm" onclick="checkInSecurityNow()" title="Confirm check-in and reset 24-hour heartbeat">
+                🔄 Check-In Now
+              </button>
+            </div>
+
+            <!-- Mesh Quorum Extension Controls -->
+            <div style="padding: 1rem; background: var(--nv-surface-2); border-radius: var(--nv-radius-sm); border: 1px solid var(--nv-border);">
+              <div style="font-weight: 600; font-size: 0.85rem; color: #fff; margin-bottom: 0.35rem;">Request Offline Security Extension</div>
+              <p style="font-size: 0.75rem; color: var(--nv-muted); margin-bottom: 0.85rem;">
+                Traveling offline? Request an extension approved by paired nodes in your NexGrid mesh.
+              </p>
+              <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+                <label class="nv-label" style="margin-bottom: 0;">Extension Duration:</label>
+                <select class="nv-input" id="security-extension-select" style="max-width: 200px;">
+                  <option value="1week">1 Week (7 Days)</option>
+                  <option value="1month" selected>1 Month (30 Days)</option>
+                  <option value="3months">3 Months (90 Days Quorum)</option>
+                </select>
+                <button class="nv-btn nv-btn-accent nv-btn-sm" type="button" onclick="requestSecurityExtension(false)">
+                  🌐 Request Mesh Peer Approval
+                </button>
+                <button class="nv-btn nv-btn-ghost nv-btn-sm" type="button" onclick="requestSecurityExtension(true)" title="For single standalone devices without mesh peers">
+                  Standalone Grace Extension
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Cryptographic Integrity & Tamper Detection Card -->
+          <div class="nv-card" style="margin-bottom: 1.25rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+              <div style="font-weight: 600; color: #fff;">Cryptographic Integrity &amp; Tamper Monitor</div>
+              <span class="nv-badge success" id="integrity-status-badge">Checksums Verified</span>
+            </div>
+            <p style="font-size: 0.8rem; color: var(--nv-muted); margin-bottom: 1rem;">
+              Continuously verifies SHA-256 baseline hashes of local database pages, identity keys, and core cryptosystems to thwart memory alteration or binary tampering.
             </p>
             <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
               <button class="nv-btn" onclick="runIntegrityCheck()">Run Integrity Check</button>
               <button class="nv-btn nv-btn-ghost" onclick="runTamperMonitor()">Start Tamper Monitor</button>
-              <button class="nv-btn nv-btn-danger" onclick="triggerNuke()">Emergency Nuke</button>
             </div>
           </div>
 
-          <div class="nv-card">
-            <div style="font-size: 0.8rem; font-weight: 600; color: var(--nv-muted); margin-bottom: 0.65rem;">Security Diagnostics Log</div>
-            <div class="nv-terminal" id="security-log" style="max-height: 240px; overflow-y: auto;">
->> Security tools ready.
+          <!-- Trust Ledger Audit Trail Card -->
+          <div class="nv-card" style="margin-bottom: 1.25rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+              <div style="font-weight: 600; color: #fff;">Append-Only Cryptographic Trust Ledger</div>
+              <button class="nv-btn nv-btn-ghost nv-btn-sm" onclick="loadTrustLedger()">Refresh Log</button>
+            </div>
+            <p style="font-size: 0.78rem; color: var(--nv-muted); margin-bottom: 0.75rem;">
+              Every security-critical event (peer pairing, key authorization, offline window extensions) is recorded in an immutable hash-chained audit log.
+            </p>
+            <div class="nv-terminal" id="security-ledger-log" style="max-height: 180px; overflow-y: auto; font-size: 0.75rem;">
+              Loading cryptographic ledger...
             </div>
           </div>
+
+          <!-- Danger Zone: Emergency Cryptographic Nuke -->
+          <div class="nv-card" style="border-color: rgba(239, 68, 68, 0.4); background: rgba(239, 68, 68, 0.04); margin-bottom: 1.25rem;">
+            <div style="font-weight: 600; color: var(--nv-danger); margin-bottom: 0.4rem; display: flex; align-items: center; gap: 0.5rem;">
+              <span>⚠️</span>
+              <span>Emergency Cryptographic Destruction (Self-Destruct)</span>
+            </div>
+            <p style="font-size: 0.8rem; color: var(--nv-muted); margin-bottom: 1rem;">
+              Permanently and irreversibly zeroes all master keys from RAM, overwrites the encrypted database file with multiple passes of cryptographic pseudorandom noise, unlinks all keystores, and halts the process.
+            </p>
+            <button class="nv-btn nv-btn-danger" onclick="triggerNuke()">
+              ☠️ Initiate Emergency Cryptographic Nuke
+            </button>
+          </div>
+
         </div>
 
         <!-- ==================== PAGE 5: SETTINGS ==================== -->
@@ -1761,6 +1861,7 @@
         if (!s) return;
         const deadlineEl = $('security-deadline-countdown');
         const badgeEl = $('security-window-badge');
+        const targetEl = $('security-deadline-target');
         
         let deadlineTime = null;
         if (s.offlineDeadline) {
@@ -1780,12 +1881,13 @@
           
           let formatted = '';
           if (days > 1) {
-            formatted = `${days} days, ${hours % 24} hours remaining`;
+            formatted = `${days} days, ${hours % 24}h remaining`;
           } else {
             formatted = `${hours}h ${mins}m ${secs}s remaining`;
           }
           
           if (deadlineEl) deadlineEl.textContent = formatted;
+          if (targetEl) targetEl.textContent = `Deadline: ${new Date(deadlineTime).toLocaleString()}`;
           if (badgeEl) {
             if (s.extension) {
               badgeEl.textContent = `Extended (${s.extension.duration})`;
@@ -1801,20 +1903,158 @@
       }
     }
 
-    async function requestSecurityExtension() {
-      const sel = $('setting-security-extension-select');
+    const incomingExtensionRequests = new Map();
+
+    function renderIncomingExtensionRequests() {
+      const container = $('incoming-extension-requests-container');
+      const badge = $('sidebar-security-badge');
+      if (!container) return;
+
+      const requests = Array.from(incomingExtensionRequests.values());
+      if (requests.length === 0) {
+        container.style.display = 'none';
+        container.innerHTML = '';
+        if (badge) badge.style.display = 'none';
+        return;
+      }
+
+      if (badge) {
+        badge.style.display = 'inline-block';
+        badge.textContent = String(requests.length);
+      }
+
+      container.style.display = 'block';
+      container.innerHTML = requests.map(req => `
+        <div class="nv-card" style="margin-bottom: 0.75rem; border-color: var(--nv-primary); background: rgba(16, 185, 129, 0.08); box-shadow: 0 0 15px rgba(16, 185, 129, 0.15);">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; margin-bottom: 0.5rem;">
+            <div>
+              <div style="font-weight: 700; color: #fff; font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem;">
+                <span>🔔</span>
+                <span>Incoming Security Window Extension Request</span>
+              </div>
+              <div style="font-size: 0.8rem; color: var(--nv-text-secondary); margin-top: 0.25rem;">
+                Device <strong>"${escapeHtml(req.deviceName || 'Mesh Peer')}"</strong> is requesting a <strong>${escapeHtml(req.duration)}</strong> offline security extension.
+              </div>
+            </div>
+            <span class="nv-badge success" style="text-transform: uppercase;">${escapeHtml(req.duration)}</span>
+          </div>
+          <div style="font-size: 0.75rem; color: var(--nv-muted); font-family: var(--nv-font-mono); margin-bottom: 0.75rem;">
+            Target Deadline: ${req.newDeadline ? new Date(req.newDeadline).toLocaleString() : 'Calculating...'}
+          </div>
+          <div style="display: flex; gap: 0.5rem;">
+            <button class="nv-btn nv-btn-sm" onclick="approvePeerExtension('${req.peerId}', '${req.requestId}', '${req.duration}', '${req.newDeadline || ''}')">
+              ✓ Approve &amp; Extend Peer
+            </button>
+            <button class="nv-btn nv-btn-ghost nv-btn-sm" style="color: var(--nv-danger);" onclick="rejectPeerExtension('${req.peerId}', '${req.requestId}')">
+              ✕ Decline
+            </button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function approvePeerExtension(peerId, requestId, duration, newDeadline) {
+      try {
+        setStatus(`Approving ${duration} extension for peer...`);
+        const r = await window.nexVault.approveExtension(peerId, requestId, duration, newDeadline);
+        if (r.success) {
+          incomingExtensionRequests.delete(requestId);
+          renderIncomingExtensionRequests();
+          setStatus(`Approved extension for peer device.`);
+          loadTrustLedger();
+        } else throw new Error(r.error);
+      } catch (err) {
+        setStatus('Error approving extension: ' + err.message);
+      }
+    }
+
+    async function rejectPeerExtension(peerId, requestId) {
+      try {
+        await window.nexVault.rejectExtension(peerId, requestId, 'Declined by desktop user');
+        incomingExtensionRequests.delete(requestId);
+        renderIncomingExtensionRequests();
+        setStatus('Declined peer extension request.');
+      } catch (err) {
+        setStatus('Error declining extension: ' + err.message);
+      }
+    }
+
+    function showPendingExtensionBanner(duration, requestId, newDeadline, broadcastCount) {
+      const banner = $('pending-extension-banner');
+      const badge = $('pending-extension-duration-badge');
+      const details = $('pending-extension-details');
+      if (banner) {
+        banner.style.display = 'block';
+        if (badge) badge.textContent = duration;
+        if (details) {
+          const dateStr = newDeadline ? new Date(newDeadline).toLocaleString() : '';
+          const peerNotice = (broadcastCount && broadcastCount > 0) ? `Broadcasted to ${broadcastCount} connected peer(s).` : 'Broadcasted across NexGrid mesh.';
+          details.textContent = `${peerNotice} Target deadline: ${dateStr}`;
+        }
+      }
+    }
+
+    function hidePendingExtensionBanner() {
+      const banner = $('pending-extension-banner');
+      if (banner) banner.style.display = 'none';
+    }
+
+    function cancelPendingExtensionRequest() {
+      hidePendingExtensionBanner();
+      setStatus('Dismissed pending extension banner.');
+    }
+
+    async function checkInSecurityNow() {
+      try {
+        setStatus('Checking in security heartbeat...');
+        await window.nexVault.startSecurityCountdown();
+        refreshSecurityStatus();
+        loadTrustLedger();
+        setStatus('Security check-in successful. 24-hour heartbeat reset.');
+      } catch (err) {
+        setStatus('Check-in error: ' + err.message);
+      }
+    }
+
+    async function loadTrustLedger() {
+      const ledgerLog = $('security-ledger-log');
+      if (!ledgerLog) return;
+      try {
+        const hist = await window.nexVault.getTrustHistory();
+        if (hist && hist.events && hist.events.length > 0) {
+          ledgerLog.innerHTML = hist.events.slice().reverse().map(e => `
+            <div style="padding: 0.35rem 0; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <span style="color: var(--nv-primary); font-weight: 600;">[${escapeHtml(e.eventType)}]</span>
+                <span style="color: #fff; margin-left: 0.4rem;">${escapeHtml(JSON.stringify(e.payload || {}))}</span>
+              </div>
+              <span style="color: var(--nv-muted); font-size: 0.7rem;">${new Date(e.timestamp).toLocaleTimeString()}</span>
+            </div>
+          `).join('');
+        } else {
+          ledgerLog.innerHTML = '<div style="color: var(--nv-muted); padding: 0.5rem 0;">No ledger events recorded yet.</div>';
+        }
+      } catch (err) {
+        ledgerLog.innerHTML = `<div style="color: var(--nv-danger);">Failed to load ledger: ${err.message}</div>`;
+      }
+    }
+
+    async function requestSecurityExtension(forceLocal = false) {
+      const sel = $('security-extension-select') || $('setting-security-extension-select');
       const dur = sel ? sel.value : '1week';
       setStatus('Requesting security window extension...');
       try {
-        const r = await window.nexVault.extendSecurityWindow(dur);
+        const r = await window.nexVault.extendSecurityWindow(dur, { mesh: !forceLocal, local: forceLocal });
         if (r.success) {
           if (r.pendingApproval) {
-            setStatus(`Extension request broadcasted to mesh peers for approval (${dur})`);
-            alert(`Extension for ${dur} requires 1 approval from a trusted mesh peer. The request has been broadcasted across NexGrid.`);
+            setStatus(`Extension request broadcasted to mesh peers (${dur})`);
+            showPendingExtensionBanner(dur, r.requestId, r.newDeadline, r.broadcastCount);
           } else {
             setStatus(`Security window extended to ${new Date(r.expiresAt).toLocaleDateString()}`);
+            hidePendingExtensionBanner();
           }
           refreshSecurityStatus();
+          loadTrustLedger();
         } else throw new Error(r.error);
       } catch (e) {
         setStatus('Extension error: ' + e.message);
@@ -2054,10 +2294,38 @@
           }
         });
       }
+      if (window.nexVault.onPeerRequestsApproval) {
+        window.nexVault.onPeerRequestsApproval((data) => {
+          if (data && data.requestId) {
+            incomingExtensionRequests.set(data.requestId, data);
+            renderIncomingExtensionRequests();
+            setStatus(`🔔 Incoming extension approval request from "${data.deviceName || 'Mesh Peer'}"`);
+          }
+        });
+      }
+      if (window.nexVault.onExtensionApproved) {
+        window.nexVault.onExtensionApproved((data) => {
+          hidePendingExtensionBanner();
+          setStatus(`🎉 Extension approved! Security window extended (${data.duration})`);
+          refreshSecurityStatus();
+          loadTrustLedger();
+        });
+      }
+      if (window.nexVault.onExtensionRejected) {
+        window.nexVault.onExtensionRejected((data) => {
+          hidePendingExtensionBanner();
+          setStatus(`❌ Extension request declined: ${data.reason || 'Declined'}`);
+        });
+      }
     }
 
     // Expose helpers
     window.navigateTo = navigateTo;
+    window.approvePeerExtension = approvePeerExtension;
+    window.rejectPeerExtension = rejectPeerExtension;
+    window.cancelPendingExtensionRequest = cancelPendingExtensionRequest;
+    window.checkInSecurityNow = checkInSecurityNow;
+    window.loadTrustLedger = loadTrustLedger;
     window.switchAuthTab = switchAuthTab;
     window.toggleTokenView = toggleTokenView;
     window.handleNewUser = handleNewUser;

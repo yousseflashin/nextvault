@@ -15,6 +15,7 @@ import android.view.autofill.AutofillValue;
 import android.widget.RemoteViews;
 import android.os.CancellationSignal;
 import android.os.Build;
+import android.util.Pair;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.util.ArrayList;
@@ -27,9 +28,27 @@ public class NexVaultAutofillService extends AutofillService {
     @Override
     public void onFillRequest(FillRequest request, CancellationSignal cancellationSignal, FillCallback callback) {
         try {
-            AssistStructure structure = request.getFillContexts().get(request.getFillContexts().size() - 1).getStructure();
+            List<FillContext> contexts = request.getFillContexts();
+            if (contexts == null || contexts.isEmpty()) {
+                callback.onSuccess(null);
+                return;
+            }
+
+            AssistStructure structure = contexts.get(contexts.size() - 1).getStructure();
             List<Field> fields = new ArrayList<>();
-            String domain = collectFields(structure.getWindowNodeAt(0).getRootViewNode(), fields);
+            String domain = "";
+
+            int windowCount = structure.getWindowNodeCount();
+            for (int w = 0; w < windowCount; w++) {
+                AssistStructure.WindowNode window = structure.getWindowNodeAt(w);
+                if (window != null && window.getRootViewNode() != null) {
+                    String foundDomain = collectFields(window.getRootViewNode(), fields);
+                    if (domain.isEmpty() && !foundDomain.isEmpty()) {
+                        domain = foundDomain;
+                    }
+                }
+            }
+
             boolean hasPassword = false;
             boolean hasUsername = false;
             for (Field field : fields) {
@@ -45,6 +64,7 @@ public class NexVaultAutofillService extends AutofillService {
                 }
             }
             fields.removeIf(field -> !field.password && !field.username);
+
             if (domain.isEmpty() || fields.isEmpty()) {
                 callback.onSuccess(null);
                 return;
@@ -55,10 +75,10 @@ public class NexVaultAutofillService extends AutofillService {
             boolean matched = false;
             for (int i = 0; i < credentials.length(); i++) {
                 JSONObject credential = credentials.getJSONObject(i);
-                String service = normalize(credential.optString("service"));
+                String service = credential.optString("service");
                 if (!matches(domain, service)) continue;
 
-                Dataset.Builder dataset = new Dataset.Builder(presentation(credential.optString("service"), credential.optString("username")));
+                Dataset.Builder dataset = new Dataset.Builder(presentation(service, credential.optString("username")));
                 for (Field field : fields) {
                     String value = field.password ? credential.optString("password") : credential.optString("username");
                     if (!value.isEmpty()) dataset.setValue(field.id, AutofillValue.forText(value));
@@ -66,6 +86,7 @@ public class NexVaultAutofillService extends AutofillService {
                 response.addDataset(dataset.build());
                 matched = true;
             }
+
             if (hasPasswordField(fields)) {
                 Dataset.Builder generator = new Dataset.Builder(presentation("NEXVAULT", "Generate strong password"));
                 String generated = generatePassword();
@@ -74,6 +95,7 @@ public class NexVaultAutofillService extends AutofillService {
                 }
                 response.addDataset(generator.build());
                 matched = true;
+
                 AutofillId[] saveIds = new AutofillId[fields.size()];
                 for (int i = 0; i < fields.size(); i++) saveIds[i] = fields.get(i).id;
                 response.setSaveInfo(new SaveInfo.Builder(
@@ -81,6 +103,7 @@ public class NexVaultAutofillService extends AutofillService {
                     saveIds
                 ).build());
             }
+
             callback.onSuccess(matched ? response.build() : null);
         } catch (Exception error) {
             callback.onFailure("NexVault autofill is unavailable");
@@ -89,20 +112,74 @@ public class NexVaultAutofillService extends AutofillService {
 
     private String collectFields(AssistStructure.ViewNode node, List<Field> fields) {
         String domain = normalize(node.getWebDomain());
+
+        // Check for URL address bar in Chrome/Chromium and other browsers
+        String idEntry = node.getIdEntry();
+        if (domain.isEmpty() && idEntry != null) {
+            String lowerId = idEntry.toLowerCase(Locale.ROOT);
+            if (lowerId.contains("url_bar") || lowerId.contains("location_bar") || lowerId.contains("search_box")) {
+                CharSequence text = node.getText();
+                if (text != null && text.length() > 0) {
+                    String urlCandidate = normalize(text.toString());
+                    if (!urlCandidate.isEmpty() && urlCandidate.contains(".")) {
+                        domain = urlCandidate;
+                    }
+                }
+            }
+        }
+
         String[] hints = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ? node.getAutofillHints() : null;
         String hintText = hints == null ? "" : String.join(" ", hints).toLowerCase(Locale.ROOT);
-        boolean password = hintText.contains("password") || (node.getInputType() & 0x00000081) != 0;
+
+        int inputType = node.getInputType();
+        boolean password = hintText.contains("password")
+            || (inputType & 0x00000081) != 0
+            || (inputType & 0x000000e0) != 0; // textPassword or textWebPassword
+
         String fieldName = ((node.getHint() == null ? "" : node.getHint()) + " "
-            + (node.getIdEntry() == null ? "" : node.getIdEntry())).toLowerCase(Locale.ROOT);
+            + (node.getIdEntry() == null ? "" : node.getIdEntry()) + " "
+            + (node.getContentDescription() == null ? "" : node.getContentDescription())).toLowerCase(Locale.ROOT);
+
         boolean username = hintText.contains("username") || hintText.contains("email") || hintText.contains("phone")
-            || fieldName.matches(".*(user|email|login|account|phone|identifier).*" );
+            || fieldName.matches(".*(user|email|login|account|phone|identifier).*");
+
+        // Inspect HTML Info if available (Chrome and WebViews)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && node.getHtmlInfo() != null) {
+            try {
+                AssistStructure.ViewNode.HtmlInfo htmlInfo = node.getHtmlInfo();
+                String tag = htmlInfo.getTag();
+                if ("input".equalsIgnoreCase(tag)) {
+                    List<Pair<String, String>> attrs = htmlInfo.getAttributes();
+                    if (attrs != null) {
+                        for (Pair<String, String> attr : attrs) {
+                            String key = attr.first != null ? attr.first.toLowerCase(Locale.ROOT) : "";
+                            String val = attr.second != null ? attr.second.toLowerCase(Locale.ROOT) : "";
+                            if ("type".equals(key)) {
+                                if (val.contains("password")) password = true;
+                                if (val.contains("email") || val.contains("text")) username |= !password;
+                            } else if ("autocomplete".equals(key)) {
+                                if (val.contains("password")) password = true;
+                                if (val.contains("username") || val.contains("email")) username = true;
+                            } else if ("name".equals(key) || "id".equals(key) || "placeholder".equals(key)) {
+                                if (val.contains("pass")) password = true;
+                                if (val.contains("user") || val.contains("email") || val.contains("login")) username = true;
+                            }
+                        }
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+
         boolean ordinaryTextInput = node.getAutofillId() != null && node.getInputType() != 0 && node.getChildCount() == 0;
         if (node.getAutofillId() != null && (password || username || ordinaryTextInput)) {
             fields.add(new Field(node.getAutofillId(), password, username));
         }
+
         for (int i = 0; i < node.getChildCount(); i++) {
             String childDomain = collectFields(node.getChildAt(i), fields);
-            if (domain.isEmpty()) domain = childDomain;
+            if (domain.isEmpty() && !childDomain.isEmpty()) {
+                domain = childDomain;
+            }
         }
         return domain;
     }
@@ -115,29 +192,73 @@ public class NexVaultAutofillService extends AutofillService {
     }
 
     private boolean matches(String domain, String service) {
-        return !service.isEmpty() && (domain.equals(service) || domain.endsWith("." + service) || service.endsWith("." + domain));
+        if (domain == null || domain.isEmpty() || service == null || service.isEmpty()) return false;
+        String normDomain = normalize(domain);
+        String normService = normalize(service);
+
+        // 1. Direct host match or subdomain match
+        if (normDomain.equals(normService)
+            || normDomain.endsWith("." + normService)
+            || normService.endsWith("." + normDomain)) {
+            return true;
+        }
+
+        // 2. Base stem match (e.g. "github" matches "github.com", "google" matches "accounts.google.com")
+        String stemDomain = extractStem(normDomain);
+        String stemService = extractStem(normService);
+        if (!stemDomain.isEmpty() && !stemService.isEmpty()) {
+            if (stemDomain.equalsIgnoreCase(stemService)
+                || normDomain.contains(stemService)
+                || normService.contains(stemDomain)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private String extractStem(String host) {
+        if (host == null || host.isEmpty()) return "";
+        int lastDot = host.lastIndexOf('.');
+        String withoutTld = (lastDot > 0) ? host.substring(0, lastDot) : host;
+        int prevDot = withoutTld.lastIndexOf('.');
+        return (prevDot >= 0) ? withoutTld.substring(prevDot + 1) : withoutTld;
     }
 
     private String normalize(String value) {
         if (value == null) return "";
         String normalized = value.trim().toLowerCase(Locale.ROOT);
-        normalized = normalized.replaceFirst("^https?://", "").replaceFirst("^www\\.", "");
+        normalized = normalized.replaceFirst("^https?://", "");
+        normalized = normalized.replaceFirst("^www\\.", "");
         int slash = normalized.indexOf('/');
-        return slash >= 0 ? normalized.substring(0, slash) : normalized;
+        if (slash >= 0) normalized = normalized.substring(0, slash);
+        int colon = normalized.indexOf(':');
+        if (colon >= 0) normalized = normalized.substring(0, colon);
+        return normalized;
     }
 
-    @Override public void onSaveRequest(android.service.autofill.SaveRequest request, android.service.autofill.SaveCallback callback) {
+    @Override
+    public void onSaveRequest(android.service.autofill.SaveRequest request, android.service.autofill.SaveCallback callback) {
         try {
             SavedValues values = new SavedValues();
-            AssistStructure.ViewNode root = request.getFillContexts().get(request.getFillContexts().size() - 1)
-                .getStructure().getWindowNodeAt(0).getRootViewNode();
-            collectSavedValues(root, values);
+            List<FillContext> contexts = request.getFillContexts();
+            if (contexts != null && !contexts.isEmpty()) {
+                AssistStructure structure = contexts.get(contexts.size() - 1).getStructure();
+                int windowCount = structure.getWindowNodeCount();
+                for (int w = 0; w < windowCount; w++) {
+                    AssistStructure.WindowNode window = structure.getWindowNodeAt(w);
+                    if (window != null && window.getRootViewNode() != null) {
+                        collectSavedValues(window.getRootViewNode(), values);
+                    }
+                }
+            }
+
             if (!values.domain.isEmpty() && !values.password.isEmpty()) {
                 JSONArray credentials = new JSONArray(NativeCredentialStore.read(this));
                 JSONObject entry = null;
                 for (int i = 0; i < credentials.length(); i++) {
                     JSONObject candidate = credentials.getJSONObject(i);
-                    if (matches(values.domain, normalize(candidate.optString("service")))) {
+                    if (matches(values.domain, candidate.optString("service"))) {
                         entry = candidate;
                         break;
                     }
@@ -147,7 +268,9 @@ public class NexVaultAutofillService extends AutofillService {
                     entry.put("service", values.domain);
                     credentials.put(entry);
                 }
-                entry.put("username", values.username);
+                if (!values.username.isEmpty()) {
+                    entry.put("username", values.username);
+                }
                 entry.put("password", values.password);
                 NativeCredentialStore.write(this, credentials.toString());
             }
@@ -160,6 +283,21 @@ public class NexVaultAutofillService extends AutofillService {
     private void collectSavedValues(AssistStructure.ViewNode node, SavedValues values) {
         String domain = normalize(node.getWebDomain());
         if (!domain.isEmpty()) values.domain = domain;
+
+        String idEntry = node.getIdEntry();
+        if (values.domain.isEmpty() && idEntry != null) {
+            String lowerId = idEntry.toLowerCase(Locale.ROOT);
+            if (lowerId.contains("url_bar") || lowerId.contains("location_bar") || lowerId.contains("search_box")) {
+                CharSequence text = node.getText();
+                if (text != null && text.length() > 0) {
+                    String urlCandidate = normalize(text.toString());
+                    if (!urlCandidate.isEmpty() && urlCandidate.contains(".")) {
+                        values.domain = urlCandidate;
+                    }
+                }
+            }
+        }
+
         String hints = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && node.getAutofillHints() != null
             ? String.join(" ", node.getAutofillHints()).toLowerCase(Locale.ROOT)
             : "";

@@ -101,4 +101,52 @@ describe('NexVault Security', () => {
     security.cancelNuke();
     expect(security.nukeWarningTimer).toBeNull();
   });
+
+  test('should create peer mesh extension request and apply upon approval', async () => {
+    const reqResult = await security.extendSecurityWindow('1month', { mesh: true });
+    expect(reqResult.success).toBe(true);
+    expect(reqResult.pendingApproval).toBe(true);
+    expect(reqResult.requestId).toBeDefined();
+
+    // Generate approval response from a peer
+    const approvalResponse = {
+      type: 'extension-approval-response',
+      requestId: reqResult.requestId,
+      approved: true,
+      approverDeviceId: 'peer-device-key-123',
+      approverDeviceName: 'Pixel 8 Pro',
+      duration: '1month',
+      newDeadline: reqResult.newDeadline
+    };
+
+    const approved = security.handlePeerApproval(approvalResponse);
+    expect(approved).toBe(true);
+
+    const status = security.getSecurityStatus();
+    expect(status.extension).toBeDefined();
+    expect(status.extension.duration).toBe('1month');
+    expect(status.extension.approverName).toBe('Pixel 8 Pro');
+  });
+
+  test('should handle peer extension rejection', async () => {
+    const reqResult = await security.extendSecurityWindow('3months', { mesh: true });
+    expect(reqResult.pendingApproval).toBe(true);
+
+    let rejectedEvent = null;
+    security.on('extension-rejected', (data) => {
+      rejectedEvent = data;
+    });
+
+    const rejection = {
+      type: 'extension-approval-response',
+      requestId: reqResult.requestId,
+      approved: false,
+      reason: 'User declined'
+    };
+
+    const result = security.handlePeerApproval(rejection);
+    expect(result).toBe(false);
+    expect(rejectedEvent).toBeDefined();
+    expect(rejectedEvent.reason).toBe('User declined');
+  });
 });

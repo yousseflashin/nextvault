@@ -3,7 +3,22 @@ import type { CSSProperties, ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './cyber/cyber.css';
 import './main.css';
-import { getSavedRelayUrl, CURRENT_VERSION, parseOtpAuthUri, parseBulkImport, clearAutofillCredentials, syncAutofillCredentials, mergeNativeAutofillCredentials, openAutofillSettings, getSecurityWindowStatus, extendOfflineSecurityWindow, emergencyNukeVault } from './mobileVault';
+import {
+  getSavedRelayUrl,
+  CURRENT_VERSION,
+  parseOtpAuthUri,
+  parseBulkImport,
+  clearAutofillCredentials,
+  syncAutofillCredentials,
+  mergeNativeAutofillCredentials,
+  openAutofillSettings,
+  getSecurityWindowStatus,
+  extendOfflineSecurityWindow,
+  requestPeerSecurityExtension,
+  respondToPeerSecurityExtension,
+  emergencyNukeVault,
+  type PeerExtensionRequest
+} from './mobileVault';
 import { startCameraQrScanner, scanQrFromImageSource, requestCameraPermission } from './qrScanner';
 
 function CircularCountdown({ seconds, period = 30, size = 26 }: { seconds: number; period?: number; size?: number }) {
@@ -396,7 +411,7 @@ function BulkImportModal({
   );
 }
 
-type TabType = 'vault' | 'quick-fill' | 'otp' | 'grid' | 'settings';
+type TabType = 'vault' | 'otp' | 'grid' | 'security' | 'settings' | 'quick-fill';
 type QuickFillView = 'vault' | 'generator' | 'settings';
 
 function App() {
@@ -438,6 +453,15 @@ function App() {
   const [autoLockMinutes, setAutoLockMinutesState] = useState<number | 'never'>(() => (window as any).nexVault?.getAutoLockMinutes?.() ?? 5);
   const [securityDeadlineStatus, setSecurityDeadlineStatus] = useState<{ isWithinWindow: boolean; deadline: string; remainingSeconds: number; isExpired: boolean } | null>(null);
   const [selectedExtension, setSelectedExtension] = useState<'1week' | '1month' | '3months'>('1week');
+  const [incomingExtensionRequest, setIncomingExtensionRequest] = useState<PeerExtensionRequest | null>(null);
+  const [pendingExtensionRequest, setPendingExtensionRequest] = useState<{ requestId: string; duration: string; expiresAt: string; peersCount?: number } | null>(() => {
+    try {
+      const saved = localStorage.getItem('nexvault_pending_extension_request');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
 
   // NexGrid State
   const [relayUrl, setRelayUrl] = useState(() => getSavedRelayUrl());
@@ -651,12 +675,82 @@ function App() {
     showToast(`Auto-lock timeout set to: ${val === 'never' ? 'Disabled' : `${val} Minutes`}`);
   }
 
-  function onExtendSecurityWindow() {
-    const res = extendOfflineSecurityWindow(selectedExtension);
-    if (res.success) {
-      setSecurityDeadlineStatus(getSecurityWindowStatus());
-      showToast(`Security window extended (${res.duration})`);
+  function formatRemainingCountdown(diffSeconds?: number) {
+    const diff = diffSeconds ?? (24 * 3600);
+    const hours = Math.floor(diff / 3600);
+    const mins = Math.floor((diff % 3600) / 60);
+    const secs = diff % 60;
+    const days = Math.floor(hours / 24);
+    if (days > 1) {
+      return `${days} days, ${hours % 24}h remaining`;
     }
+    return `${hours}h ${mins}m ${secs}s remaining`;
+  }
+
+  function onRequestSecurityExtension(forceLocal = false) {
+    if (forceLocal) {
+      const res = extendOfflineSecurityWindow(selectedExtension);
+      if (res.success) {
+        setSecurityDeadlineStatus(getSecurityWindowStatus());
+        setPendingExtensionRequest(null);
+        try { localStorage.removeItem('nexvault_pending_extension_request'); } catch {}
+        showToast(`Standalone grace extension applied (${res.duration})`);
+      }
+      return;
+    }
+
+    const res = requestPeerSecurityExtension(selectedExtension);
+    if (res.success) {
+      setPendingExtensionRequest({
+        requestId: res.requestId,
+        duration: res.duration,
+        expiresAt: res.expiresAt,
+        peersCount: res.peersCount
+      });
+      if (res.peersCount > 0) {
+        showToast(`Request broadcasted to ${res.peersCount} mesh device(s)`);
+      } else {
+        showToast(`Request sent across mesh. Standalone grace is also available.`);
+      }
+    }
+  }
+
+  function onApprovePeerExtension() {
+    if (!incomingExtensionRequest) return;
+    const res = respondToPeerSecurityExtension(
+      incomingExtensionRequest.from,
+      incomingExtensionRequest.requestId,
+      incomingExtensionRequest.duration,
+      true
+    );
+    if (res.success) {
+      showToast(`Approved ${incomingExtensionRequest.duration} extension for "${incomingExtensionRequest.deviceName}"`);
+      setIncomingExtensionRequest(null);
+    } else {
+      showToast(res.error || 'Failed to approve extension');
+    }
+  }
+
+  function onRejectPeerExtension() {
+    if (!incomingExtensionRequest) return;
+    respondToPeerSecurityExtension(
+      incomingExtensionRequest.from,
+      incomingExtensionRequest.requestId,
+      incomingExtensionRequest.duration,
+      false,
+      'Declined by mobile user'
+    );
+    showToast('Declined extension request');
+    setIncomingExtensionRequest(null);
+  }
+
+  function onCheckInNow() {
+    if (typeof localStorage !== 'undefined') {
+      const dayMs = 24 * 60 * 60 * 1000;
+      localStorage.setItem('nexvault_offline_deadline', new Date(Date.now() + dayMs).toISOString());
+    }
+    setSecurityDeadlineStatus(getSecurityWindowStatus());
+    showToast('Check-in confirmed! 24-hour heartbeat reset.');
   }
 
   async function onEmergencyNuke() {
@@ -780,6 +874,24 @@ function App() {
           refreshVault(false);
           refreshOTPs(false);
           showToast('Vault updated from mesh sync');
+        },
+        onIncomingExtensionRequest: (req: any) => {
+          setIncomingExtensionRequest(req);
+          log(`🔔 Incoming security window extension request from "${req.deviceName}" (${req.duration})`);
+          showToast(`🔔 Extension request from ${req.deviceName} (${req.duration})`);
+        },
+        onExtensionApproved: (data: any) => {
+          setPendingExtensionRequest(null);
+          try { localStorage.removeItem('nexvault_pending_extension_request'); } catch {}
+          setSecurityDeadlineStatus(getSecurityWindowStatus());
+          showToast(`🎉 Extension approved by ${data.approverName || 'peer'}!`);
+          log(`🎉 Extension approved by ${data.approverName || 'peer'}!`);
+        },
+        onExtensionRejected: (data: any) => {
+          setPendingExtensionRequest(null);
+          try { localStorage.removeItem('nexvault_pending_extension_request'); } catch {}
+          showToast(`❌ Extension request declined: ${data.reason || 'Declined'}`);
+          log(`❌ Extension request declined: ${data.reason || 'Declined'}`);
         }
       });
       if (r.success) {
@@ -1118,19 +1230,65 @@ function App() {
             <span className="nv-app-title">Next<span>Vault</span></span>
             <span className="nv-badge" style={{ fontSize: '0.62rem' }}>v{CURRENT_VERSION}</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
             {unlocked && (
-              <button
-                className="nv-btn nv-btn-ghost"
-                style={{ padding: '0.25rem 0.55rem', fontSize: '0.7rem' }}
-                onClick={onLockVault}
-              >
-                Lock
-              </button>
+              <>
+                <button
+                  className="nv-btn nv-btn-ghost"
+                  style={{ padding: '0.25rem 0.55rem', fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '3px' }}
+                  onClick={openQuickFill}
+                  title="Quick Fill credentials"
+                >
+                  <Shield size={12} />
+                  <span>Fill</span>
+                </button>
+                <button
+                  className="nv-btn nv-btn-ghost"
+                  style={{ padding: '0.25rem 0.55rem', fontSize: '0.7rem' }}
+                  onClick={onLockVault}
+                >
+                  Lock
+                </button>
+              </>
             )}
             <StatusPill ok={unlocked} label={unlocked ? 'unlocked' : 'locked'} />
           </div>
         </header>
+
+        {/* Incoming Extension Approval Banner */}
+        {unlocked && incomingExtensionRequest && (
+          <div style={{
+            margin: '0.75rem 1rem 0',
+            padding: '0.75rem 1rem',
+            background: 'rgba(16, 185, 129, 0.15)',
+            border: '1px solid var(--nv-primary)',
+            borderRadius: 'var(--nv-radius-sm)',
+            boxShadow: '0 0 15px rgba(16, 185, 129, 0.25)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '0.5rem'
+          }}>
+            <div>
+              <div style={{ fontWeight: 700, color: '#fff', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span>🔔</span>
+                <span>Extension Request from "{incomingExtensionRequest.deviceName}"</span>
+              </div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--nv-text-secondary)' }}>
+                Requesting <strong>{incomingExtensionRequest.duration}</strong> offline security extension.
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '0.4rem' }}>
+              <button className="nv-btn nv-btn-sm" onClick={onApprovePeerExtension}>
+                ✓ Approve
+              </button>
+              <button className="nv-btn nv-btn-ghost nv-btn-sm" style={{ color: 'var(--nv-danger)' }} onClick={onRejectPeerExtension}>
+                ✕ Decline
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Update Notification Banner */}
         {updateInfo && updateInfo.hasUpdate && (
@@ -1842,81 +2000,183 @@ function App() {
                 </div>
               )}
 
-              {/* PAGE 4: SETTINGS */}
+              {/* PAGE 4: SECURITY CENTER */}
+              {activeTab === 'security' && (
+                <div>
+                  {/* Incoming Peer Extension Request Alert Card */}
+                  {incomingExtensionRequest && (
+                    <Card style={{ marginBottom: '1rem', borderColor: 'var(--nv-primary)', background: 'rgba(16, 185, 129, 0.08)', boxShadow: '0 0 15px rgba(16, 185, 129, 0.2)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                        <div style={{ fontWeight: 700, color: '#fff', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <span>🔔</span>
+                          <span>Incoming Extension Request</span>
+                        </div>
+                        <span className="nv-badge success" style={{ textTransform: 'uppercase' }}>{incomingExtensionRequest.duration}</span>
+                      </div>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--nv-text-secondary)', margin: '0 0 0.75rem' }}>
+                        Device <strong>"{incomingExtensionRequest.deviceName}"</strong> is requesting approval to extend its offline security deadline.
+                      </p>
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <button className="nv-btn nv-btn-sm" onClick={onApprovePeerExtension}>
+                          ✓ Approve Extension
+                        </button>
+                        <button className="nv-btn nv-btn-ghost nv-btn-sm" style={{ color: 'var(--nv-danger)' }} onClick={onRejectPeerExtension}>
+                          ✕ Decline
+                        </button>
+                      </div>
+                    </Card>
+                  )}
+
+                  {/* Pending Local Extension Request Card */}
+                  {pendingExtensionRequest && (
+                    <Card style={{ marginBottom: '1rem', borderColor: 'var(--nv-accent)', background: 'rgba(14, 165, 233, 0.08)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                        <div style={{ fontWeight: 700, color: '#fff', fontSize: '0.85rem' }}>
+                          Awaiting Peer Approval
+                        </div>
+                        <span className="nv-badge" style={{ background: 'var(--nv-accent)', color: '#fff' }}>{pendingExtensionRequest.duration}</span>
+                      </div>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--nv-text-secondary)', margin: '0 0 0.75rem' }}>
+                        Extension request was broadcasted across NexGrid. Please tap "Approve" on your desktop or secondary paired device.
+                      </p>
+                      <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={() => {
+                        setPendingExtensionRequest(null);
+                        try { localStorage.removeItem('nexvault_pending_extension_request'); } catch {}
+                      }}>
+                        Dismiss
+                      </button>
+                    </Card>
+                  )}
+
+                  {/* Dead Man's Switch Card */}
+                  <Card style={{ marginBottom: '1rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                      <div style={{ fontWeight: 600, color: '#fff' }}>Dead Man's Switch &amp; Security Window</div>
+                      <span className="nv-badge success">24h Heartbeat</span>
+                    </div>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--nv-muted)', margin: '0 0 0.75rem' }}>
+                      Periodic cryptographic check-in. If offline beyond this deadline without an authorized extension, keys zero out and vault locks.
+                    </p>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '0.75rem',
+                      marginBottom: '0.85rem',
+                      padding: '0.75rem 0.85rem',
+                      background: 'var(--nv-bg-2)',
+                      borderRadius: 'var(--nv-radius-sm)',
+                      border: '1px solid var(--nv-border)'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <div style={{ fontSize: '1.4rem' }}>⏳</div>
+                        <div>
+                          <div style={{ fontSize: '0.65rem', color: 'var(--nv-muted)', textTransform: 'uppercase' }}>Security Window Remaining</div>
+                          <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--nv-primary)', fontFamily: 'var(--nv-font-mono)' }}>
+                            {formatRemainingCountdown(securityDeadlineStatus?.remainingSeconds)}
+                          </div>
+                          <div style={{ fontSize: '0.65rem', color: 'var(--nv-muted)' }}>
+                            Deadline: {securityDeadlineStatus?.deadline ? new Date(securityDeadlineStatus.deadline).toLocaleDateString() : 'Calculating...'}
+                          </div>
+                        </div>
+                      </div>
+                      <button className="nv-btn nv-btn-sm" onClick={onCheckInNow} title="Reset 24h timer">
+                        Check In
+                      </button>
+                    </div>
+
+                    {/* Mesh Extension Controls */}
+                    <div style={{ padding: '0.75rem', background: 'var(--nv-surface-2)', borderRadius: 'var(--nv-radius-sm)', border: '1px solid var(--nv-border)' }}>
+                      <div style={{ fontWeight: 600, fontSize: '0.8rem', color: '#fff', marginBottom: '0.25rem' }}>Request Offline Window Extension</div>
+                      <p style={{ fontSize: '0.7rem', color: 'var(--nv-muted)', margin: '0 0 0.65rem' }}>
+                        Traveling offline? Broadcast an extension request to be authorized by your paired mesh nodes.
+                      </p>
+                      <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+                        {(['1week', '1month', '3months'] as const).map(d => (
+                          <button
+                            key={d}
+                            className={`nv-btn nv-btn-sm ${selectedExtension === d ? 'nv-btn-accent' : 'nv-btn-ghost'}`}
+                            onClick={() => setSelectedExtension(d)}
+                            style={{ fontSize: '0.72rem', padding: '0.35rem 0.65rem' }}
+                          >
+                            {d === '1week' ? '1 Week' : d === '1month' ? '1 Month' : '3 Months (Quorum)'}
+                          </button>
+                        ))}
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                        <button className="nv-btn nv-btn-accent nv-btn-sm" onClick={() => onRequestSecurityExtension(false)}>
+                          🌐 Request Mesh Peer Approval
+                        </button>
+                        <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={() => onRequestSecurityExtension(true)} title="Single device grace extension">
+                          Standalone Grace
+                        </button>
+                      </div>
+                    </div>
+                  </Card>
+
+                  {/* Cryptographic Protection Card */}
+                  <Card style={{ marginBottom: '1rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                      <div style={{ fontWeight: 600, color: '#fff' }}>Cryptographic Memory Shield</div>
+                      <span className="nv-badge success">Active</span>
+                    </div>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--nv-muted)', margin: '0 0 0.5rem' }}>
+                      Hardware-backed Android KeyStore AES-256-GCM encryption. Keys are evicted and zeroed upon auto-lock or app backgrounding. Android FLAG_SECURE blocks screenshots.
+                    </p>
+                  </Card>
+
+                  {/* Danger Zone: Emergency Nuke */}
+                  <Card style={{ borderColor: 'rgba(239, 68, 68, 0.35)', background: 'rgba(239, 68, 68, 0.04)' }}>
+                    <div style={{ fontWeight: 600, color: 'var(--nv-danger)', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <span>⚠️</span>
+                      <span>Emergency Cryptographic Destruction</span>
+                    </div>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--nv-muted)', margin: '0 0 0.75rem' }}>
+                      Self-destruct protocol: Immediately purges all credentials, 2FA tokens, Android hardware keystore autofill cache, and local encryption keys from this device.
+                    </p>
+                    <button className="nv-btn nv-btn-danger nv-btn-sm" onClick={onEmergencyNuke}>
+                      ☠️ Emergency Cryptographic Nuke
+                    </button>
+                  </Card>
+                </div>
+              )}
+
+              {/* PAGE 5: SETTINGS */}
               {activeTab === 'settings' && (
                 <div>
-                  <Card style={{ marginBottom: '1rem' }}>
-                    <div style={{ fontWeight: 600, color: '#fff', marginBottom: '0.35rem' }}>Vault Identity &amp; Token</div>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--nv-muted)', margin: '0 0 0.75rem' }}>
-                      Your cryptographically signed identity token.
-                    </p>
-                    {tokenJson ? (
-                      <>
-                        <textarea
-                          className="nv-textarea nv-mono"
-                          rows={4}
-                          readOnly
-                          value={tokenJson}
-                          style={{ fontSize: '0.72rem', marginBottom: '0.5rem' }}
-                        />
-                        <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={copyBootstrapToken}>
-                          Copy Token JSON
-                        </button>
-                      </>
-                    ) : (
-                      <p style={{ fontSize: '0.75rem', color: 'var(--nv-muted)' }}>No token loaded in memory.</p>
-                    )}
-                  </Card>
-
+                  {/* Browser & System Autofill Card with Chrome Guide */}
                   <Card style={{ marginBottom: '1rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-                      <div style={{ fontWeight: 600, color: '#fff' }}>Application Updates</div>
-                      <span className="nv-badge">v{CURRENT_VERSION}</span>
+                      <div style={{ fontWeight: 600, color: '#fff' }}>Android &amp; Google Chrome Autofill</div>
+                      <span className="nv-badge success">Enabled</span>
                     </div>
                     <p style={{ fontSize: '0.75rem', color: 'var(--nv-muted)', margin: '0 0 0.75rem' }}>
-                      Check GitHub releases for seamless in-place updates.
+                      NextVault provides system-level autofill for native Android apps and mobile web browsers (Google Chrome, Brave, Firefox, Edge).
                     </p>
-                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                      <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={() => checkMobileUpdates(true)}>
-                        Check for Updates
-                      </button>
-                      {updateInfo && updateInfo.hasUpdate && (
-                        <button
-                          className="nv-btn nv-btn-accent nv-btn-sm"
-                          disabled={isUpdating}
-                          onClick={onApplyMobileUpdate}
-                        >
-                          {isUpdating ? 'Installing...' : `Install v${updateInfo.latestVersion}`}
-                        </button>
-                      )}
+                    
+                    <div style={{ background: 'var(--nv-bg-2)', padding: '0.75rem', borderRadius: 'var(--nv-radius-sm)', border: '1px solid var(--nv-border)', marginBottom: '0.75rem' }}>
+                      <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#fff', marginBottom: '0.35rem' }}>📱 Chrome Web Autofill Setup:</div>
+                      <ol style={{ fontSize: '0.72rem', color: 'var(--nv-text-secondary)', margin: 0, paddingLeft: '1.2rem', lineHeight: '1.5' }}>
+                        <li>Tap <strong>"Open Autofill Settings"</strong> below and set NexVault as your Android autofill service.</li>
+                        <li>In <strong>Google Chrome</strong>: tap <strong>⋮ (Menu) → Settings → Autofill options</strong>.</li>
+                        <li>Select <strong>"Autofill using another service"</strong>.</li>
+                        <li>Tap <strong>"Sync Vault to Native Autofill"</strong> below to prime stored logins into Android KeyStore.</li>
+                      </ol>
                     </div>
-                  </Card>
 
-                  <Card style={{ marginBottom: '1rem' }}>
-                    <div style={{ fontWeight: 600, color: '#fff', marginBottom: '0.35rem' }}>Data &amp; Migration</div>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--nv-muted)', margin: '0 0 0.75rem' }}>
-                      Import passwords and 2FA accounts from Chrome, Bitwarden, 1Password, or otpauth:// links, or delete all vault entries.
-                    </p>
                     <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                      <button className="nv-btn nv-btn-accent nv-btn-sm" onClick={() => setImportModalType('all')}>
-                        📥 Bulk Import Credentials &amp; 2FA
+                      <button className="nv-btn nv-btn-accent nv-btn-sm" onClick={openAutofillSettings}>
+                        ⚙️ Open Android Autofill Settings
                       </button>
-                      <button className="nv-btn nv-btn-ghost nv-btn-sm" style={{ color: 'var(--nv-danger)', borderColor: 'rgba(239, 68, 68, 0.3)' }} onClick={onDeleteAllEverything}>
-                        🗑 Delete All Vault Items
+                      <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={async () => {
+                        const st = (window as any).nexVault?.loadVault?.();
+                        if (st) {
+                          await syncAutofillCredentials(st.passwords);
+                          showToast('Synced vault credentials to Android native keystore!');
+                        }
+                      }}>
+                        🔄 Sync Vault to Native Autofill
                       </button>
-                    </div>
-                  </Card>
-
-                  <Card style={{ marginBottom: '1rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-                      <div style={{ fontWeight: 600, color: '#fff' }}>Browser &amp; System Autofill</div>
-                      <span className="nv-badge success">Integrated</span>
-                    </div>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--nv-muted)', margin: '0 0 0.75rem' }}>
-                      NextVault uses Android's system Autofill service to fill logins and 2FA across mobile browsers (Chrome, Firefox, Brave) and installed apps. On desktop, the extension is registered automatically to default browsers upon installation and launch.
-                    </p>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--nv-text-secondary)', background: 'var(--nv-bg-2)', padding: '0.5rem 0.65rem', borderRadius: 'var(--nv-radius-sm)', border: '1px solid var(--nv-border)' }}>
-                      💡 Link this mobile node with Desktop via NexGrid to keep credentials synchronized across all your devices.
                     </div>
                   </Card>
 
@@ -1949,73 +2209,72 @@ function App() {
                     </div>
                   </Card>
 
-                  {/* Dead Man's Switch & Security Window Card */}
+                  {/* Data & Migration Card */}
+                  <Card style={{ marginBottom: '1rem' }}>
+                    <div style={{ fontWeight: 600, color: '#fff', marginBottom: '0.35rem' }}>Data &amp; Migration</div>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--nv-muted)', margin: '0 0 0.75rem' }}>
+                      Bulk import passwords and 2FA accounts from Chrome, Bitwarden, 1Password, or standard CSV/JSON files.
+                    </p>
+                    <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                      <button className="nv-btn nv-btn-accent nv-btn-sm" onClick={() => setImportModalType('all')}>
+                        📥 Bulk Import Credentials &amp; 2FA
+                      </button>
+                      <button className="nv-btn nv-btn-ghost nv-btn-sm" style={{ color: 'var(--nv-danger)', borderColor: 'rgba(239, 68, 68, 0.3)' }} onClick={onDeleteAllEverything}>
+                        🗑 Delete All Vault Items
+                      </button>
+                    </div>
+                  </Card>
+
+                  {/* Application Updates Card */}
                   <Card style={{ marginBottom: '1rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-                      <div style={{ fontWeight: 600, color: '#fff' }}>Dead Man's Switch &amp; Window</div>
-                      <span className="nv-badge">24h Heartbeat</span>
+                      <div style={{ fontWeight: 600, color: '#fff' }}>Application Updates</div>
+                      <span className="nv-badge">v{CURRENT_VERSION}</span>
                     </div>
                     <p style={{ fontSize: '0.75rem', color: 'var(--nv-muted)', margin: '0 0 0.75rem' }}>
-                      Periodic security check-in deadline. If offline beyond this window, the mobile node locks down.
-                    </p>
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.75rem',
-                      marginBottom: '0.85rem',
-                      padding: '0.65rem 0.85rem',
-                      background: 'var(--nv-bg-2)',
-                      borderRadius: 'var(--nv-radius-sm)',
-                      border: '1px solid var(--nv-border)'
-                    }}>
-                      <div style={{ fontSize: '1.25rem' }}>⏳</div>
-                      <div>
-                        <div style={{ fontSize: '0.65rem', color: 'var(--nv-muted)', textTransform: 'uppercase' }}>Security Window Remaining</div>
-                        <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--nv-primary)', fontFamily: 'var(--nv-font-mono)' }}>
-                          {(() => {
-                            const diff = securityDeadlineStatus?.remainingSeconds ?? (24 * 3600);
-                            const hours = Math.floor(diff / 3600);
-                            const mins = Math.floor((diff % 3600) / 60);
-                            const secs = diff % 60;
-                            const days = Math.floor(hours / 24);
-                            if (days > 1) return `${days} days, ${hours % 24} hours remaining`;
-                            return `${hours}h ${mins}m ${secs}s remaining`;
-                          })()}
-                        </div>
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                      <select
-                        className="nv-input"
-                        style={{ maxWidth: '160px', padding: '0.4rem 0.6rem', fontSize: '0.8rem' }}
-                        value={selectedExtension}
-                        onChange={e => setSelectedExtension(e.target.value as any)}
-                      >
-                        <option value="1week">1 Week</option>
-                        <option value="1month">1 Month</option>
-                        <option value="3months">3 Months (Quorum)</option>
-                      </select>
-                      <button className="nv-btn nv-btn-accent nv-btn-sm" onClick={onExtendSecurityWindow}>
-                        Extend Window
-                      </button>
-                    </div>
-                  </Card>
-
-                  {/* Danger Zone: Emergency Cryptographic Nuke */}
-                  <Card style={{ marginBottom: '1rem', borderColor: 'rgba(239, 68, 68, 0.4)', background: 'rgba(239, 68, 68, 0.03)' }}>
-                    <div style={{ fontWeight: 600, color: 'var(--nv-danger)', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                      <span>☢️</span> Danger Zone: Emergency Cryptographic Nuke
-                    </div>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--nv-muted)', margin: '0 0 0.75rem' }}>
-                      Self-destruct protocol: Immediately purges all credentials, 2FA tokens, Android hardware keystore autofill cache, and local encryption keys from this device.
+                      Check GitHub releases for seamless in-place APK updates.
                     </p>
                     <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                      <button className="nv-btn nv-btn-danger nv-btn-sm" onClick={onEmergencyNuke}>
-                        ☢️ Emergency Nuke Vault
+                      <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={() => checkMobileUpdates(true)}>
+                        Check for Updates
                       </button>
+                      {updateInfo && updateInfo.hasUpdate && (
+                        <button
+                          className="nv-btn nv-btn-accent nv-btn-sm"
+                          disabled={isUpdating}
+                          onClick={onApplyMobileUpdate}
+                        >
+                          {isUpdating ? 'Installing...' : `Install v${updateInfo.latestVersion}`}
+                        </button>
+                      )}
                     </div>
                   </Card>
 
+                  {/* Vault Identity & Token Card */}
+                  <Card style={{ marginBottom: '1rem' }}>
+                    <div style={{ fontWeight: 600, color: '#fff', marginBottom: '0.35rem' }}>Vault Identity &amp; Token</div>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--nv-muted)', margin: '0 0 0.75rem' }}>
+                      Your cryptographically signed identity token.
+                    </p>
+                    {tokenJson ? (
+                      <>
+                        <textarea
+                          className="nv-textarea nv-mono"
+                          rows={4}
+                          readOnly
+                          value={tokenJson}
+                          style={{ fontSize: '0.72rem', marginBottom: '0.5rem' }}
+                        />
+                        <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={copyBootstrapToken}>
+                          Copy Token JSON
+                        </button>
+                      </>
+                    ) : (
+                      <p style={{ fontSize: '0.75rem', color: 'var(--nv-muted)' }}>No token loaded in memory.</p>
+                    )}
+                  </Card>
+
+                  {/* Session Card */}
                   <Card style={{ borderColor: 'rgba(255, 255, 255, 0.1)' }}>
                     <div style={{ fontWeight: 600, color: '#fff', marginBottom: '0.35rem' }}>Session</div>
                     <p style={{ fontSize: '0.75rem', color: 'var(--nv-muted)', margin: '0 0 0.75rem' }}>
@@ -2042,15 +2301,6 @@ function App() {
         {unlocked && (
           <nav className="nv-bottom-nav">
             <button
-              className={`nv-nav-button ${activeTab === 'quick-fill' ? 'active' : ''}`}
-              onClick={openQuickFill}
-            >
-              <span className="nav-icon">
-                <Shield size={18} />
-              </span>
-              <span>Quick Fill</span>
-            </button>
-            <button
               className={`nv-nav-button ${activeTab === 'vault' ? 'active' : ''}`}
               onClick={() => setActiveTab('vault')}
             >
@@ -2076,6 +2326,19 @@ function App() {
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="6" height="6" x="9" y="2" rx="1"/><rect width="6" height="6" x="2" y="16" rx="1"/><rect width="6" height="6" x="16" y="16" rx="1"/><path d="M12 8v4m0 0H5v4m7-4h7v4"/></svg>
               </span>
               <span>NexGrid</span>
+            </button>
+            <button
+              className={`nv-nav-button ${activeTab === 'security' ? 'active' : ''}`}
+              onClick={() => setActiveTab('security')}
+              style={{ position: 'relative' }}
+            >
+              <span className="nav-icon">
+                <Shield size={18} />
+              </span>
+              <span>Security</span>
+              {incomingExtensionRequest && (
+                <span style={{ position: 'absolute', top: 6, right: '25%', width: 7, height: 7, borderRadius: '50%', background: 'var(--nv-primary)', boxShadow: '0 0 6px var(--nv-primary)' }} />
+              )}
             </button>
             <button
               className={`nv-nav-button ${activeTab === 'settings' ? 'active' : ''}`}

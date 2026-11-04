@@ -372,6 +372,10 @@ class NexGrid extends EventEmitter {
             this.emit('vault-sync-requested', fromPeerId, decrypted);
           } else if (decrypted && decrypted.type === 'credential-deleted') {
             this.emit('credential-deleted', fromPeerId, decrypted);
+          } else if (decrypted && decrypted.type === 'extension-approval-request') {
+            this.emit('extension-approval-request', fromPeerId, decrypted);
+          } else if (decrypted && (decrypted.type === 'extension-approval-response' || decrypted.type === 'extension-approval')) {
+            this.emit('extension-approval-response', fromPeerId, decrypted);
           }
           this.emit('secure-message', fromPeerId, decrypted);
           this.emit('message', fromPeerId, decrypted);
@@ -412,9 +416,31 @@ class NexGrid extends EventEmitter {
       this.emit('credential-deleted', fromPeerId, payload);
       this.emit('secure-message', fromPeerId, payload);
       this.emit('message', fromPeerId, payload);
+    } else if (payload.type === 'extension-approval-request') {
+      this.emit('extension-approval-request', fromPeerId, payload);
+      this.emit('message', fromPeerId, payload);
+    } else if (payload.type === 'extension-approval-response' || payload.type === 'extension-approval') {
+      this.emit('extension-approval-response', fromPeerId, payload);
+      this.emit('message', fromPeerId, payload);
     } else {
       this.emit('message', fromPeerId, payload);
     }
+  }
+
+  broadcastSecureMessage(message) {
+    if (!this.connectedRelayPeers || this.connectedRelayPeers.size === 0) {
+      return 0;
+    }
+    let count = 0;
+    for (const peerId of this.connectedRelayPeers.keys()) {
+      try {
+        this.sendSecureMessage(peerId, message);
+        count++;
+      } catch (err) {
+        console.warn(`[NexGrid] Failed to send secure message to ${peerId}:`, err.message);
+      }
+    }
+    return count;
   }
 
   requestPeerList(token) {
