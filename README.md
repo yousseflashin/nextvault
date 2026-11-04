@@ -6,13 +6,17 @@ NexVault is a local-first, end-to-end encrypted password manager, OTP authentica
 
 > 📖 **Full Installation & Architecture Guide**: See [DOCUMENTATION.md](DOCUMENTATION.md) for complete setup, end-to-end workflows, security architecture, and troubleshooting.
 
-## Core Principles
+## Core Principles & Key Features
 
 - **Local-first**: Vault data lives only on your devices, encrypted with SQLCipher + AES-256-GCM.
 - **Peer-to-peer**: Trusted devices discover each other over a lightweight signaling relay, then upgrade to encrypted WebRTC channels.
 - **Zero knowledge**: The relay only sees routing metadata; it cannot read your passwords, TOTP secrets, or vault metadata.
+- **Feature Parity**: Complete feature parity across Desktop and Mobile platforms, including inline credential editing, 2FA editing, bulk import, and quick search.
+- **Google Authenticator UI**: Animated SVG circular progress rings, formatted 6-digit codes (`123 456`), tap-to-copy interactions with visual toasts, and colorful service monograms.
+- **Configurable Auto-Lock**: User-configurable idle timeout countdowns (1m, 2m, 5m default, 15m, 30m, or Disabled) that purge active keys from memory upon idle.
+- **Dead Man's Switch & Quorum Extensions**: Real-time 24-hour heartbeat countdown with on-demand offline window extensions (1 week, 1 month, or 3 months via P2P multisig peer approval).
+- **Emergency Cryptographic Nuke**: One-click emergency self-destruct protocol in Settings (Danger Zone) with double-confirmation, wiping keys, shredding local database files, and terminating processes.
 - **Integrity protection**: A cryptographic manifest watches for unauthorized changes to local database files.
-- **Offline security**: A 24‑hour heartbeat locks the vault and can trigger a crypto‑nuke if authorization is not restored.
 
 ---
 

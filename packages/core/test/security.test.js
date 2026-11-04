@@ -94,4 +94,11 @@ describe('NexVault Security', () => {
     expect(status).toHaveProperty('extension');
     expect(status).toHaveProperty('countdownActive');
   });
+
+  test('should schedule and cancel emergency nuke', () => {
+    security.triggerNuke();
+    expect(security.nukeWarningTimer).toBeDefined();
+    security.cancelNuke();
+    expect(security.nukeWarningTimer).toBeNull();
+  });
 });

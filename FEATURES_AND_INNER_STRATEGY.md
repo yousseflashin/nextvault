@@ -165,6 +165,19 @@ The Mobile app (`apps/mobile/src/qrScanner.ts`) provides dual scanning mechanism
 3. **URI Parser (`parseOtpAuthUri`)**:
    - Parses label, secret, algorithm, digits, and issuer parameters directly into the authenticator store.
 
+### 4.3 Google Authenticator-Inspired UI & Dynamic Countdown Rings
+
+Both Desktop and Mobile feature an enhanced UI/UX adhering to standard authenticator design ergonomics:
+1. **Animated Circular Progress Rings**:
+   - Smooth SVG circular progress ring indicating remaining time in the 30-second window ($T_X = 30$).
+   - Dynamically sweeps clockwise/counter-clockwise and shifts to an urgent danger palette (`#ef4444`) when 5 seconds or fewer remain.
+2. **Ergonomic Monospace Code Display**:
+   - Codes are rendered in prominent high-contrast typography, formatted with a delimiter space (`123 456`) for rapid human legibility.
+   - Single-tap/click card copying with instantaneous clipboard write and visual "✓ Copied" confirmation.
+3. **Unified Edit & Lifecycle Management**:
+   - Full feature parity across Mobile and Desktop: users can edit existing credentials and 2FA accounts (modifying service labels, usernames, and base32 secrets) directly inline.
+   - Real-time instant search filter bars across both password and 2FA lists.
+
 ---
 
 ## 5. Universal Migration & Bulk Ingestion Engine
@@ -255,26 +268,33 @@ $$\text{hash} = \text{SHA-256}(\text{index} + \text{timestamp} + \text{eventType
   - Critical core modules.
 - Periodic integrity sweeps re-verify hashes. If a hash changes unexpectedly outside authorized write operations, the vault enters an immediate security lockdown.
 
-### 8.3 24-Hour Heartbeat & Dead Man's Switch
+### 8.3 24-Hour Heartbeat, Dead Man's Switch & Configurable Auto-Lock
 
-- Vaults require a periodic heartbeat confirmation every 24 hours.
-- If a device is disconnected or offline beyond the security threshold:
-  - The vault locks immediately.
-  - Sensitive cached tokens are evicted from memory.
-  - To re-activate, the user must enter their master password or obtain a quorum extension.
+- **Configurable Inactivity Auto-Lock**:
+  - Inactivity timeout can be configured directly in Settings on both Desktop and Mobile (1 min, 2 min, 5 min default, 15 min, 30 min, or Disabled/Never).
+  - When idle expiration is reached, active decryption keys in memory are overwritten with zeroes and local databases close.
+- **Dead Man's Switch**:
+  - Vaults enforce a periodic heartbeat confirmation every 24 hours.
+  - A real-time countdown timer in Settings and Security tabs displays the exact time remaining before the security window lapses.
+  - If a device remains offline past the threshold, the vault locks down and evicts all cached authorization tokens.
 
 ### 8.4 Quorum Peer Approvals for Offline Extensions
 
-- If a user anticipates traveling offline for an extended period, they can request an offline window extension from the desktop.
-- The request is broadcast across the NexGrid mesh.
-- Any paired trusted peer (e.g., the user's mobile phone) can approve the extension cryptographically, signing the approval with their Ed25519 device key.
+- If a user anticipates traveling offline for an extended duration, they can request an offline security window extension directly from the Settings or Security tabs on either Desktop or Mobile:
+  - **1 Week** (`1week`): Extends window locally by 7 days.
+  - **1 Month** (`1month`): Extends window locally by 30 days.
+  - **3 Months Quorum** (`3months`): Broadcasts an approval request across the NexGrid mesh requiring at least one paired trusted peer node to cryptographically sign and authorize the offline extension.
+- Once authorized, the offline security deadline updates in the local trust ledger and persistent storage.
 
 ### 8.5 Emergency Cryptographic Nuke (Self-Destruct Protocol)
 
-In high-risk scenarios (e.g., physical compromise), the user can trigger an emergency vault nuke:
-1. **Multi-Pass Memory Overwrite**: All in-memory buffers containing credentials, TOTP secrets, and cryptographic keys are overwritten with pseudo-random noise, followed by zeroes.
-2. **Database Shredding**: The SQLCipher database file is overwritten with random bytes in multiple passes before unlinking from the file system.
-3. **Mesh Revocation Broadcast**: A signed revocation broadcast is sent across NexGrid to un-pair and blacklist the compromised device ID.
+Both Desktop and Mobile feature an Emergency Cryptographic Nuke button prominently placed in Settings (Danger Zone) as well as the Security Diagnostics tab:
+1. **Multi-Pass Memory Overwrite**: All in-memory buffers containing credentials, TOTP secrets, session keys, and derived keys are overwritten with pseudo-random noise, followed by zeroes.
+2. **Database & Keystore Shredding**:
+   - **Desktop**: The SQLCipher database file (`nexvault.db`) and cryptographic key manifests are closed, overwritten with multiple passes of cryptographically random bytes, and unlinked from the filesystem.
+   - **Mobile**: Android hardware keystore credentials (`NativeCredentialStore`), local vault envelopes, pairing tokens, and session stores are purged.
+3. **Double Verification Safety**: Requires explicit two-step user confirmation before initiating the self-destruct sequence to eliminate accidental wipes.
+4. **Immediate Process Lockdown**: Terminates application execution and forces an immediate cold exit.
 
 ---
 

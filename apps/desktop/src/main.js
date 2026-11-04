@@ -1202,7 +1202,17 @@ ipcMain.handle('list-otps', async () => {
     const user = nexVaultDatabase.getUser(context.username);
     if (!user) return { success: true, entries: [] };
     const entries = nexVaultDatabase.listOtpSecrets(user.id);
-    return { success: true, entries };
+    const entriesWithCodes = entries.map(e => {
+      try {
+        const full = nexVaultDatabase.getOtpSecretByService(user.id, e.service);
+        if (full && full.encrypted_data) {
+          const secret = nexVaultDatabase.decryptData(full.encrypted_data, context.encryptionKey, full.iv);
+          return { ...e, code: generateTotp(secret) };
+        }
+      } catch {}
+      return e;
+    });
+    return { success: true, entries: entriesWithCodes };
   } catch (error) {
     return { success: false, error: error.message, entries: [] };
   }
@@ -1218,6 +1228,21 @@ ipcMain.handle('get-otp', async (event, serviceName) => {
     if (!result) return { success: false, error: 'OTP secret not found' };
     const secret = nexVaultDatabase.decryptData(result.encrypted_data, context.encryptionKey, result.iv);
     return { success: true, code: generateTotp(secret), period: 30 };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('get-otp-details', async (event, serviceName) => {
+  try {
+    const context = nexVaultSecurity.getUserContext();
+    if (!context) throw new Error('User is not authenticated');
+    const user = nexVaultDatabase.getUser(context.username);
+    if (!user) throw new Error('User not found');
+    const result = nexVaultDatabase.getOtpSecretByService(user.id, serviceName);
+    if (!result) return { success: false, error: 'OTP secret not found' };
+    const secret = nexVaultDatabase.decryptData(result.encrypted_data, context.encryptionKey, result.iv);
+    return { success: true, service: result.service_name || serviceName, secret };
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -1357,9 +1382,14 @@ ipcMain.handle('run-integrity-check', async () => {
   return nexVaultSecurity.checkIntegrity();
 });
 
-ipcMain.handle('trigger-emergency-nuke', async () => {
+ipcMain.handle('trigger-emergency-nuke', async (event, immediate) => {
   try {
-    nexVaultSecurity.triggerNuke();
+    if (immediate) {
+      try { nexVaultDatabase.close(); } catch {}
+      nexVaultSecurity.executeNuke();
+    } else {
+      nexVaultSecurity.triggerNuke();
+    }
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };

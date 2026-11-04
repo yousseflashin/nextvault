@@ -259,28 +259,41 @@ sequenceDiagram
    - Click **Autofill Current Page** (or search for the domain in the search bar).
    - NexVault matches the current domain, retrieves the decrypted credential from the local desktop vault over the encrypted `127.0.0.1:46124` bridge, and safely injects the password into the password field.
 
-### TOTP Two-Factor Authentication
+### TOTP Two-Factor Authentication & Google Authenticator-Style UI
 
-1. In the Desktop vault, navigate to the **OTP / TOTP** section.
-2. Enter the service name (e.g. `github.com`) and the base32 secret provided by the service (e.g. `JBSWY3DPEHPK3PXP`).
-3. Click **Add TOTP**.
-4. The service will appear in the TOTP list with a live countdown timer. Click **Copy Code** to copy the current 6-digit TOTP code to your clipboard.
+1. In Desktop or Mobile, navigate to the **Authenticator** section.
+2. Enter the service name (e.g. `github.com`) and the base32 secret (or scan a QR code using Mobile camera or image upload).
+3. Click **Save TOTP**.
+4. The service appears with Google Authenticator-style styling:
+   - **Circular Countdown Rings**: Animated SVG progress rings displaying remaining seconds in the 30-second window, turning red when under 5 seconds.
+   - **High-Contrast Formatted Codes**: Spaced 6-digit codes (`123 456`) in clean monospace font.
+   - **Tap-to-Copy**: Click anywhere on the card or the copy button for instant clipboard access with visual "✓ Copied" confirmation.
+   - **Inline Search**: Filter authenticators instantly by service name.
+   - **Inline Edit & Parity**: Edit existing authenticators (service labels and secrets) and credentials on both Desktop and Mobile.
 
 ---
 
 ## 6. Security Model & Safeguards
 
+### Configurable Inactivity Auto-Lock
+
+Both Desktop and Mobile feature an inactivity auto-lock system configurable in Settings:
+- Selectable timeouts: **1 min**, **2 min**, **5 min (default)**, **15 min**, **30 min**, or **Disabled / Never**.
+- Inactivity monitors keypress, mouse movement, and touch interactions.
+- Upon auto-lock, active decryption keys in memory are overwritten with zeroes and local databases close.
+
 ### 24-Hour Heartbeat & Dead Man's Switch
 
 NexVault includes an active security countdown timer:
 - Devices maintain a 24-hour authorization window from the time of last authentication or active peer connection.
+- Settings and Security tabs display the real-time remaining countdown (e.g. `23h 48m remaining`).
 - If all peers disconnect and no authentication occurs before the timer expires, an emergency cryptographic destruction process is queued.
 
 ### Offline Window Extensions & Peer Approvals
 
-Users who plan to travel or operate offline can extend their security window:
-- Extensions of **1 week** or **1 month** can be granted locally.
-- Extensions exceeding 30 days (up to 90 days absolute offline deadline) trigger a **multisig peer approval request** across the WebRTC mesh, requiring at least one paired trusted device to cryptographically sign the extension.
+Users who plan to travel or operate offline can request a window extension directly from Settings on Desktop or Mobile:
+- Extensions of **1 week** or **1 month** are granted locally.
+- Extensions of **3 months** trigger a **multisig peer approval request** across the WebRTC mesh, requiring at least one paired trusted device to cryptographically sign the extension.
 
 ### Storage Integrity Monitor
 
@@ -292,12 +305,14 @@ Users who plan to travel or operate offline can extend their security window:
 
 All critical security events (vault initialization, peer additions, window extensions, authorizations) are recorded in an internal SHA-256 hash-chained ledger (`TrustLedger`). Every block references the hash of the preceding event, ensuring tamper-evident audit history.
 
-### Emergency Cryptographic Nuke
+### Emergency Cryptographic Nuke (Self-Destruct Protocol)
 
-When the dead-man's switch triggers or emergency nuke is manually activated:
-1. All encryption keys are wiped from OS secure storage.
-2. SQLite database files and key files are overwritten with cryptographically random bytes before deletion from disk.
-3. The application terminates its processes immediately.
+Available in the **Danger Zone** of Settings and Security tabs on both Desktop and Mobile:
+1. Double-confirmation dialog verifies intent to prevent accidental execution.
+2. All encryption keys and tokens are purged from secure storage and memory.
+3. On Desktop, SQLite database files and store keys are overwritten with random bytes before disk deletion.
+4. On Mobile, Android hardware keystore entries, local storage envelopes, and tokens are obliterated.
+5. The application terminates its processes immediately.
 
 ---
 

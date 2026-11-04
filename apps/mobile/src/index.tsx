@@ -3,8 +3,54 @@ import type { CSSProperties, ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './cyber/cyber.css';
 import './main.css';
-import { getSavedRelayUrl, CURRENT_VERSION, parseOtpAuthUri, parseBulkImport, clearAutofillCredentials, syncAutofillCredentials, mergeNativeAutofillCredentials, openAutofillSettings } from './mobileVault';
+import { getSavedRelayUrl, CURRENT_VERSION, parseOtpAuthUri, parseBulkImport, clearAutofillCredentials, syncAutofillCredentials, mergeNativeAutofillCredentials, openAutofillSettings, getSecurityWindowStatus, extendOfflineSecurityWindow, emergencyNukeVault } from './mobileVault';
 import { startCameraQrScanner, scanQrFromImageSource, requestCameraPermission } from './qrScanner';
+
+function CircularCountdown({ seconds, period = 30, size = 26 }: { seconds: number; period?: number; size?: number }) {
+  const radius = 10;
+  const stroke = 2.4;
+  const normalizedRadius = radius - stroke * 0.5;
+  const circumference = normalizedRadius * 2 * Math.PI;
+  const strokeDashoffset = circumference - (seconds / period) * circumference;
+  const isUrgent = seconds <= 5;
+  const strokeColor = isUrgent ? '#ef4444' : '#10b981';
+
+  return (
+    <div style={{ position: 'relative', width: size, height: size, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+      <svg height={size} width={size} style={{ transform: 'rotate(-90deg)', display: 'block' }}>
+        <circle
+          stroke="rgba(255, 255, 255, 0.12)"
+          fill="transparent"
+          strokeWidth={stroke}
+          r={normalizedRadius}
+          cx={size / 2}
+          cy={size / 2}
+        />
+        <circle
+          stroke={strokeColor}
+          fill="transparent"
+          strokeWidth={stroke}
+          strokeDasharray={`${circumference} ${circumference}`}
+          style={{ strokeDashoffset, transition: 'stroke-dashoffset 0.85s linear, stroke 0.3s ease' }}
+          strokeLinecap="round"
+          r={normalizedRadius}
+          cx={size / 2}
+          cy={size / 2}
+        />
+      </svg>
+      <span style={{
+        position: 'absolute',
+        fontSize: Math.round(size * 0.38),
+        fontWeight: 700,
+        fontFamily: 'var(--nv-font-mono)',
+        color: strokeColor,
+        lineHeight: 1
+      }}>
+        {seconds}
+      </span>
+    </div>
+  );
+}
 
 /** Copies a secret and clears the clipboard after 30s if it still holds that value. */
 async function copySecret(value: string) {
@@ -381,11 +427,17 @@ function App() {
 
   // OTP State
   const [otpItems, setOtpItems] = useState<{ service: string; code?: string }[]>([]);
+  const [otpSearch, setOtpSearch] = useState('');
   const [showAddOtp, setShowAddOtp] = useState(false);
   const [editingOtpService, setEditingOtpService] = useState<string | null>(null);
   const [otpService, setOtpService] = useState('');
   const [otpSecret, setOtpSecret] = useState('');
   const [countdown, setCountdown] = useState(30);
+
+  // Security & Auto-Lock State
+  const [autoLockMinutes, setAutoLockMinutesState] = useState<number | 'never'>(() => (window as any).nexVault?.getAutoLockMinutes?.() ?? 5);
+  const [securityDeadlineStatus, setSecurityDeadlineStatus] = useState<{ isWithinWindow: boolean; deadline: string; remainingSeconds: number; isExpired: boolean } | null>(null);
+  const [selectedExtension, setSelectedExtension] = useState<'1week' | '1month' | '3months'>('1week');
 
   // NexGrid State
   const [relayUrl, setRelayUrl] = useState(() => getSavedRelayUrl());
@@ -550,8 +602,11 @@ function App() {
       }
     };
     const idle = setInterval(() => {
-      if (Date.now() - lastActive > 5 * 60 * 1000) onLockVault();
-    }, 15000);
+      const minutes = (window as any).nexVault?.getAutoLockMinutes?.() ?? 5;
+      if (minutes !== 'never' && typeof minutes === 'number') {
+        if (Date.now() - lastActive > minutes * 60 * 1000) onLockVault();
+      }
+    }, 10000);
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('touchstart', touch, { passive: true });
     window.addEventListener('keydown', touch);
@@ -574,6 +629,56 @@ function App() {
     }, 1000);
     return () => clearInterval(timer);
   }, [unlocked]);
+
+  useEffect(() => {
+    if (!unlocked) return;
+    const updateSecurity = () => {
+      const s = getSecurityWindowStatus();
+      setSecurityDeadlineStatus(s);
+      if (s.isExpired) {
+        onLockVault();
+      }
+    };
+    updateSecurity();
+    const interval = setInterval(updateSecurity, 10000);
+    return () => clearInterval(interval);
+  }, [unlocked]);
+
+  function onChangeAutoLock(val: string) {
+    const parsed = val === 'never' ? 'never' : (Number(val) || 5);
+    (window as any).nexVault?.setAutoLockMinutes?.(parsed);
+    setAutoLockMinutesState(parsed);
+    showToast(`Auto-lock timeout set to: ${val === 'never' ? 'Disabled' : `${val} Minutes`}`);
+  }
+
+  function onExtendSecurityWindow() {
+    const res = extendOfflineSecurityWindow(selectedExtension);
+    if (res.success) {
+      setSecurityDeadlineStatus(getSecurityWindowStatus());
+      showToast(`Security window extended (${res.duration})`);
+    }
+  }
+
+  async function onEmergencyNuke() {
+    const first = confirm('☢️ EMERGENCY NUKE WARNING: This will permanently wipe all local encryption keys, saved passwords, and 2FA accounts from this mobile node. Proceed?');
+    if (!first) return;
+    const second = confirm('FINAL VERIFICATION: Are you absolutely certain? This operation CANNOT be undone.');
+    if (!second) return;
+    try {
+      emergencyNukeVault();
+      setUnlocked(false);
+      setPassword('');
+      setUsername('');
+      setTokenJson('');
+      setVaultItems([]);
+      setOtpItems([]);
+      setStatus('Vault destroyed');
+      showToast('Vault wiped. All local data permanently shredded.');
+      alert('NexVault mobile node has been permanently wiped and destroyed.');
+    } catch (e: any) {
+      showToast('Nuke error: ' + e.message);
+    }
+  }
 
   useEffect(() => {
     async function checkExistingProfile() {
@@ -1433,11 +1538,14 @@ function App() {
               {activeTab === 'otp' && (
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem', flexWrap: 'wrap', gap: '0.4rem' }}>
-                    <div>
-                      <div style={{ fontSize: '1rem', fontWeight: 700, color: '#fff' }}>Authenticator</div>
-                      <span className="nv-badge" style={{ fontSize: '0.65rem' }}>Refreshes in {countdown}s</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <CircularCountdown seconds={countdown} size={28} />
+                      <div>
+                        <div style={{ fontSize: '1rem', fontWeight: 700, color: '#fff' }}>Authenticator</div>
+                        <span className="nv-badge" style={{ fontSize: '0.65rem' }}>Auto-refresh: {countdown}s</span>
+                      </div>
                     </div>
-                    <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', flexWrap: 'wrap' }}>
                       {otpItems.length > 0 && (
                         <button
                           className="nv-btn nv-btn-ghost nv-btn-sm"
@@ -1468,6 +1576,25 @@ function App() {
                         {showAddOtp ? '✕ Close' : '+ Add'}
                       </button>
                     </div>
+                  </div>
+
+                  {/* Search Filter for 2FA Authenticators */}
+                  <div className="nv-search-bar" style={{ marginBottom: '0.75rem' }}>
+                    <span>🔍</span>
+                    <input
+                      placeholder="Search authenticators..."
+                      value={otpSearch}
+                      onChange={e => setOtpSearch(e.target.value)}
+                    />
+                    {otpSearch && (
+                      <button
+                        className="nv-btn nv-btn-ghost nv-btn-sm"
+                        style={{ padding: '0.1rem 0.4rem', fontSize: '0.75rem' }}
+                        onClick={() => setOtpSearch('')}
+                      >
+                        ✕
+                      </button>
+                    )}
                   </div>
 
                   {showAddOtp && (
@@ -1511,10 +1638,12 @@ function App() {
                     </Card>
                   )}
 
-                  {otpItems.length === 0 ? (
-                    <div className="nv-empty">No TOTP authenticators added yet.</div>
-                  ) : (
-                    otpItems.map(o => {
+                  {(() => {
+                    const filteredOtpList = otpItems.filter(o => !otpSearch || o.service.toLowerCase().includes(otpSearch.toLowerCase()));
+                    if (filteredOtpList.length === 0) {
+                      return <div className="nv-empty">{otpItems.length === 0 ? 'No TOTP authenticators added yet.' : 'No authenticators match your search.'}</div>;
+                    }
+                    return filteredOtpList.map(o => {
                       const codeClean = (o.code || '').replace(/\s+/g, '');
                       const displayCode = codeClean.length === 6
                         ? `${codeClean.slice(0, 3)} ${codeClean.slice(3)}`
@@ -1522,25 +1651,33 @@ function App() {
                       const isCopied = copiedKey === `otp-${o.service}`;
 
                       return (
-                        <div className="nv-vault-item" key={o.service}>
+                        <div
+                          className="nv-vault-item"
+                          key={o.service}
+                          style={{ cursor: 'pointer' }}
+                          onClick={() => copyOTP(codeClean || o.code, o.service)}
+                        >
                           <div className="nv-vault-left">
                             <div className="nv-avatar-monogram" style={{ background: 'linear-gradient(135deg, rgba(14, 165, 233, 0.25), rgba(16, 185, 129, 0.25))', borderColor: 'rgba(14, 165, 233, 0.35)' }}>
                               {(o.service.charAt(0) || '2').toUpperCase()}
                             </div>
                             <div className="nv-vault-info">
                               <span className="nv-vault-service">{o.service}</span>
-                              <span style={{
-                                fontSize: '1.25rem',
-                                fontFamily: 'var(--nv-font-mono)',
-                                fontWeight: 700,
-                                color: 'var(--nv-primary)',
-                                letterSpacing: '2.5px'
-                              }}>
-                                {displayCode}
-                              </span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                                <span style={{
+                                  fontSize: '1.35rem',
+                                  fontFamily: 'var(--nv-font-mono)',
+                                  fontWeight: 700,
+                                  color: 'var(--nv-primary)',
+                                  letterSpacing: '2.5px'
+                                }}>
+                                  {displayCode}
+                                </span>
+                                <CircularCountdown seconds={countdown} size={24} />
+                              </div>
                             </div>
                           </div>
-                          <div className="nv-vault-actions">
+                          <div className="nv-vault-actions" onClick={e => e.stopPropagation()}>
                             <button
                               className="nv-btn nv-btn-sm"
                               style={isCopied ? { background: 'rgba(16, 185, 129, 0.2)', borderColor: 'var(--nv-primary)', color: 'var(--nv-primary)' } : {}}
@@ -1566,8 +1703,8 @@ function App() {
                           </div>
                         </div>
                       );
-                    })
-                  )}
+                    });
+                  })()}
                 </div>
               )}
 
@@ -1783,12 +1920,108 @@ function App() {
                     </div>
                   </Card>
 
-                  <Card style={{ borderColor: 'rgba(239, 68, 68, 0.25)' }}>
-                    <div style={{ fontWeight: 600, color: 'var(--nv-danger)', marginBottom: '0.35rem' }}>Session</div>
+                  {/* Inactivity Auto-Lock Setting Card */}
+                  <Card style={{ marginBottom: '1rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                      <div style={{ fontWeight: 600, color: '#fff' }}>Inactivity Auto-Lock</div>
+                      <span className="nv-badge success">
+                        {autoLockMinutes === 'never' ? 'Disabled' : `${autoLockMinutes} Min`}
+                      </span>
+                    </div>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--nv-muted)', margin: '0 0 0.75rem' }}>
+                      Lock mobile vault and purge decryption keys from memory when device is idle.
+                    </p>
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <label className="nv-label" style={{ marginBottom: 0, fontSize: '0.75rem' }}>Timeout:</label>
+                      <select
+                        className="nv-input"
+                        style={{ maxWidth: '160px', padding: '0.4rem 0.6rem', fontSize: '0.8rem' }}
+                        value={String(autoLockMinutes)}
+                        onChange={e => onChangeAutoLock(e.target.value)}
+                      >
+                        <option value="1">1 Minute</option>
+                        <option value="2">2 Minutes</option>
+                        <option value="5">5 Minutes</option>
+                        <option value="15">15 Minutes</option>
+                        <option value="30">30 Minutes</option>
+                        <option value="never">Never (Disabled)</option>
+                      </select>
+                    </div>
+                  </Card>
+
+                  {/* Dead Man's Switch & Security Window Card */}
+                  <Card style={{ marginBottom: '1rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                      <div style={{ fontWeight: 600, color: '#fff' }}>Dead Man's Switch &amp; Window</div>
+                      <span className="nv-badge">24h Heartbeat</span>
+                    </div>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--nv-muted)', margin: '0 0 0.75rem' }}>
+                      Periodic security check-in deadline. If offline beyond this window, the mobile node locks down.
+                    </p>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.75rem',
+                      marginBottom: '0.85rem',
+                      padding: '0.65rem 0.85rem',
+                      background: 'var(--nv-bg-2)',
+                      borderRadius: 'var(--nv-radius-sm)',
+                      border: '1px solid var(--nv-border)'
+                    }}>
+                      <div style={{ fontSize: '1.25rem' }}>⏳</div>
+                      <div>
+                        <div style={{ fontSize: '0.65rem', color: 'var(--nv-muted)', textTransform: 'uppercase' }}>Security Window Remaining</div>
+                        <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--nv-primary)', fontFamily: 'var(--nv-font-mono)' }}>
+                          {(() => {
+                            const diff = securityDeadlineStatus?.remainingSeconds ?? (24 * 3600);
+                            const hours = Math.floor(diff / 3600);
+                            const mins = Math.floor((diff % 3600) / 60);
+                            const secs = diff % 60;
+                            const days = Math.floor(hours / 24);
+                            if (days > 1) return `${days} days, ${hours % 24} hours remaining`;
+                            return `${hours}h ${mins}m ${secs}s remaining`;
+                          })()}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <select
+                        className="nv-input"
+                        style={{ maxWidth: '160px', padding: '0.4rem 0.6rem', fontSize: '0.8rem' }}
+                        value={selectedExtension}
+                        onChange={e => setSelectedExtension(e.target.value as any)}
+                      >
+                        <option value="1week">1 Week</option>
+                        <option value="1month">1 Month</option>
+                        <option value="3months">3 Months (Quorum)</option>
+                      </select>
+                      <button className="nv-btn nv-btn-accent nv-btn-sm" onClick={onExtendSecurityWindow}>
+                        Extend Window
+                      </button>
+                    </div>
+                  </Card>
+
+                  {/* Danger Zone: Emergency Cryptographic Nuke */}
+                  <Card style={{ marginBottom: '1rem', borderColor: 'rgba(239, 68, 68, 0.4)', background: 'rgba(239, 68, 68, 0.03)' }}>
+                    <div style={{ fontWeight: 600, color: 'var(--nv-danger)', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <span>☢️</span> Danger Zone: Emergency Cryptographic Nuke
+                    </div>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--nv-muted)', margin: '0 0 0.75rem' }}>
+                      Self-destruct protocol: Immediately purges all credentials, 2FA tokens, Android hardware keystore autofill cache, and local encryption keys from this device.
+                    </p>
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <button className="nv-btn nv-btn-danger nv-btn-sm" onClick={onEmergencyNuke}>
+                        ☢️ Emergency Nuke Vault
+                      </button>
+                    </div>
+                  </Card>
+
+                  <Card style={{ borderColor: 'rgba(255, 255, 255, 0.1)' }}>
+                    <div style={{ fontWeight: 600, color: '#fff', marginBottom: '0.35rem' }}>Session</div>
                     <p style={{ fontSize: '0.75rem', color: 'var(--nv-muted)', margin: '0 0 0.75rem' }}>
                       Lock your vault to encrypt passwords and keys in memory.
                     </p>
-                    <button className="nv-btn nv-btn-danger nv-btn-sm" onClick={onLockVault}>
+                    <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={onLockVault}>
                       Lock Vault Now
                     </button>
                   </Card>

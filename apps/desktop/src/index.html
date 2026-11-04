@@ -624,7 +624,7 @@
 
           <!-- Add Credential Card (Collapsible) -->
           <div class="nv-card" id="add-credential-card" style="display: none; margin-bottom: 1.25rem;">
-            <div style="font-weight: 600; margin-bottom: 1rem; color: #fff;">New Credential</div>
+            <div style="font-weight: 600; margin-bottom: 1rem; color: #fff;" id="credential-card-title">New Credential</div>
             <div class="form-grid-2">
               <div class="form-group">
                 <label class="nv-label">Service / Website</label>
@@ -644,7 +644,7 @@
             </div>
             <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
               <button class="nv-btn nv-btn-ghost" type="button" onclick="toggleAddCredentialForm()">Cancel</button>
-              <button class="nv-btn" type="button" onclick="savePassword()">Save Credential</button>
+              <button class="nv-btn" type="button" id="save-cred-btn" onclick="savePassword()">Save Credential</button>
             </div>
           </div>
 
@@ -656,11 +656,16 @@
 
         <!-- ==================== PAGE 2: AUTHENTICATOR (OTP) ==================== -->
         <div class="app-page" id="page-otp">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-            <div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.75rem;">
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+              <div id="otp-circular-timer-wrap"></div>
               <span class="nv-badge" id="otp-timer-badge">Auto-refresh: 30s</span>
             </div>
-            <div style="display: flex; gap: 0.5rem;">
+            <div class="search-box" style="flex: 1; max-width: 340px; margin-bottom: 0;">
+              <span>🔍</span>
+              <input type="text" id="otp-search-input" placeholder="Search authenticators..." oninput="filterOTPEntries()">
+            </div>
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
               <button class="nv-btn nv-btn-danger" onclick="deleteAllOTPs()" title="Delete all saved 2FA authenticators from vault and mesh">
                 <span>🗑 Delete All</span>
               </button>
@@ -675,7 +680,7 @@
 
           <!-- Add OTP Form Card -->
           <div class="nv-card" id="add-otp-card" style="display: none; margin-bottom: 1.25rem;">
-            <div style="font-weight: 600; margin-bottom: 1rem; color: #fff;">Add TOTP Service</div>
+            <div style="font-weight: 600; margin-bottom: 1rem; color: #fff;" id="otp-card-title">Add TOTP Service</div>
             <div class="form-grid-2">
               <div class="form-group">
                 <label class="nv-label">Service Name</label>
@@ -688,7 +693,7 @@
             </div>
             <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
               <button class="nv-btn nv-btn-ghost" type="button" onclick="toggleAddOtpForm()">Cancel</button>
-              <button class="nv-btn" type="button" onclick="saveOTP()">Save TOTP</button>
+              <button class="nv-btn" type="button" id="save-otp-btn" onclick="saveOTP()">Save TOTP</button>
             </div>
           </div>
 
@@ -861,13 +866,76 @@
             </div>
           </div>
 
-          <!-- Session & Danger Zone -->
-          <div class="nv-card" style="border-color: rgba(239, 68, 68, 0.25);">
-            <div style="font-weight: 600; color: var(--nv-danger); margin-bottom: 0.5rem;">Session Control</div>
+          <!-- Auto-Lock Inactivity Card -->
+          <div class="nv-card" style="margin-bottom: 1.25rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+              <div style="font-weight: 600; color: #fff;">Inactivity Auto-Lock</div>
+              <span class="nv-badge success" id="autolock-current-badge">5 Minutes</span>
+            </div>
+            <p style="font-size: 0.8rem; color: var(--nv-muted); margin-bottom: 0.85rem;">
+              Automatically lock the desktop vault and zero master encryption keys from memory when idle.
+            </p>
+            <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+              <label class="nv-label" style="margin-bottom: 0;">Auto-Lock Timeout:</label>
+              <select class="nv-input" id="setting-autolock-select" style="max-width: 200px;" onchange="changeAutoLockSetting(this.value)">
+                <option value="1">1 Minute</option>
+                <option value="2">2 Minutes</option>
+                <option value="5" selected>5 Minutes</option>
+                <option value="15">15 Minutes</option>
+                <option value="30">30 Minutes</option>
+                <option value="never">Never (Disabled)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Security Dead Man's Switch & Window Countdown Card -->
+          <div class="nv-card" style="margin-bottom: 1.25rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+              <div style="font-weight: 600; color: #fff;">Dead Man's Switch &amp; Security Window</div>
+              <span class="nv-badge" id="security-window-badge">24h Heartbeat</span>
+            </div>
+            <p style="font-size: 0.8rem; color: var(--nv-muted); margin-bottom: 0.85rem;">
+              Requires a periodic check-in. If the device remains offline past the deadline, the vault locks down. You can extend the security window below.
+            </p>
+            <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; padding: 0.75rem 1rem; background: var(--nv-bg-2); border-radius: var(--nv-radius-sm); border: 1px solid var(--nv-border);">
+              <div style="font-size: 1.4rem;">⏳</div>
+              <div>
+                <div style="font-size: 0.72rem; color: var(--nv-muted); text-transform: uppercase;">Offline Security Deadline Remaining</div>
+                <div style="font-size: 1.15rem; font-weight: 700; color: var(--nv-primary); font-family: var(--nv-font-mono);" id="security-deadline-countdown">24 hours remaining</div>
+              </div>
+            </div>
+            <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+              <label class="nv-label" style="margin-bottom: 0;">Request Window Extension:</label>
+              <select class="nv-input" id="setting-security-extension-select" style="max-width: 180px;">
+                <option value="1week">1 Week</option>
+                <option value="1month">1 Month</option>
+                <option value="3months">3 Months (Quorum)</option>
+              </select>
+              <button class="nv-btn nv-btn-accent nv-btn-sm" type="button" onclick="requestSecurityExtension()">Request Extension</button>
+            </div>
+          </div>
+
+          <!-- Danger Zone: Emergency Cryptographic Nuke -->
+          <div class="nv-card" style="border-color: rgba(239, 68, 68, 0.35); background: rgba(239, 68, 68, 0.03); margin-bottom: 1.25rem;">
+            <div style="font-weight: 600; color: var(--nv-danger); margin-bottom: 0.4rem; display: flex; align-items: center; gap: 0.5rem;">
+              <span>☢️</span> Danger Zone: Emergency Cryptographic Nuke
+            </div>
+            <p style="font-size: 0.8rem; color: var(--nv-muted); margin-bottom: 1rem;">
+              Emergency self-destruct protocol: Immediately destroys all local cryptographic keys, overwrites and deletes the local SQLCipher database file, invalidates browser tokens, and halts execution.
+            </p>
+            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
+              <button class="nv-btn nv-btn-danger" type="button" onclick="triggerImmediateNuke()">☢️ Emergency Nuke Vault</button>
+              <button class="nv-btn nv-btn-ghost nv-btn-sm" type="button" onclick="lockVault()">Lock Vault</button>
+            </div>
+          </div>
+
+          <!-- Session Control -->
+          <div class="nv-card" style="border-color: rgba(255, 255, 255, 0.1);">
+            <div style="font-weight: 600; color: #fff; margin-bottom: 0.5rem;">Session Control</div>
             <p style="font-size: 0.8rem; color: var(--nv-muted); margin-bottom: 1rem;">
               Lock your vault immediately to encrypt secrets in memory.
             </p>
-            <button class="nv-btn nv-btn-danger" onclick="lockVault()">Lock Vault</button>
+            <button class="nv-btn nv-btn-ghost" onclick="lockVault()">Lock Vault</button>
           </div>
 
         </div>
@@ -994,14 +1062,48 @@
       }, 30000);
     }
 
-    // Auto-lock after 5 minutes without interaction
+    // Configurable Auto-Lock
+    function getAutoLockMinutes() {
+      const v = localStorage.getItem('nexvault_autolock_minutes');
+      if (v === 'never') return 'never';
+      const num = Number(v);
+      return isNaN(num) || num <= 0 ? 5 : num;
+    }
+
+    function changeAutoLockSetting(val) {
+      localStorage.setItem('nexvault_autolock_minutes', val);
+      const badge = $('autolock-current-badge');
+      if (badge) {
+        badge.textContent = val === 'never' ? 'Disabled' : `${val} Minutes`;
+        badge.className = val === 'never' ? 'nv-badge' : 'nv-badge success';
+      }
+      setStatus('Auto-lock set to: ' + (val === 'never' ? 'Disabled' : `${val} Minutes`));
+    }
+
+    function initAutoLockUI() {
+      const sel = $('setting-autolock-select');
+      const current = getAutoLockMinutes();
+      if (sel) sel.value = String(current);
+      const badge = $('autolock-current-badge');
+      if (badge) {
+        badge.textContent = current === 'never' ? 'Disabled' : `${current} Minutes`;
+        badge.className = current === 'never' ? 'nv-badge' : 'nv-badge success';
+      }
+    }
+
+    // Auto-lock setup with dynamic timeout
     (function setupAutoLock() {
       let last = Date.now();
       ['mousemove', 'keydown', 'click'].forEach(ev => window.addEventListener(ev, () => { last = Date.now(); }, { passive: true }));
       setInterval(() => {
         const ws = document.getElementById('main-workspace');
-        if (ws && ws.style.display !== 'none' && Date.now() - last > 5 * 60 * 1000) lockVault();
-      }, 15000);
+        if (ws && ws.style.display !== 'none') {
+          const minutes = getAutoLockMinutes();
+          if (minutes !== 'never' && typeof minutes === 'number') {
+            if (Date.now() - last > minutes * 60 * 1000) lockVault();
+          }
+        }
+      }, 10000);
     })();
 
     // Lock Vault
@@ -1048,10 +1150,17 @@
       } catch (e) { setStatus('Error: ' + e.message); }
     }
 
+    let securityStatusTimer = null;
+
     function showWorkspace() {
       $('auth-container').style.display = 'none';
       $('main-workspace').style.display = 'flex';
       navigateTo('vault');
+      initAutoLockUI();
+      refreshSecurityStatus();
+      if (!securityStatusTimer) {
+        securityStatusTimer = setInterval(refreshSecurityStatus, 10000);
+      }
       listPasswords();
       listOTPs();
       loadTrustedDevicesUI();
@@ -1066,12 +1175,43 @@
     }
 
     // Vault Credentials Management
+    let editingVaultService = null;
+
     function toggleAddCredentialForm() {
       const card = $('add-credential-card');
       const isHidden = card.style.display === 'none';
-      card.style.display = isHidden ? 'block' : 'none';
-      $('add-cred-btn-text').textContent = isHidden ? '✕ Close' : '+ Add Credential';
-      if (isHidden) $('service').focus();
+      if (isHidden) {
+        card.style.display = 'block';
+        $('add-cred-btn-text').textContent = '✕ Close';
+        $('service').focus();
+      } else {
+        card.style.display = 'none';
+        $('add-cred-btn-text').textContent = '+ Add Credential';
+        editingVaultService = null;
+        if ($('credential-card-title')) $('credential-card-title').textContent = 'New Credential';
+        if ($('save-cred-btn')) $('save-cred-btn').textContent = 'Save Credential';
+        $('service').value = '';
+        $('vault-username').value = '';
+        $('vault-password').value = '';
+      }
+    }
+
+    async function editPassword(service) {
+      try {
+        const r = await window.nexVault.getPassword(service);
+        if (!r.success) throw new Error(r.error || 'Credential not found');
+        editingVaultService = service;
+        $('service').value = service;
+        $('vault-username').value = r.username || '';
+        $('vault-password').value = r.password || '';
+        if ($('credential-card-title')) $('credential-card-title').textContent = 'Edit Credential';
+        if ($('save-cred-btn')) $('save-cred-btn').textContent = 'Update Credential';
+        $('add-credential-card').style.display = 'block';
+        $('add-cred-btn-text').textContent = '✕ Close';
+        $('service').focus();
+      } catch (e) {
+        setStatus('Error: ' + e.message);
+      }
     }
 
     function generateRandomPassword() {
@@ -1091,11 +1231,18 @@
       try {
         const r = await window.nexVault.addPassword(s, p, u);
         if (r.success) {
-          setStatus('Credential saved');
+          if (editingVaultService && editingVaultService !== s) {
+            await window.nexVault.deletePassword(editingVaultService);
+          }
+          setStatus(editingVaultService ? 'Credential updated' : 'Credential saved');
           $('service').value = '';
           $('vault-username').value = '';
           $('vault-password').value = '';
-          toggleAddCredentialForm();
+          editingVaultService = null;
+          if ($('credential-card-title')) $('credential-card-title').textContent = 'New Credential';
+          if ($('save-cred-btn')) $('save-cred-btn').textContent = 'Save Credential';
+          $('add-credential-card').style.display = 'none';
+          $('add-cred-btn-text').textContent = '+ Add Credential';
           listPasswords();
         } else throw new Error(r.error);
       } catch (e) { setStatus('Error: ' + e.message); }
@@ -1140,6 +1287,7 @@
           <div class="vault-actions">
             <button class="nv-btn nv-btn-ghost nv-btn-sm" id="btn-pass-${encodeURIComponent(e.service)}" onclick="copyPassword(decodeURIComponent('${encodeURIComponent(e.service)}'))">Copy Pass</button>
             ${e.username ? `<button class="nv-btn nv-btn-ghost nv-btn-sm" id="btn-user-${encodeURIComponent(e.username)}" onclick="copyUsername(decodeURIComponent('${encodeURIComponent(e.username)}'))">Copy User</button>` : ''}
+            <button class="nv-btn nv-btn-ghost nv-btn-sm" onclick="editPassword(decodeURIComponent('${encodeURIComponent(e.service)}'))">Edit</button>
             <button class="nv-btn nv-btn-ghost nv-btn-sm" style="color: var(--nv-danger);" onclick="deletePassword(decodeURIComponent('${encodeURIComponent(e.service)}'))">Delete</button>
           </div>
         </div>
@@ -1201,12 +1349,85 @@
     }
 
     // Authenticator (TOTP) Management
+    let editingOtpService = null;
+
+    function renderCircularTimer(seconds, period = 30, size = 26) {
+      const radius = 10;
+      const stroke = 2.4;
+      const normalizedRadius = radius - stroke * 0.5;
+      const circumference = normalizedRadius * 2 * Math.PI;
+      const strokeDashoffset = circumference - (seconds / period) * circumference;
+      const isUrgent = seconds <= 5;
+      const strokeColor = isUrgent ? '#ef4444' : '#10b981';
+
+      return `
+        <div style="position: relative; width: ${size}px; height: ${size}px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;">
+          <svg height="${size}" width="${size}" style="transform: rotate(-90deg); display: block;">
+            <circle
+              stroke="rgba(255, 255, 255, 0.12)"
+              fill="transparent"
+              stroke-width="${stroke}"
+              r="${normalizedRadius}"
+              cx="${size / 2}"
+              cy="${size / 2}"
+            />
+            <circle
+              stroke="${strokeColor}"
+              fill="transparent"
+              stroke-width="${stroke}"
+              stroke-dasharray="${circumference} ${circumference}"
+              style="stroke-dashoffset: ${strokeDashoffset}; transition: stroke-dashoffset 0.85s linear, stroke 0.3s ease;"
+              stroke-linecap="round"
+              r="${normalizedRadius}"
+              cx="${size / 2}"
+              cy="${size / 2}"
+            />
+          </svg>
+          <span style="position: absolute; font-size: ${Math.round(size * 0.38)}px; font-weight: 700; font-family: var(--nv-font-mono); color: ${strokeColor}; line-height: 1;">
+            ${seconds}
+          </span>
+        </div>
+      `;
+    }
+
     function toggleAddOtpForm() {
       const card = $('add-otp-card');
       const isHidden = card.style.display === 'none';
-      card.style.display = isHidden ? 'block' : 'none';
-      $('add-otp-btn-text').textContent = isHidden ? '✕ Close' : '+ Add Authenticator';
-      if (isHidden) $('otp-service').focus();
+      if (isHidden) {
+        editingOtpService = null;
+        if ($('otp-card-title')) $('otp-card-title').textContent = 'Add TOTP Service';
+        if ($('save-otp-btn')) $('save-otp-btn').textContent = 'Save TOTP';
+        $('otp-service').value = '';
+        $('otp-secret').value = '';
+        card.style.display = 'block';
+        $('add-otp-btn-text').textContent = '✕ Close';
+        $('otp-service').focus();
+      } else {
+        card.style.display = 'none';
+        $('add-otp-btn-text').textContent = '+ Add Authenticator';
+        editingOtpService = null;
+        if ($('otp-card-title')) $('otp-card-title').textContent = 'Add TOTP Service';
+        if ($('save-otp-btn')) $('save-otp-btn').textContent = 'Save TOTP';
+        $('otp-service').value = '';
+        $('otp-secret').value = '';
+      }
+    }
+
+    async function editOTP(service) {
+      try {
+        const r = await window.nexVault.getOTPDetails(service);
+        if (!r.success) throw new Error(r.error || 'Authenticator not found');
+        editingOtpService = service;
+        $('otp-service').value = r.service || service;
+        $('otp-secret').value = r.secret || '';
+        if ($('otp-card-title')) $('otp-card-title').textContent = 'Edit Authenticator';
+        if ($('save-otp-btn')) $('save-otp-btn').textContent = 'Update TOTP';
+        $('add-otp-card').style.display = 'block';
+        $('add-otp-btn-text').textContent = '✕ Close';
+        $('otp-service').focus();
+      } catch (e) {
+        setStatus('Error: ' + e.message);
+      }
     }
 
     async function saveOTP() {
@@ -1216,10 +1437,17 @@
       try {
         const r = await window.nexVault.addOTP(s, sec);
         if (r.success) {
-          setStatus('Authenticator added');
+          if (editingOtpService && editingOtpService !== s) {
+            await window.nexVault.deleteOTP(editingOtpService);
+          }
+          setStatus(editingOtpService ? 'Authenticator updated' : 'Authenticator added');
           $('otp-service').value = '';
           $('otp-secret').value = '';
-          toggleAddOtpForm();
+          editingOtpService = null;
+          if ($('otp-card-title')) $('otp-card-title').textContent = 'Add TOTP Service';
+          if ($('save-otp-btn')) $('save-otp-btn').textContent = 'Save TOTP';
+          $('add-otp-card').style.display = 'none';
+          $('add-otp-btn-text').textContent = '+ Add Authenticator';
           listOTPs();
         } else throw new Error(r.error);
       } catch (e) { setStatus('Error: ' + e.message); }
@@ -1229,43 +1457,80 @@
       try {
         const r = await window.nexVault.listOTPs();
         cachedOTPEntries = r.entries || [];
-        renderOTPList();
+        filterOTPEntries();
         if (!otpTimer) {
           otpTimer = setInterval(updateOTPCountdowns, 1000);
+          updateOTPCountdowns();
         }
       } catch (e) { setStatus('Error: ' + e.message); }
     }
 
-    function renderOTPList() {
+    function filterOTPEntries() {
+      const q = ($('otp-search-input')?.value || '').toLowerCase().trim();
+      const filtered = cachedOTPEntries.filter(e => {
+        if (!q) return true;
+        return (e.service && e.service.toLowerCase().includes(q)) ||
+               (e.otpType && e.otpType.toLowerCase().includes(q));
+      });
+      renderOTPList(filtered);
+    }
+
+    function renderOTPList(entries = null) {
       const el = $('otp-list');
-      if (!cachedOTPEntries.length) {
-        el.innerHTML = '<div class="nv-empty">No TOTP entries yet.</div>';
+      const list = entries !== null ? entries : (function() {
+        const q = ($('otp-search-input')?.value || '').toLowerCase().trim();
+        if (!q) return cachedOTPEntries;
+        return cachedOTPEntries.filter(e => (e.service && e.service.toLowerCase().includes(q)) || (e.otpType && e.otpType.toLowerCase().includes(q)));
+      })();
+
+      if (!list.length) {
+        el.innerHTML = '<div class="nv-empty">No TOTP entries found.</div>';
         return;
       }
       const remaining = 30 - (Math.floor(Date.now() / 1000) % 30);
-      el.innerHTML = cachedOTPEntries.map(e => `
-        <div class="vault-item">
-          <div style="display: flex; align-items: center; gap: 0.85rem; flex: 1; min-width: 0;">
-            <div class="nv-avatar-monogram" style="background: linear-gradient(135deg, rgba(14, 165, 233, 0.25), rgba(16, 185, 129, 0.25)); border-color: rgba(14, 165, 233, 0.35);">${escapeHtml((e.service.charAt(0) || '2').toUpperCase())}</div>
-            <div class="vault-item-info">
-              <div class="vault-service">${escapeHtml(e.service)}</div>
-              <div class="vault-meta otp-countdown">Refreshes in ${remaining}s</div>
+      el.innerHTML = list.map(e => {
+        const cleanCode = (e.code || '').replace(/\s+/g, '');
+        const displayCode = cleanCode.length === 6 ? `${cleanCode.slice(0, 3)} ${cleanCode.slice(3)}` : (e.code || '------');
+        const safeService = escapeHtml(e.service);
+        const encService = encodeURIComponent(e.service);
+        return `
+          <div class="vault-item" style="cursor: pointer;" onclick="copyOTP(decodeURIComponent('${encService}'))">
+            <div style="display: flex; align-items: center; gap: 0.85rem; flex: 1; min-width: 0;">
+              <div class="nv-avatar-monogram" style="background: linear-gradient(135deg, rgba(14, 165, 233, 0.25), rgba(16, 185, 129, 0.25)); border-color: rgba(14, 165, 233, 0.35);">
+                ${escapeHtml((e.service.charAt(0) || '2').toUpperCase())}
+              </div>
+              <div class="vault-item-info">
+                <div class="vault-service">${safeService}</div>
+                <div style="display: flex; align-items: center; gap: 0.75rem; margin-top: 0.25rem;">
+                  <span style="font-size: 1.35rem; font-weight: 700; font-family: var(--nv-font-mono); color: var(--nv-primary); letter-spacing: 2.5px;" id="otp-code-${encService}">
+                    ${displayCode}
+                  </span>
+                  <div class="otp-timer-slot">${renderCircularTimer(remaining, 30, 24)}</div>
+                </div>
+              </div>
+            </div>
+            <div class="vault-actions" onclick="event.stopPropagation()">
+              <button class="nv-btn nv-btn-accent nv-btn-sm" id="btn-otp-${encService}" onclick="copyOTP(decodeURIComponent('${encService}'))">Copy Code</button>
+              <button class="nv-btn nv-btn-ghost nv-btn-sm" onclick="editOTP(decodeURIComponent('${encService}'))">Edit</button>
+              <button class="nv-btn nv-btn-ghost nv-btn-sm" style="color: var(--nv-danger);" onclick="deleteOTP(decodeURIComponent('${encService}'))">Delete</button>
             </div>
           </div>
-          <div class="vault-actions">
-            <button class="nv-btn nv-btn-accent nv-btn-sm" id="btn-otp-${encodeURIComponent(e.service)}" onclick="copyOTP(decodeURIComponent('${encodeURIComponent(e.service)}'))">Copy Code</button>
-            <button class="nv-btn nv-btn-ghost nv-btn-sm" style="color: var(--nv-danger);" onclick="deleteOTP(decodeURIComponent('${encodeURIComponent(e.service)}'))">Delete</button>
-          </div>
-        </div>
-      `).join('');
+        `;
+      }).join('');
     }
 
     function updateOTPCountdowns() {
       const remaining = 30 - (Math.floor(Date.now() / 1000) % 30);
       if ($('otp-timer-badge')) $('otp-timer-badge').textContent = `Auto-refresh: ${remaining}s`;
-      document.querySelectorAll('.otp-countdown').forEach(el => {
-        el.textContent = `Refreshes in ${remaining}s`;
+      if ($('otp-circular-timer-wrap')) {
+        $('otp-circular-timer-wrap').innerHTML = renderCircularTimer(remaining, 30, 26);
+      }
+      document.querySelectorAll('.otp-timer-slot').forEach(el => {
+        el.innerHTML = renderCircularTimer(remaining, 30, 24);
       });
+      if (remaining === 30) {
+        listOTPs();
+      }
     }
 
     async function copyOTP(service) {
@@ -1472,13 +1737,88 @@
     }
 
     async function triggerNuke() {
-      if (!confirm('EMERGENCY: This will wipe all keys from local storage. Proceed?')) return;
-      log('Nuking local keystore...');
+      return triggerImmediateNuke();
+    }
+
+    async function triggerImmediateNuke() {
+      const first = confirm('☢️ EMERGENCY NUKE WARNING: This will permanently destroy all local encryption keys, shred the SQLCipher database, and close NexVault. Proceed?');
+      if (!first) return;
+      const second = confirm('FINAL VERIFICATION: Are you absolutely certain? This operation CANNOT be undone.');
+      if (!second) return;
       try {
-        const r = await window.nexVault.triggerEmergencyNuke();
-        log(r.success ? 'Keystore wiped.' : 'Error: ' + r.error);
+        setStatus('Executing Emergency Cryptographic Nuke...');
+        await window.nexVault.triggerEmergencyNuke(true);
         lockVault();
-      } catch (e) { log('Exception: ' + e.message); }
+        window.location.reload();
+      } catch (e) {
+        setStatus('Nuke error: ' + e.message);
+      }
+    }
+
+    async function refreshSecurityStatus() {
+      try {
+        const s = await window.nexVault.getSecurityStatus();
+        if (!s) return;
+        const deadlineEl = $('security-deadline-countdown');
+        const badgeEl = $('security-window-badge');
+        
+        let deadlineTime = null;
+        if (s.offlineDeadline) {
+          deadlineTime = new Date(s.offlineDeadline).getTime();
+        } else if (s.windowEnd) {
+          deadlineTime = new Date(s.windowEnd).getTime();
+        } else if (s.lastActive) {
+          deadlineTime = new Date(s.lastActive).getTime() + 24 * 3600 * 1000;
+        }
+
+        if (deadlineTime) {
+          const diff = Math.max(0, Math.floor((deadlineTime - Date.now()) / 1000));
+          const hours = Math.floor(diff / 3600);
+          const mins = Math.floor((diff % 3600) / 60);
+          const secs = diff % 60;
+          const days = Math.floor(hours / 24);
+          
+          let formatted = '';
+          if (days > 1) {
+            formatted = `${days} days, ${hours % 24} hours remaining`;
+          } else {
+            formatted = `${hours}h ${mins}m ${secs}s remaining`;
+          }
+          
+          if (deadlineEl) deadlineEl.textContent = formatted;
+          if (badgeEl) {
+            if (s.extension) {
+              badgeEl.textContent = `Extended (${s.extension.duration})`;
+              badgeEl.className = 'nv-badge success';
+            } else {
+              badgeEl.textContent = '24h Heartbeat Active';
+              badgeEl.className = 'nv-badge';
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Failed to get security status', err);
+      }
+    }
+
+    async function requestSecurityExtension() {
+      const sel = $('setting-security-extension-select');
+      const dur = sel ? sel.value : '1week';
+      setStatus('Requesting security window extension...');
+      try {
+        const r = await window.nexVault.extendSecurityWindow(dur);
+        if (r.success) {
+          if (r.pendingApproval) {
+            setStatus(`Extension request broadcasted to mesh peers for approval (${dur})`);
+            alert(`Extension for ${dur} requires 1 approval from a trusted mesh peer. The request has been broadcasted across NexGrid.`);
+          } else {
+            setStatus(`Security window extended to ${new Date(r.expiresAt).toLocaleDateString()}`);
+          }
+          refreshSecurityStatus();
+        } else throw new Error(r.error);
+      } catch (e) {
+        setStatus('Extension error: ' + e.message);
+      }
     }
 
     // App Updates Check & In-Place Auto-Updater
@@ -1730,15 +2070,22 @@
     window.filterVaultEntries = filterVaultEntries;
     window.copyUsername = copyUsername;
     window.copyPassword = copyPassword;
+    window.editPassword = editPassword;
     window.deletePassword = deletePassword;
     window.deleteAllPasswords = deleteAllPasswords;
     window.toggleAddOtpForm = toggleAddOtpForm;
     window.saveOTP = saveOTP;
     window.listOTPs = listOTPs;
+    window.filterOTPEntries = filterOTPEntries;
     window.copyOTP = copyOTP;
+    window.editOTP = editOTP;
     window.deleteOTP = deleteOTP;
     window.deleteAllOTPs = deleteAllOTPs;
     window.deleteAllVault = deleteAllVault;
+    window.changeAutoLockSetting = changeAutoLockSetting;
+    window.requestSecurityExtension = requestSecurityExtension;
+    window.triggerImmediateNuke = triggerImmediateNuke;
+    window.refreshSecurityStatus = refreshSecurityStatus;
     window.startGrid = startGrid;
     window.stopGrid = stopGrid;
     window.requestPair = requestPair;

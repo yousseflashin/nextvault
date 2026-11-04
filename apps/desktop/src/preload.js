@@ -32,6 +32,7 @@ contextBridge.exposeInMainWorld('nexVault', {
   addOTP: (serviceName, secret) => ipcRenderer.invoke('add-otp', serviceName, secret),
   listOTPs: () => ipcRenderer.invoke('list-otps'),
   getOTP: (serviceName) => ipcRenderer.invoke('get-otp', serviceName),
+  getOTPDetails: (serviceName) => ipcRenderer.invoke('get-otp-details', serviceName),
   deleteOTP: (serviceName) => ipcRenderer.invoke('delete-otp', serviceName),
   deleteAllOTPs: () => ipcRenderer.invoke('delete-all-otps'),
   deleteAllVault: () => ipcRenderer.invoke('delete-all-vault'),

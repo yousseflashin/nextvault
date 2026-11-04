@@ -442,6 +442,7 @@ async function startSession(password: string, state: MobileVaultState) {
   cachedState = state;
   persistEncrypted(state);
   localStorage.removeItem(LEGACY_STORAGE_KEY);
+  touchOfflineHeartbeat();
 }
 
 /** Decrypts the stored vault; throws 'Invalid master password' on failure. */
@@ -454,6 +455,7 @@ async function unlockEnvelope(password: string, env: VaultEnvelope): Promise<Mob
   sessionSalt = salt;
   sessionIter = env.iter;
   cachedState = JSON.parse(naclUtil.encodeUTF8(plain));
+  touchOfflineHeartbeat();
   return cachedState as MobileVaultState;
 }
 
@@ -508,6 +510,76 @@ export function syncAutofillCredentials(state = loadVault()) {
 export function clearAutofillCredentials() {
   if (typeof window === 'undefined' || (window as any).Capacitor?.getPlatform?.() !== 'android') return;
   AutofillBridge.clearCredentials().catch(() => {});
+}
+
+const DEFAULT_OFFLINE_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+export function getOfflineSecurityDeadline(): number {
+  if (typeof localStorage === 'undefined') return Date.now() + DEFAULT_OFFLINE_WINDOW_MS;
+  const stored = localStorage.getItem('nexvault_offline_deadline');
+  if (stored) {
+    const time = new Date(stored).getTime();
+    if (!isNaN(time)) return time;
+  }
+  const defaultDeadline = Date.now() + DEFAULT_OFFLINE_WINDOW_MS;
+  localStorage.setItem('nexvault_offline_deadline', new Date(defaultDeadline).toISOString());
+  return defaultDeadline;
+}
+
+export function touchOfflineHeartbeat() {
+  if (typeof localStorage === 'undefined') return;
+  const stored = localStorage.getItem('nexvault_offline_deadline');
+  if (!stored) {
+    const newDeadline = Date.now() + DEFAULT_OFFLINE_WINDOW_MS;
+    localStorage.setItem('nexvault_offline_deadline', new Date(newDeadline).toISOString());
+  }
+}
+
+export function getSecurityWindowStatus() {
+  const deadline = getOfflineSecurityDeadline();
+  const now = Date.now();
+  const remainingSeconds = Math.max(0, Math.floor((deadline - now) / 1000));
+  return {
+    isWithinWindow: remainingSeconds > 0,
+    deadline: new Date(deadline).toISOString(),
+    remainingSeconds,
+    isExpired: remainingSeconds <= 0
+  };
+}
+
+export function extendOfflineSecurityWindow(duration: string): { success: boolean; duration: string; expiresAt: string } {
+  const durations: Record<string, number> = {
+    '1week': 7 * 24 * 60 * 60 * 1000,
+    '1month': 30 * 24 * 60 * 60 * 1000,
+    '3months': 90 * 24 * 60 * 60 * 1000
+  };
+  const ms = durations[duration] || durations['1week'];
+  const newDeadline = Date.now() + ms;
+  const expiresAt = new Date(newDeadline).toISOString();
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem('nexvault_offline_deadline', expiresAt);
+  }
+  return { success: true, duration, expiresAt };
+}
+
+export function emergencyNukeVault() {
+  try {
+    clearAutofillCredentials();
+  } catch {}
+  lockVault();
+  if (typeof localStorage !== 'undefined') {
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
+    localStorage.removeItem('nexvault_mobile_vault');
+    localStorage.removeItem('nexvault_mobile_token');
+    localStorage.removeItem('nexvault_relay_url');
+    localStorage.removeItem('nexvault_offline_deadline');
+    localStorage.removeItem('nexvault_autolock_minutes');
+  }
+  if (typeof sessionStorage !== 'undefined') {
+    sessionStorage.clear();
+  }
+  return { success: true };
 }
 
 export async function mergeNativeAutofillCredentials() {
@@ -2030,6 +2102,31 @@ export function initMobileVault() {
 
     parseOtpAuthUri(uri: string) {
       return parseOtpAuthUri(uri);
+    },
+
+    async triggerEmergencyNuke() {
+      return emergencyNukeVault();
+    },
+
+    async getSecurityStatus() {
+      return getSecurityWindowStatus();
+    },
+
+    async extendSecurityWindow(duration: string) {
+      return extendOfflineSecurityWindow(duration);
+    },
+
+    getAutoLockMinutes(): number | 'never' {
+      if (typeof localStorage === 'undefined') return 5;
+      const v = localStorage.getItem('nexvault_autolock_minutes');
+      if (v === 'never') return 'never';
+      const num = Number(v);
+      return isNaN(num) || num <= 0 ? 5 : num;
+    },
+
+    setAutoLockMinutes(minutes: number | 'never') {
+      if (typeof localStorage === 'undefined') return;
+      localStorage.setItem('nexvault_autolock_minutes', String(minutes));
     }
   };
 }
