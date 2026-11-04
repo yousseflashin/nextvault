@@ -1,15 +1,15 @@
 {
-  "version": "0.1.16",
-  "tag": "v0.1.16",
+  "version": "0.1.17",
+  "tag": "v0.1.17",
   "desktop": {
-    "filename": "NexVault-0.1.16.AppImage",
+    "filename": "NexVault-0.1.17.AppImage",
     "size": "124.5 MB",
-    "url": "https://github.com/yousseflashin/nextvault/releases/download/v0.1.16/NexVault-0.1.16.AppImage"
+    "url": "https://github.com/yousseflashin/nextvault/releases/download/v0.1.17/NexVault-0.1.17.AppImage"
   },
   "mobile": {
     "filename": "NexVault-mobile-app-debug.apk",
     "size": "4.0 MB",
-    "url": "https://github.com/yousseflashin/nextvault/releases/download/v0.1.16/NexVault-mobile-app-debug.apk"
+    "url": "https://github.com/yousseflashin/nextvault/releases/download/v0.1.17/NexVault-mobile-app-debug.apk"
   },
-  "publishedAt": "2026-11-04T10:26:42.419Z"
+  "publishedAt": "2026-11-04T10:27:15.500Z"
 }
