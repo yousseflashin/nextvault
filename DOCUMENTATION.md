@@ -2,6 +2,9 @@
 
 NexVault is a local-first, zero-knowledge password manager, OTP 2FA authenticator, and trusted-device peer-to-peer network. Vault data lives exclusively on user devices, encrypted locally with SQLCipher and communicated across devices via end-to-end encrypted WebRTC channels negotiated over a lightweight, zero-knowledge signaling relay.
 
+> [!NOTE]
+> For a deep-dive breakdown of all features, cryptographic protocols, TOTP math, bulk migration parsers, and inner security strategy, consult [FEATURES_AND_INNER_STRATEGY.md](file:///home/youssef/projects/nextvault/FEATURES_AND_INNER_STRATEGY.md).
+
 ---
 
 ## Table of Contents

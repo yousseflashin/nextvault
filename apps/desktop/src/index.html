@@ -193,12 +193,78 @@
 
     .auth-card {
       width: 100%;
-      max-width: 440px;
+      max-width: 480px;
       background: var(--nv-surface);
-      border: 1px solid var(--nv-border);
-      border-radius: var(--nv-radius-lg);
-      padding: 2rem;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--nv-border-accent);
+      border-radius: var(--nv-radius-md);
+      box-shadow: 0 20px 48px rgba(0, 0, 0, 0.6), 0 0 24px rgba(16, 185, 129, 0.12);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .auth-hero-media {
+      position: relative;
+      width: 100%;
+      height: 180px;
+      overflow: hidden;
+      background: #090d16;
+    }
+
+    .auth-hero-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center;
+      display: block;
+      filter: contrast(1.05) brightness(0.95);
+      transition: transform 0.5s ease;
+    }
+
+    .auth-card:hover .auth-hero-img {
+      transform: scale(1.02);
+    }
+
+    .auth-hero-gradient {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(9, 13, 22, 0.2) 0%, rgba(9, 13, 22, 0.75) 60%, rgba(9, 13, 22, 0.98) 100%);
+      pointer-events: none;
+    }
+
+    .auth-hero-content {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      z-index: 2;
+    }
+
+    .auth-card-body {
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .nv-avatar-monogram {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(14, 165, 233, 0.2));
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: #fff;
+      font-weight: 700;
+      font-size: 0.95rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      text-transform: uppercase;
     }
 
     .auth-brand {
@@ -394,52 +460,56 @@
   <!-- AUTHENTICATION SCREEN (When locked) -->
   <div id="auth-container">
     <div class="auth-card">
-      <div class="auth-brand">
-        <img src="assets/icon.png" alt="NextVault" style="width: 32px; height: 32px; border-radius: 6px; object-fit: contain;">
-        <div>
-          <div class="brand-title">Next<span>Vault</span></div>
-          <div style="font-size: 0.75rem; color: var(--nv-muted);">Decentralized P2P Mesh Vault</div>
+      <div class="auth-hero-media">
+        <img src="assets/cover.jpg" alt="NextVault Hero" class="auth-hero-img">
+        <div class="auth-hero-gradient"></div>
+        <div class="auth-hero-content">
+          <span class="nv-badge" style="align-self: flex-start; background: rgba(16, 185, 129, 0.2); border-color: rgba(16, 185, 129, 0.4); font-size: 0.65rem;">ZERO-KNOWLEDGE P2P MESH</span>
+          <div style="font-size: 1.45rem; font-weight: 800; color: #fff; letter-spacing: -0.02em;">Next<span style="color: var(--nv-primary); text-shadow: 0 0 16px rgba(16, 185, 129, 0.45);">Vault</span></div>
+          <div style="font-size: 0.78rem; color: var(--nv-muted);">Decentralized Hardware-Secured Vault & Authenticator</div>
         </div>
       </div>
 
-      <div class="nv-tabs" id="auth-tabs" style="margin-bottom: 1.25rem;">
-        <button class="nv-tab active" data-tab="unlock" onclick="switchAuthTab('unlock')">Unlock Vault</button>
-        <button class="nv-tab" data-tab="create" onclick="switchAuthTab('create')">New Vault</button>
-      </div>
+      <div class="auth-card-body">
+        <div class="nv-tabs" id="auth-tabs" style="margin-bottom: 0.5rem;">
+          <button class="nv-tab active" data-tab="unlock" onclick="switchAuthTab('unlock')">Unlock Vault</button>
+          <button class="nv-tab" data-tab="create" onclick="switchAuthTab('create')">New Vault</button>
+        </div>
 
-      <!-- Unlock Tab -->
-      <div class="nv-tab-content active" id="tab-unlock">
-        <div class="form-group">
-          <label class="nv-label">Master Password</label>
-          <input type="password" class="nv-input" id="existing-password" placeholder="Enter master password to unlock" autocomplete="current-password">
+        <!-- Unlock Tab -->
+        <div class="nv-tab-content active" id="tab-unlock">
+          <div class="form-group">
+            <label class="nv-label">Master Password</label>
+            <input type="password" class="nv-input" id="existing-password" placeholder="Enter master password to unlock" autocomplete="current-password">
+          </div>
+          <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+            <button class="nv-btn" style="flex: 1;" onclick="handleExistingUser()">Unlock</button>
+            <button class="nv-btn nv-btn-ghost" type="button" onclick="toggleTokenView()" id="toggle-token-btn">Token JSON</button>
+          </div>
+          <div class="form-group" id="token-container" style="display: none; margin-top: 1rem;">
+            <label class="nv-label">Bootstrap Token (JSON)</label>
+            <textarea class="nv-textarea nv-mono" id="existing-token" placeholder='{"tokenId":"...","publicKey":"...","signature":"...","expiresAt":...}' rows="4"></textarea>
+          </div>
         </div>
-        <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
-          <button class="nv-btn" style="flex: 1;" onclick="handleExistingUser()">Unlock</button>
-          <button class="nv-btn nv-btn-ghost" type="button" onclick="toggleTokenView()" id="toggle-token-btn">Token JSON</button>
-        </div>
-        <div class="form-group" id="token-container" style="display: none; margin-top: 1rem;">
-          <label class="nv-label">Bootstrap Token (JSON)</label>
-          <textarea class="nv-textarea nv-mono" id="existing-token" placeholder='{"tokenId":"...","publicKey":"...","signature":"...","expiresAt":...}' rows="4"></textarea>
-        </div>
-      </div>
 
-      <!-- Create New Vault Tab -->
-      <div class="nv-tab-content" id="tab-create">
-        <div class="form-group">
-          <label class="nv-label">Username</label>
-          <input type="text" class="nv-input" id="new-username" placeholder="Choose a username" autocomplete="username">
+        <!-- Create New Vault Tab -->
+        <div class="nv-tab-content" id="tab-create">
+          <div class="form-group">
+            <label class="nv-label">Username</label>
+            <input type="text" class="nv-input" id="new-username" placeholder="Choose a username" autocomplete="username">
+          </div>
+          <div class="form-group">
+            <label class="nv-label">Master Password</label>
+            <input type="password" class="nv-input" id="new-password" placeholder="Choose master password" autocomplete="new-password">
+          </div>
+          <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+            <button class="nv-btn" style="flex: 1;" onclick="handleNewUser()">Create Vault</button>
+          </div>
         </div>
-        <div class="form-group">
-          <label class="nv-label">Master Password</label>
-          <input type="password" class="nv-input" id="new-password" placeholder="Choose master password" autocomplete="new-password">
-        </div>
-        <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
-          <button class="nv-btn" style="flex: 1;" onclick="handleNewUser()">Create Vault</button>
-        </div>
-      </div>
 
-      <div style="margin-top: 1.25rem; font-size: 0.75rem; color: var(--nv-muted); text-align: center;" id="auth-status">
-        Ready
+        <div style="font-size: 0.75rem; color: var(--nv-muted); text-align: center;" id="auth-status">
+          Ready
+        </div>
       </div>
     </div>
   </div>
@@ -967,13 +1037,6 @@
       setTimeout(() => startGrid(), 300);
     }
 
-    function copyToken() {
-      const t = $('existing-token').value;
-      if (!t) return;
-      navigator.clipboard.writeText(t);
-      setStatus('Token copied');
-    }
-
     function copyTokenFromSettings() {
       const t = $('settings-token-display').value;
       if (!t) return;
@@ -1043,16 +1106,19 @@
       }
       el.innerHTML = entries.map(e => `
         <div class="vault-item">
-          <div class="vault-item-info">
-            <div class="vault-service">${escapeHtml(e.service)}</div>
-            <div class="vault-meta">
-              ${e.username ? `<span>👤 ${escapeHtml(e.username)}</span>` : ''}
-              <span>Added: ${new Date(e.createdAt).toLocaleDateString()}</span>
+          <div style="display: flex; align-items: center; gap: 0.85rem; flex: 1; min-width: 0;">
+            <div class="nv-avatar-monogram">${escapeHtml((e.service.charAt(0) || 'V').toUpperCase())}</div>
+            <div class="vault-item-info">
+              <div class="vault-service">${escapeHtml(e.service)}</div>
+              <div class="vault-meta">
+                ${e.username ? `<span>👤 ${escapeHtml(e.username)}</span>` : ''}
+                <span>Added: ${new Date(e.createdAt).toLocaleDateString()}</span>
+              </div>
             </div>
           </div>
           <div class="vault-actions">
-            <button class="nv-btn nv-btn-ghost nv-btn-sm" onclick="copyPassword(decodeURIComponent('${encodeURIComponent(e.service)}'))">Copy Pass</button>
-            ${e.username ? `<button class="nv-btn nv-btn-ghost nv-btn-sm" onclick="copyUsername(decodeURIComponent('${encodeURIComponent(e.username)}'))">Copy User</button>` : ''}
+            <button class="nv-btn nv-btn-ghost nv-btn-sm" id="btn-pass-${encodeURIComponent(e.service)}" onclick="copyPassword(decodeURIComponent('${encodeURIComponent(e.service)}'))">Copy Pass</button>
+            ${e.username ? `<button class="nv-btn nv-btn-ghost nv-btn-sm" id="btn-user-${encodeURIComponent(e.username)}" onclick="copyUsername(decodeURIComponent('${encodeURIComponent(e.username)}'))">Copy User</button>` : ''}
             <button class="nv-btn nv-btn-ghost nv-btn-sm" style="color: var(--nv-danger);" onclick="deletePassword(decodeURIComponent('${encodeURIComponent(e.service)}'))">Delete</button>
           </div>
         </div>
@@ -1063,6 +1129,13 @@
       try {
         await navigator.clipboard.writeText(user);
         setStatus('Username copied');
+        const b = document.getElementById(`btn-user-${encodeURIComponent(user)}`);
+        if (b) {
+          const old = b.textContent;
+          b.textContent = '✓ Copied';
+          b.style.color = 'var(--nv-primary)';
+          setTimeout(() => { b.textContent = old; b.style.color = ''; }, 1600);
+        }
       } catch (e) { setStatus('Error: ' + e.message); }
     }
 
@@ -1072,6 +1145,13 @@
         if (r.success) {
           await navigator.clipboard.writeText(r.password);
           setStatus('Password copied for ' + service);
+          const b = document.getElementById(`btn-pass-${encodeURIComponent(service)}`);
+          if (b) {
+            const old = b.textContent;
+            b.textContent = '✓ Copied';
+            b.style.color = 'var(--nv-primary)';
+            setTimeout(() => { b.textContent = old; b.style.color = ''; }, 1600);
+          }
         } else throw new Error(r.error);
       } catch (e) { setStatus('Error: ' + e.message); }
     }
@@ -1144,12 +1224,15 @@
       const remaining = 30 - (Math.floor(Date.now() / 1000) % 30);
       el.innerHTML = cachedOTPEntries.map(e => `
         <div class="vault-item">
-          <div class="vault-item-info">
-            <div class="vault-service">${escapeHtml(e.service)}</div>
-            <div class="vault-meta otp-countdown">Refreshes in ${remaining}s</div>
+          <div style="display: flex; align-items: center; gap: 0.85rem; flex: 1; min-width: 0;">
+            <div class="nv-avatar-monogram" style="background: linear-gradient(135deg, rgba(14, 165, 233, 0.25), rgba(16, 185, 129, 0.25)); border-color: rgba(14, 165, 233, 0.35);">${escapeHtml((e.service.charAt(0) || '2').toUpperCase())}</div>
+            <div class="vault-item-info">
+              <div class="vault-service">${escapeHtml(e.service)}</div>
+              <div class="vault-meta otp-countdown">Refreshes in ${remaining}s</div>
+            </div>
           </div>
           <div class="vault-actions">
-            <button class="nv-btn nv-btn-accent nv-btn-sm" onclick="copyOTP(decodeURIComponent('${encodeURIComponent(e.service)}'))">Copy 6-Digit Code</button>
+            <button class="nv-btn nv-btn-accent nv-btn-sm" id="btn-otp-${encodeURIComponent(e.service)}" onclick="copyOTP(decodeURIComponent('${encodeURIComponent(e.service)}'))">Copy Code</button>
             <button class="nv-btn nv-btn-ghost nv-btn-sm" style="color: var(--nv-danger);" onclick="deleteOTP(decodeURIComponent('${encodeURIComponent(e.service)}'))">Delete</button>
           </div>
         </div>
@@ -1170,6 +1253,12 @@
         if (r.success) {
           await navigator.clipboard.writeText(r.code);
           setStatus('Copied OTP: ' + r.code);
+          const b = document.getElementById(`btn-otp-${encodeURIComponent(service)}`);
+          if (b) {
+            const old = b.textContent;
+            b.textContent = '✓ Copied';
+            setTimeout(() => { b.textContent = old; }, 1600);
+          }
         } else throw new Error(r.error);
       } catch (e) { setStatus('Error: ' + e.message); }
     }

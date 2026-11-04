@@ -1742,7 +1742,6 @@ export function initMobileVault() {
         const hasUpdate = compareVersions(latestTag, CURRENT_VERSION) > 0;
         const assets = data.assets || [];
         const apkAsset = assets.find((a: any) => /\.apk$/i.test(a.name));
-        const cleanTag = latestTag.replace(/^v/, '');
         const downloadUrl = apkAsset ? apkAsset.browser_download_url : `https://github.com/${GITHUB_REPO}/releases/download/${latestTag}/NexVault-mobile-app-debug.apk`;
         return {
           success: true,

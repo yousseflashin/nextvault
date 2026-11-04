@@ -3,7 +3,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './cyber/cyber.css';
 import './main.css';
-import { getDefaultRelayUrl, getSavedRelayUrl, CURRENT_VERSION, parseOtpAuthUri, parseBulkImport } from './mobileVault';
+import { getSavedRelayUrl, CURRENT_VERSION, parseOtpAuthUri, parseBulkImport } from './mobileVault';
 import { startCameraQrScanner, scanQrFromImageSource, requestCameraPermission } from './qrScanner';
 
 function Shield({ size = 32 }: { size?: number }) {
@@ -338,7 +338,8 @@ function BulkImportModal({
   );
 }
 
-type TabType = 'vault' | 'otp' | 'grid' | 'settings';
+type TabType = 'vault' | 'quick-fill' | 'otp' | 'grid' | 'settings';
+type QuickFillView = 'vault' | 'generator' | 'settings';
 
 function App() {
   // Navigation
@@ -355,6 +356,11 @@ function App() {
   // Vault State
   const [vaultItems, setVaultItems] = useState<{ service: string; username?: string; createdAt: string }[]>([]);
   const [vaultSearch, setVaultSearch] = useState('');
+  const [quickFillView, setQuickFillView] = useState<QuickFillView>('vault');
+  const [quickFillSearch, setQuickFillSearch] = useState('');
+  const [quickFillStatus, setQuickFillStatus] = useState('Ready');
+  const [quickFillPassword, setQuickFillPassword] = useState('');
+  const [quickFillPasswordLength, setQuickFillPasswordLength] = useState(24);
   const [showAddVault, setShowAddVault] = useState(false);
   const [service, setService] = useState('');
   const [vaultUsername, setVaultUsername] = useState('');
@@ -386,9 +392,53 @@ function App() {
   const [isScanningQr, setIsScanningQr] = useState(false);
   const [importModalType, setImportModalType] = useState<'vault' | 'otp' | 'all' | null>(null);
 
+  // Instant Copy Feedback
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  function markCopied(key: string) {
+    setCopiedKey(key);
+    setTimeout(() => {
+      setCopiedKey(prev => (prev === key ? null : prev));
+    }, 1800);
+  }
+
   function showToast(msg: string) {
     setToastMsg(msg);
     setTimeout(() => setToastMsg(null), 3500);
+  }
+
+  function generateQuickFillPassword(length = quickFillPasswordLength) {
+    const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*-_+=';
+    const bytes = new Uint8Array(length);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, byte => charset[byte % charset.length]).join('');
+  }
+
+  function openQuickFill() {
+    setActiveTab('quick-fill');
+    setQuickFillView('vault');
+    setQuickFillStatus('Ready');
+    if (!quickFillPassword) setQuickFillPassword(generateQuickFillPassword());
+  }
+
+  async function copyQuickFillCredential(serviceName: string, kind: 'password' | 'username') {
+    try {
+      const result = await (window as any).nexVault.getPassword(serviceName);
+      const value = kind === 'password' ? result?.password : result?.username;
+      if (!result?.success || !value) throw new Error(kind === 'password' ? 'Password unavailable' : 'Username unavailable');
+      await navigator.clipboard.writeText(value);
+      setQuickFillStatus(`${kind === 'password' ? 'Password' : 'Username'} copied`);
+      showToast(`${kind === 'password' ? 'Password' : 'Username'} copied for ${serviceName}`);
+    } catch (error: any) {
+      setQuickFillStatus('Copy failed');
+      showToast(error.message || 'Could not copy credential');
+    }
+  }
+
+  function refreshQuickFillPassword(length = quickFillPasswordLength) {
+    setQuickFillPasswordLength(length);
+    setQuickFillPassword(generateQuickFillPassword(length));
+    setQuickFillStatus('New password generated');
   }
 
   function onQrCodeDetected(rawCode: string) {
@@ -723,6 +773,7 @@ function App() {
       const res = await (window as any).nexVault.getPassword(serviceName);
       if (res && res.success && res.password) {
         await navigator.clipboard.writeText(res.password);
+        markCopied(`pass-${serviceName}`);
         showToast(`Copied password for ${serviceName}`);
       } else {
         showToast('Failed to retrieve password');
@@ -735,6 +786,7 @@ function App() {
   async function copyUsername(user: string) {
     try {
       await navigator.clipboard.writeText(user);
+      markCopied(`user-${user}`);
       showToast(`Copied username: ${user}`);
     } catch {
       showToast('Copy error');
@@ -784,10 +836,11 @@ function App() {
     }
   }
 
-  async function copyOTP(code?: string) {
+  async function copyOTP(code?: string, serviceName?: string) {
     if (!code) return;
     try {
       await navigator.clipboard.writeText(code);
+      if (serviceName) markCopied(`otp-${serviceName}`);
       showToast(`Copied TOTP code: ${code}`);
     } catch {
       showToast('Copy error');
@@ -928,30 +981,38 @@ function App() {
         {/* Main Content Area */}
         <main className="nv-app-main">
           {!unlocked ? (
-            /* LOCKED AUTH SCREEN */
-            <Card style={{ margin: 'auto 0' }}>
-              <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
-                <img src="/icon.png" alt="NextVault" style={{ width: 56, height: 56, borderRadius: 12, marginBottom: '0.5rem', boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }} />
-                <h1 className="nv-title" style={{ fontSize: '1.35rem', marginTop: '0.25rem' }}>NextVault Mobile</h1>
-                <p className="nv-muted" style={{ fontSize: '0.8rem', margin: '0.25rem 0 0' }}>
-                  Decentralized P2P Mesh Vault &amp; Authenticator.
-                </p>
+            /* LOCKED AUTH SCREEN WITH HERO COVER BANNER */
+            <div className="nv-hero-cover-card" style={{ margin: 'auto 0' }}>
+              <div className="nv-hero-cover-media">
+                <img src="/cover.jpg" alt="NextVault Cover" className="nv-hero-cover-img" />
+                <div className="nv-hero-cover-gradient" />
+                <div className="nv-hero-cover-content">
+                  <span className="nv-hero-chip">P2P ENCRYPTED MESH</span>
+                  <div className="nv-hero-brand">
+                    <Shield size={36} />
+                    <div>
+                      <h1 className="nv-hero-title">Next<span>Vault</span></h1>
+                      <p className="nv-hero-subtitle">Decentralized Zero-Knowledge Security</p>
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <div className="nv-tabs" style={{ justifyContent: 'center' }}>
-                <button
-                  className={`nv-tab ${authMode === 'existing' ? 'active' : ''}`}
-                  onClick={() => setAuthMode('existing')}
-                >
-                  Unlock Vault
-                </button>
-                <button
-                  className={`nv-tab ${authMode === 'new' ? 'active' : ''}`}
-                  onClick={() => setAuthMode('new')}
-                >
-                  New Vault
-                </button>
-              </div>
+              <div className="nv-hero-cover-body">
+                <div className="nv-segmented-control">
+                  <button
+                    className={`nv-segment-btn ${authMode === 'existing' ? 'active' : ''}`}
+                    onClick={() => setAuthMode('existing')}
+                  >
+                    Unlock Vault
+                  </button>
+                  <button
+                    className={`nv-segment-btn ${authMode === 'new' ? 'active' : ''}`}
+                    onClick={() => setAuthMode('new')}
+                  >
+                    New Vault
+                  </button>
+                </div>
 
               {authMode === 'existing' ? (
                 <div className="nv-form">
@@ -1010,11 +1071,133 @@ function App() {
               <p style={{ fontSize: '0.75rem', color: 'var(--nv-muted)', textAlign: 'center', marginTop: '1rem', marginBottom: 0 }}>
                 {status}
               </p>
-            </Card>
-          ) : (
+            </div>
+          </div>
+        ) : (
             /* UNLOCKED MULTI-PAGE VIEWS */
             <>
-              {/* PAGE 1: VAULT */}
+              {/* PAGE 1: MOBILE EXTENSION */}
+              {activeTab === 'quick-fill' && (
+                <section className="nv-extension-panel">
+                  <div className="nv-extension-header">
+                    <div className="nv-extension-brand">
+                      <Shield size={24} />
+                      <div>
+                        <div className="nv-extension-title">Next<span>Vault</span></div>
+                        <div className="nv-extension-subtitle">Mobile Quick Fill</div>
+                      </div>
+                    </div>
+                    <div className="nv-extension-status">
+                      <span className="dot" />
+                      <span>{quickFillStatus}</span>
+                    </div>
+                  </div>
+
+                  <div className="nv-extension-nav" role="tablist" aria-label="Quick Fill tools">
+                    {(['vault', 'generator', 'settings'] as QuickFillView[]).map(view => (
+                      <button
+                        key={view}
+                        className={`nv-extension-nav-btn ${quickFillView === view ? 'active' : ''}`}
+                        onClick={() => setQuickFillView(view)}
+                        role="tab"
+                        aria-selected={quickFillView === view}
+                      >
+                        {view === 'vault' ? 'Vault' : view === 'generator' ? 'Generator' : 'Settings'}
+                      </button>
+                    ))}
+                  </div>
+
+                  {quickFillView === 'vault' && (
+                    <div className="nv-extension-view">
+                      <button className="nv-btn nv-extension-primary" onClick={() => refreshVault(true)}>
+                        {isSyncing ? 'Syncing Vault...' : 'Refresh Mobile Vault'}
+                      </button>
+                      <div className="nv-extension-copy-note">
+                        Copy a username or password into the mobile browser or app you are using.
+                      </div>
+                      <div className="nv-extension-search">
+                        <span>⌕</span>
+                        <input
+                          value={quickFillSearch}
+                          onChange={e => setQuickFillSearch(e.target.value)}
+                          placeholder="Search vault credentials..."
+                          aria-label="Search vault credentials"
+                        />
+                      </div>
+                      <div className="nv-extension-result">
+                        {vaultItems.filter(item => {
+                          const query = quickFillSearch.toLowerCase().trim();
+                          return !query || item.service.toLowerCase().includes(query) || (item.username || '').toLowerCase().includes(query);
+                        }).length > 0 ? vaultItems.filter(item => {
+                          const query = quickFillSearch.toLowerCase().trim();
+                          return !query || item.service.toLowerCase().includes(query) || (item.username || '').toLowerCase().includes(query);
+                        }).map(item => (
+                          <div className="nv-extension-item" key={item.service}>
+                            <div className="nv-extension-item-info">
+                              <strong>{item.service}</strong>
+                              <span>{item.username || 'No username saved'}</span>
+                            </div>
+                            <div className="nv-extension-item-actions">
+                              {item.username && (
+                                <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={() => copyQuickFillCredential(item.service, 'username')}>
+                                  User
+                                </button>
+                              )}
+                              <button className="nv-btn nv-btn-sm" onClick={() => copyQuickFillCredential(item.service, 'password')}>
+                                Copy
+                              </button>
+                            </div>
+                          </div>
+                        )) : (
+                          <span className="nv-extension-empty">{quickFillSearch ? `No matches for "${quickFillSearch}"` : '>> No credentials saved in mobile vault'}</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {quickFillView === 'generator' && (
+                    <div className="nv-extension-view">
+                      <label className="nv-label" htmlFor="quick-fill-length">
+                        Password Length: <strong>{quickFillPasswordLength}</strong> characters
+                      </label>
+                      <input
+                        id="quick-fill-length"
+                        className="nv-extension-range"
+                        type="range"
+                        min="12"
+                        max="64"
+                        value={quickFillPasswordLength}
+                        onChange={e => refreshQuickFillPassword(Number(e.target.value))}
+                      />
+                      <input className="nv-input nv-mono nv-extension-password" value={quickFillPassword} readOnly aria-label="Generated password" />
+                      <div className="nv-btn-row">
+                        <button className="nv-btn" onClick={() => refreshQuickFillPassword()}>Generate New</button>
+                        <button className="nv-btn nv-btn-ghost" onClick={async () => {
+                          await navigator.clipboard.writeText(quickFillPassword);
+                          setQuickFillStatus('Password copied');
+                          showToast('Generated password copied');
+                        }}>Copy</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {quickFillView === 'settings' && (
+                    <div className="nv-extension-view">
+                      <div className="nv-extension-setting">
+                        <span>Mobile vault</span>
+                        <StatusPill ok label="Connected" />
+                      </div>
+                      <div className="nv-extension-copy-note">
+                        Quick Fill is powered by this unlocked mobile vault. It uses the same credentials as Vault and syncs through NexGrid.
+                      </div>
+                      <button className="nv-btn nv-btn-ghost" onClick={copyBootstrapToken}>Copy Account Token</button>
+                      <button className="nv-btn nv-btn-danger" onClick={onLockVault}>Lock Mobile Vault</button>
+                    </div>
+                  )}
+                </section>
+              )}
+
+              {/* PAGE 2: VAULT */}
               {activeTab === 'vault' && (
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.4rem' }}>
@@ -1049,6 +1232,11 @@ function App() {
                       value={vaultSearch}
                       onChange={e => setVaultSearch(e.target.value)}
                     />
+                    {vaultSearch && (
+                      <button className="nv-search-clear" onClick={() => setVaultSearch('')} title="Clear">
+                        ✕
+                      </button>
+                    )}
                   </div>
 
                   {showAddVault && (
@@ -1088,31 +1276,39 @@ function App() {
                   ) : (
                     filteredVaultItems.map(v => (
                       <div className="nv-vault-item" key={v.service}>
-                        <div className="nv-vault-info">
-                          <span className="nv-vault-service">{v.service}</span>
-                          <span className="nv-vault-meta">
-                            {v.username ? `👤 ${v.username}` : `Saved ${new Date(v.createdAt).toLocaleDateString()}`}
-                          </span>
+                        <div className="nv-vault-left">
+                          <div className="nv-avatar-monogram">
+                            {(v.service.charAt(0) || 'V').toUpperCase()}
+                          </div>
+                          <div className="nv-vault-info">
+                            <span className="nv-vault-service">{v.service}</span>
+                            <span className="nv-vault-meta">
+                              {v.username ? `👤 ${v.username}` : `Saved ${new Date(v.createdAt).toLocaleDateString()}`}
+                            </span>
+                          </div>
                         </div>
-                        <div style={{ display: 'flex', gap: '0.35rem' }}>
+                        <div className="nv-vault-actions">
                           <button
-                            className="nv-btn nv-btn-ghost nv-btn-sm"
+                            className="nv-btn nv-btn-sm"
+                            style={copiedKey === `pass-${v.service}` ? { background: 'rgba(16, 185, 129, 0.2)', borderColor: 'var(--nv-primary)', color: 'var(--nv-primary)' } : { background: 'transparent' }}
                             onClick={() => copyPassword(v.service)}
                           >
-                            Copy Pass
+                            {copiedKey === `pass-${v.service}` ? '✓ Copied' : 'Copy'}
                           </button>
                           {v.username && (
                             <button
-                              className="nv-btn nv-btn-ghost nv-btn-sm"
+                              className="nv-btn nv-btn-sm"
+                              style={copiedKey === `user-${v.username}` ? { background: 'rgba(16, 185, 129, 0.2)', borderColor: 'var(--nv-primary)', color: 'var(--nv-primary)' } : { background: 'transparent' }}
                               onClick={() => copyUsername(v.username!)}
                             >
-                              Copy User
+                              {copiedKey === `user-${v.username}` ? '✓ User' : 'User'}
                             </button>
                           )}
                           <button
                             className="nv-btn nv-btn-ghost nv-btn-sm"
-                            style={{ color: 'var(--nv-danger)' }}
+                            style={{ color: 'var(--nv-danger)', padding: '0.35rem 0.55rem' }}
                             onClick={() => deletePassword(v.service)}
+                            title="Delete credential"
                           >
                             ✕
                           </button>
@@ -1196,37 +1392,52 @@ function App() {
                   {otpItems.length === 0 ? (
                     <div className="nv-empty">No TOTP authenticators added yet.</div>
                   ) : (
-                    otpItems.map(o => (
-                      <div className="nv-vault-item" key={o.service}>
-                        <div className="nv-vault-info">
-                          <span className="nv-vault-service">{o.service}</span>
-                          <span style={{
-                            fontSize: '1.25rem',
-                            fontFamily: 'var(--nv-font-mono)',
-                            fontWeight: 700,
-                            color: 'var(--nv-primary)',
-                            letterSpacing: '3px'
-                          }}>
-                            {o.code || '------'}
-                          </span>
+                    otpItems.map(o => {
+                      const codeClean = (o.code || '').replace(/\s+/g, '');
+                      const displayCode = codeClean.length === 6
+                        ? `${codeClean.slice(0, 3)} ${codeClean.slice(3)}`
+                        : (o.code || '------');
+                      const isCopied = copiedKey === `otp-${o.service}`;
+
+                      return (
+                        <div className="nv-vault-item" key={o.service}>
+                          <div className="nv-vault-left">
+                            <div className="nv-avatar-monogram" style={{ background: 'linear-gradient(135deg, rgba(14, 165, 233, 0.25), rgba(16, 185, 129, 0.25))', borderColor: 'rgba(14, 165, 233, 0.35)' }}>
+                              {(o.service.charAt(0) || '2').toUpperCase()}
+                            </div>
+                            <div className="nv-vault-info">
+                              <span className="nv-vault-service">{o.service}</span>
+                              <span style={{
+                                fontSize: '1.25rem',
+                                fontFamily: 'var(--nv-font-mono)',
+                                fontWeight: 700,
+                                color: 'var(--nv-primary)',
+                                letterSpacing: '2.5px'
+                              }}>
+                                {displayCode}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="nv-vault-actions">
+                            <button
+                              className="nv-btn nv-btn-sm"
+                              style={isCopied ? { background: 'rgba(16, 185, 129, 0.2)', borderColor: 'var(--nv-primary)', color: 'var(--nv-primary)' } : {}}
+                              onClick={() => copyOTP(codeClean || o.code, o.service)}
+                            >
+                              {isCopied ? '✓ Copied' : 'Copy'}
+                            </button>
+                            <button
+                              className="nv-btn nv-btn-ghost nv-btn-sm"
+                              style={{ color: 'var(--nv-danger)', padding: '0.35rem 0.55rem' }}
+                              onClick={() => deleteOTP(o.service)}
+                              title="Delete TOTP"
+                            >
+                              ✕
+                            </button>
+                          </div>
                         </div>
-                        <div style={{ display: 'flex', gap: '0.35rem' }}>
-                          <button
-                            className="nv-btn nv-btn-accent nv-btn-sm"
-                            onClick={() => copyOTP(o.code)}
-                          >
-                            Copy Code
-                          </button>
-                          <button
-                            className="nv-btn nv-btn-ghost nv-btn-sm"
-                            style={{ color: 'var(--nv-danger)' }}
-                            onClick={() => deleteOTP(o.service)}
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               )}
@@ -1468,6 +1679,15 @@ function App() {
         {/* Bottom Navigation Bar (Visible when unlocked) */}
         {unlocked && (
           <nav className="nv-bottom-nav">
+            <button
+              className={`nv-nav-button ${activeTab === 'quick-fill' ? 'active' : ''}`}
+              onClick={openQuickFill}
+            >
+              <span className="nav-icon">
+                <Shield size={18} />
+              </span>
+              <span>Quick Fill</span>
+            </button>
             <button
               className={`nv-nav-button ${activeTab === 'vault' ? 'active' : ''}`}
               onClick={() => setActiveTab('vault')}
