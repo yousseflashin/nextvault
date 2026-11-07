@@ -5,7 +5,11 @@ apply plugin: 'com.android.application'
 // scripts/release.mjs). versionCode MUST match androidVersionCode() in
 // scripts/lib/release-common.mjs.
 // ---------------------------------------------------------------------------
-def appPackageJson = new groovy.json.JsonSlurper().parse(rootProject.file('../package.json'))
+def appPackageFile = file('../../package.json').canonicalFile
+if (!appPackageFile.exists()) {
+    throw new GradleException("Missing mobile package metadata: ${appPackageFile}")
+}
+def appPackageJson = new groovy.json.JsonSlurper().parse(appPackageFile)
 def appVersionName = appPackageJson.version as String
 def computeVersionCode = { String v ->
     def m = (v =~ /^(\d+)\.(\d+)\.(\d+)$/)

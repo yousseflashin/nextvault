@@ -1,7 +1,7 @@
 // Orchestrates building the mobile app, syncing assets to Capacitor Android,
 // detecting compatible JDK (17/21) and Android SDK paths, and compiling the APK with Gradle.
 import { spawnSync } from 'node:child_process';
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -160,7 +160,8 @@ console.log(
     : '[Android] No release keystore configured — building debug APK (assembleDebug) for local testing.'
 );
 
-const gradleResult = run(gradlewPath, ['-p', join(ROOT, 'apps', 'mobile', 'android'), gradleTask], { env });
+const androidDir = join(ROOT, 'apps', 'mobile', 'android');
+const gradleResult = run(gradlewPath, ['-p', androidDir, '--no-daemon', 'clean', gradleTask], { env });
 
 const apkPath = hasReleaseSigning
   ? join(ROOT, 'apps', 'mobile', 'android', 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk')
@@ -176,5 +177,23 @@ if (gradleResult !== 0) {
     process.exit(gradleResult);
   }
 } else {
+  const metadataPath = join(
+    ROOT,
+    'apps',
+    'mobile',
+    'android',
+    'app',
+    'build',
+    'outputs',
+    'apk',
+    hasReleaseSigning ? 'release' : 'debug',
+    'output-metadata.json'
+  );
+  const metadata = JSON.parse(readFileSync(metadataPath, 'utf8'));
+  const builtVersion = metadata.elements?.[0]?.versionName;
+  const expectedVersion = JSON.parse(readFileSync(join(ROOT, 'apps', 'mobile', 'package.json'), 'utf8')).version;
+  if (builtVersion !== expectedVersion) {
+    throw new Error(`Android APK version mismatch: built ${builtVersion}, expected ${expectedVersion}`);
+  }
   console.log(`\n✓ Android APK successfully built: ${apkPath}`);
 }

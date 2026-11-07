@@ -274,6 +274,17 @@ async function main() {
 
   // 4. Upload each asset
   const existingAssets = release.assets || [];
+  const uploadNames = new Set(filesToUpload);
+  for (const asset of existingAssets) {
+    const isBinary = /\.(apk|AppImage)$/i.test(asset.name || '');
+    if (isBinary && !uploadNames.has(asset.name)) {
+      console.log(`Removing obsolete release asset "${asset.name}"...`);
+      await githubRequest(`https://api.github.com/repos/${GITHUB_REPO}/releases/assets/${asset.id}`, {
+        method: 'DELETE'
+      });
+      console.log('  ✓ Removed obsolete binary.');
+    }
+  }
   for (const fileName of filesToUpload) {
     const filePath = join(releaseDir, fileName);
     const stats = statSync(filePath);
@@ -299,29 +310,9 @@ async function main() {
     console.log(`  ✓ Successfully attached "${fileName}" to Release ${tag}!`);
   }
 
-  // Update website release-info.json
-  try {
-    const { writeFileSync } = await import('node:fs');
-    const desktopFile = filesToUpload.find(f => f.endsWith('.AppImage'));
-    const mobileFile = filesToUpload.find(f => f.endsWith('.apk'));
-    const releaseMeta = {
-      version,
-      tag,
-      desktop: {
-        filename: desktopFile || `NexVault-${version}.AppImage`,
-        size: desktopFile ? `${(statSync(join(releaseDir, desktopFile)).size / 1024 / 1024).toFixed(1)} MB` : '124.5 MB',
-        url: `https://github.com/${GITHUB_REPO}/releases/download/${tag}/${desktopFile || `NexVault-${version}.AppImage`}`
-      },
-      mobile: {
-        filename: mobileFile || 'NexVault-mobile-app-debug.apk',
-        size: mobileFile ? `${(statSync(join(releaseDir, mobileFile)).size / 1024 / 1024).toFixed(1)} MB` : '4.0 MB',
-        url: `https://github.com/${GITHUB_REPO}/releases/download/${tag}/${mobileFile || 'NexVault-mobile-app-debug.apk'}`
-      },
-      publishedAt: new Date().toISOString()
-    };
-    writeFileSync(join(ROOT, 'apps/website/public/release-info.json'), JSON.stringify(releaseMeta, null, 2) + '\n');
-    console.log('  ✓ Updated apps/website/public/release-info.json');
-  } catch {}
+  // generate-release-manifest.mjs already synced the complete schema-v2
+  // manifest to the website. Do not replace it with a legacy partial object.
+  console.log('  ✓ Preserved schema-v2 apps/website/public/release-info.json');
 
   console.log('\n====================================================');
   console.log(`🎉 SUCCESS: Release ${tag} is now fully published on GitHub!`);

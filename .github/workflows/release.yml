@@ -7,11 +7,11 @@ name: Release
 
 on:
   push:
-    tags: ['v*.*.*']
+    tags: ["v*.*.*"]
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing tag to (re)build and publish, e.g. v0.1.31'
+        description: "Existing tag to (re)build and publish, e.g. v0.1.31"
         required: true
 
 permissions:
@@ -23,7 +23,7 @@ concurrency:
 
 env:
   TAG: ${{ github.event.inputs.tag || github.ref_name }}
-  NODE_VERSION: '22'
+  NODE_VERSION: "22"
 
 jobs:
   verify:
@@ -73,8 +73,8 @@ jobs:
         run: npm --prefix apps/desktop run build
         env:
           # Publishing is done by the publish job, never by electron-builder.
-          GH_TOKEN: ''
-          GITHUB_TOKEN: ''
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
       - name: Collect artifact
         run: |
           mkdir -p out
@@ -103,7 +103,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: "21"
           cache: gradle
       - uses: android-actions/setup-android@v3
       - name: Check signing secrets
@@ -130,10 +130,13 @@ jobs:
           NEXVAULT_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           NEXVAULT_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD || secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          RELEASE_VERSION: ${{ needs.verify.outputs.version }}
         run: |
           printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$NEXVAULT_KEYSTORE_PATH"
           chmod +x gradlew
           ./gradlew --no-daemon assembleRelease
+          test "$(node -p "require('../../package.json').version")" = "${{ needs.verify.outputs.version }}" || { echo "::error::Mobile package version does not match release tag"; exit 1; }
+          node -e "const m=require('./app/build/outputs/apk/release/output-metadata.json'); const expected=process.env.RELEASE_VERSION; if (m.elements?.[0]?.versionName !== expected) { throw new Error('APK version mismatch: '+m.elements?.[0]?.versionName+' != '+expected); }"
           rm -f "$NEXVAULT_KEYSTORE_PATH"
       - name: Verify signature & collect artifact
         run: |

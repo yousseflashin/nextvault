@@ -7,7 +7,7 @@
  * release/release-info.json + release/SHA256SUMS.txt, and syncs the manifest to
  * apps/website/public/release-info.json.
  */
-import { cp, mkdir, readdir, rm, stat } from 'node:fs/promises';
+import { cp, mkdir, readFile, readdir, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { ROOT, formatBytes, readRootVersion } from './lib/release-common.mjs';
@@ -67,6 +67,14 @@ for (const src of apkSources) {
   const files = (await readdir(src.dir)).filter((f) => src.glob.test(f));
   for (const file of files) {
     const from = join(src.dir, file);
+    const metadataPath = join(src.dir, 'output-metadata.json');
+    if (await exists(metadataPath)) {
+      const metadata = JSON.parse(await readFile(metadataPath, 'utf8'));
+      const builtVersion = metadata.elements?.[0]?.versionName;
+      if (builtVersion !== currentVersion) {
+        throw new Error(`Refusing to publish stale mobile APK: ${builtVersion || 'unknown'} (expected ${currentVersion})`);
+      }
+    }
     await cp(from, join(TARGET, src.outName));
     const { size } = await stat(from);
     published.push({ name: src.outName, size });
