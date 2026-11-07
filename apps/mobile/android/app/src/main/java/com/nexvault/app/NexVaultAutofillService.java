@@ -50,20 +50,32 @@ public class NexVaultAutofillService extends AutofillService {
                 }
             }
 
-            // Native apps do not expose a web domain. Use the hosting activity
-            // package as the stable service identity for credential matching.
+            // Post-process fields: if a form has a password field and an editable field before it
+            // without an explicit username classification, treat the prior field as username.
+            boolean hasUsername = false;
+            for (Field f : fields) {
+                if (f.username) {
+                    hasUsername = true;
+                    break;
+                }
+            }
+            if (!hasUsername) {
+                for (int i = 0; i < fields.size(); i++) {
+                    if (fields.get(i).password && i > 0) {
+                        fields.get(i - 1).username = true;
+                        break;
+                    }
+                }
+            }
+            fields.removeIf(field -> !field.password && !field.username);
+
+            // Fallback for native apps: use the hosting activity package name as service identifier
             if (domain.isEmpty()) {
                 ComponentName activity = structure.getActivityComponent();
                 if (activity != null) domain = activity.getPackageName();
             }
 
-            boolean passwordFocused = false;
-            for (Field field : fields) {
-                passwordFocused |= field.password && field.focused;
-            }
-            fields.removeIf(field -> !field.password && !field.username);
-
-            if (domain.isEmpty() || fields.isEmpty()) {
+            if (fields.isEmpty()) {
                 callback.onSuccess(null);
                 return;
             }
@@ -72,6 +84,7 @@ public class NexVaultAutofillService extends AutofillService {
             FillResponse.Builder response = new FillResponse.Builder();
             boolean matched = false;
 
+            // 1. Direct domain match
             for (int i = 0; i < credentials.length(); i++) {
                 JSONObject credential = credentials.getJSONObject(i);
                 String service = credential.optString("service");
@@ -82,11 +95,11 @@ public class NexVaultAutofillService extends AutofillService {
                 matched = true;
             }
 
-            // 1Password Fallback Method:
-            // If domain did not match any stored entry directly, or in browsers where URL isn't surfaced,
-            // provide up to 5 saved credentials so the user can easily select their account in one tap.
-            if (!matched && credentials.length() > 0) {
-                int limit = Math.min(credentials.length(), 5);
+            // 2. 1Password Fallback Method:
+            // If domain did not match any stored entry directly, or inside browsers where domain is not exposed,
+            // provide up to 10 saved credentials so the user can easily select their account in one tap.
+            if ((!matched || isBrowserPackage(domain)) && credentials.length() > 0) {
+                int limit = Math.min(credentials.length(), 10);
                 for (int i = 0; i < limit; i++) {
                     JSONObject credential = credentials.getJSONObject(i);
                     String service = credential.optString("service", "Saved Login");
@@ -96,20 +109,50 @@ public class NexVaultAutofillService extends AutofillService {
                 }
             }
 
-            if (passwordFocused) {
-                Dataset.Builder generator = createGeneratorDataset(fields);
-                response.addDataset(generator.build());
-                matched = true;
+            // 3. Always provide "⚡ Generate strong password" dataset whenever password field is present
+            Dataset.Builder generator = createGeneratorDataset(fields);
+            response.addDataset(generator.build());
 
-                AutofillId[] saveIds = new AutofillId[fields.size()];
-                for (int i = 0; i < fields.size(); i++) saveIds[i] = fields.get(i).id;
-                response.setSaveInfo(new SaveInfo.Builder(
-                    SaveInfo.SAVE_DATA_TYPE_USERNAME | SaveInfo.SAVE_DATA_TYPE_PASSWORD,
-                    saveIds
-                ).build());
+            // 4. Always configure SaveInfo so Android prompts to save credentials upon form submit
+            List<AutofillId> allIds = new ArrayList<>();
+            List<AutofillId> passwordIds = new ArrayList<>();
+            List<AutofillId> usernameIds = new ArrayList<>();
+
+            for (Field field : fields) {
+                allIds.add(field.id);
+                if (field.password) passwordIds.add(field.id);
+                if (field.username) usernameIds.add(field.id);
             }
 
-            callback.onSuccess(matched ? response.build() : null);
+            if (!allIds.isEmpty()) {
+                int saveType = SaveInfo.SAVE_DATA_TYPE_PASSWORD;
+                if (!usernameIds.isEmpty()) {
+                    saveType |= SaveInfo.SAVE_DATA_TYPE_USERNAME;
+                }
+
+                AutofillId[] requiredIds;
+                AutofillId[] optionalIds = null;
+
+                if (!passwordIds.isEmpty()) {
+                    requiredIds = passwordIds.toArray(new AutofillId[0]);
+                    if (!usernameIds.isEmpty()) {
+                        optionalIds = usernameIds.toArray(new AutofillId[0]);
+                    }
+                } else {
+                    requiredIds = allIds.toArray(new AutofillId[0]);
+                }
+
+                SaveInfo.Builder saveInfoBuilder = new SaveInfo.Builder(saveType, requiredIds);
+                if (optionalIds != null && optionalIds.length > 0) {
+                    saveInfoBuilder.setOptionalIds(optionalIds);
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    saveInfoBuilder.setFlags(SaveInfo.FLAG_SAVE_ON_ALL_VIEWS_INVISIBLE);
+                }
+                response.setSaveInfo(saveInfoBuilder.build());
+            }
+
+            callback.onSuccess(response.build());
         } catch (Exception error) {
             callback.onFailure("NexVault autofill is unavailable");
         }
@@ -123,6 +166,8 @@ public class NexVaultAutofillService extends AutofillService {
             String value = field.password ? password : username;
             if (!value.isEmpty()) {
                 dataset.setValue(field.id, AutofillValue.forText(value));
+            } else if (!password.isEmpty()) {
+                dataset.setValue(field.id, AutofillValue.forText(""));
             }
         }
 
@@ -134,10 +179,16 @@ public class NexVaultAutofillService extends AutofillService {
         Dataset.Builder dataset = new Dataset.Builder(rv);
         String generated = generatePassword();
 
+        boolean bound = false;
         for (Field field : fields) {
             if (field.password) {
                 dataset.setValue(field.id, AutofillValue.forText(generated));
+                bound = true;
             }
+        }
+        if (!bound && !fields.isEmpty()) {
+            Field target = fields.get(fields.size() - 1);
+            dataset.setValue(target.id, AutofillValue.forText(generated));
         }
 
         return dataset;
@@ -170,15 +221,15 @@ public class NexVaultAutofillService extends AutofillService {
 
         String fieldName = ((node.getHint() == null ? "" : node.getHint()) + " "
             + (node.getIdEntry() == null ? "" : node.getIdEntry()) + " "
-            + (node.getContentDescription() == null ? "" : node.getContentDescription())).toLowerCase(Locale.ROOT);
+            + (node.getContentDescription() == null ? "" : node.getContentDescription()))
+            .toLowerCase(Locale.ROOT).replace('_', ' ').replace('-', ' ').replace('.', ' ');
 
-        // Check if field is blacklisted (address, shipping, billing, search, notes, etc.)
         boolean blacklisted = isBlacklistedField(fieldName, hintText);
 
         boolean password = false;
         boolean username = false;
 
-        // Inspect HTML Info if available (Chrome and WebViews)
+        // 1. Inspect HTML Info if available (Chrome and WebViews)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && node.getHtmlInfo() != null) {
             try {
                 android.view.ViewStructure.HtmlInfo htmlInfo = node.getHtmlInfo();
@@ -186,51 +237,50 @@ public class NexVaultAutofillService extends AutofillService {
                 if ("input".equalsIgnoreCase(tag)) {
                     List<Pair<String, String>> attrs = htmlInfo.getAttributes();
                     if (attrs != null) {
-                        StringBuilder htmlProbe = new StringBuilder();
                         for (Pair<String, String> attr : attrs) {
                             String key = attr.first != null ? attr.first.toLowerCase(Locale.ROOT) : "";
                             String val = attr.second != null ? attr.second.toLowerCase(Locale.ROOT) : "";
-                            htmlProbe.append(" ").append(key).append("=").append(val);
                             if ("type".equals(key)) {
                                 if (val.contains("password")) password = true;
                                 if (val.contains("email")) username = true;
                             } else if ("autocomplete".equals(key)) {
                                 if (val.contains("password")) password = true;
-                                if (val.contains("username") || val.contains("email")) username = true;
-                            } else if ("name".equals(key) || "id".equals(key) || "placeholder".equals(key)) {
-                                if (val.matches(".*\\b(pass|password|passwd|pwd)\\b.*")) password = true;
-                                if (val.matches(".*\\b(user|username|email|login|userid|user_id)\\b.*")) username = true;
+                                if (val.contains("username") || val.contains("email") || val.contains("login")) username = true;
+                            } else if ("name".equals(key) || "id".equals(key) || "placeholder".equals(key) || "aria-label".equals(key)) {
+                                String norm = val.replace('_', ' ').replace('-', ' ').replace('.', ' ');
+                                if (norm.matches(".*\\b(pass|password|passwd|pwd|secret)\\b.*")) password = true;
+                                if (norm.matches(".*\\b(user|username|email|login|account|identifier|userid)\\b.*")) username = true;
                             }
-                        }
-                        if (isBlacklistedField(htmlProbe.toString(), "")) {
-                            blacklisted = true;
                         }
                     }
                 }
             } catch (Exception ignored) {}
         }
 
-        if (!blacklisted) {
-            int inputType = node.getInputType();
-            if (hintText.contains("password")
-                || (inputType & 0x00000081) != 0
-                || (inputType & 0x000000e0) != 0) {
-                password = true;
-            }
+        // 2. Inspect Android InputType
+        int inputType = node.getInputType();
+        int variation = inputType & 0x00000ff0;
+        if (variation == 0x80 || variation == 0x90 || variation == 0xe0 || variation == 0x10 || (inputType & 0x00000081) != 0) {
+            password = true;
+        }
+        if (variation == 0x20 || variation == 0xd0) {
+            username = true;
+        }
 
-            if (hintText.contains("username") || hintText.contains("email")
-                || fieldName.matches(".*\\b(user|username|email|login|account|identifier|userid|user_id)\\b.*")) {
-                username = true;
-            }
+        // 3. Inspect AutofillHints
+        if (hintText.contains("password")) password = true;
+        if (hintText.contains("username") || hintText.contains("email") || hintText.contains("login") || hintText.contains("user")) username = true;
 
-            // Only recognize phone in explicit auth/login context
-            if (fieldName.matches(".*\\b(phone|mobile)\\b.*") && fieldName.matches(".*\\b(login|auth|signin|account)\\b.*")) {
-                username = true;
-            }
+        // 4. Inspect field name probe
+        if (fieldName.matches(".*\\b(pass|password|passwd|pwd|secret)\\b.*")) password = true;
+        if (fieldName.matches(".*\\b(user|username|email|login|account|identifier|userid)\\b.*")) username = true;
 
-            if (password) username = false;
+        if (password) username = false;
 
-            if (node.getAutofillId() != null && (password || username)) {
+        if (!blacklisted && node.getAutofillId() != null) {
+            boolean isEditableText = (inputType & 0x0000000f) == 1
+                || (node.getClassName() != null && node.getClassName().contains("EditText"));
+            if (password || username || isEditableText) {
                 fields.add(new Field(node.getAutofillId(), password, username, node.isFocused()));
             }
         }
@@ -249,7 +299,12 @@ public class NexVaultAutofillService extends AutofillService {
         if (hintText == null) hintText = "";
         String combined = (probe + " " + hintText).toLowerCase(Locale.ROOT);
 
-        // Strict blacklist for addresses, shipping, search, personal info, financial, etc.
+        // Explicitly protect login and credential fields from blacklist
+        if (combined.contains("email") || combined.contains("mail") || combined.contains("login")
+            || combined.contains("user") || combined.contains("pass") || combined.contains("account")) {
+            return false;
+        }
+
         String blacklistPattern = ".*\\b("
             + "address|addr|street|city|state|zip|zipcode|postal|postcode|country|province|region|county|"
             + "apt|suite|unit|floor|building|po_box|pobox|delivery|shipping|billing|destination|location|"
@@ -259,17 +314,7 @@ public class NexVaultAutofillService extends AutofillService {
             + "comment|message|note|notes|bio|description|feedback|review|subject|qty|quantity|amount|price"
             + ")\\b.*";
 
-        if (combined.matches(blacklistPattern)) {
-            return true;
-        }
-
-        // Check autofill hints
-        if (combined.contains("postaladdress") || combined.contains("postalcode") || combined.contains("streetaddress")
-            || combined.contains("addressline") || combined.contains("creditcard") || combined.contains("birthdate")) {
-            return true;
-        }
-
-        return false;
+        return combined.matches(blacklistPattern);
     }
 
     private RemoteViews presentation(String service, String username) {
@@ -361,6 +406,10 @@ public class NexVaultAutofillService extends AutofillService {
                         collectSavedValues(window.getRootViewNode(), values);
                     }
                 }
+                if (values.domain.isEmpty()) {
+                    ComponentName activity = structure.getActivityComponent();
+                    if (activity != null) values.domain = activity.getPackageName();
+                }
             }
 
             if (!values.domain.isEmpty() && !values.password.isEmpty()) {
@@ -397,8 +446,9 @@ public class NexVaultAutofillService extends AutofillService {
         String idEntry = node.getIdEntry();
         if (values.domain.isEmpty() && idEntry != null) {
             String lowerId = idEntry.toLowerCase(Locale.ROOT);
-            if (lowerId.contains("url_bar") || lowerId.contains("location_bar") || lowerId.contains("search_box")) {
+            if (lowerId.contains("url_bar") || lowerId.contains("location_bar") || lowerId.contains("search_box") || lowerId.contains("omnibox") || lowerId.contains("address_bar")) {
                 CharSequence text = node.getText();
+                if (text == null || text.length() == 0) text = node.getContentDescription();
                 if (text != null && text.length() > 0) {
                     String urlCandidate = normalize(text.toString());
                     if (!urlCandidate.isEmpty() && urlCandidate.contains(".")) {
@@ -408,21 +458,80 @@ public class NexVaultAutofillService extends AutofillService {
             }
         }
 
-        String hints = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && node.getAutofillHints() != null
-            ? String.join(" ", node.getAutofillHints()).toLowerCase(Locale.ROOT)
-            : "";
-        String name = ((node.getHint() == null ? "" : node.getHint()) + " " + (node.getIdEntry() == null ? "" : node.getIdEntry())).toLowerCase(Locale.ROOT);
+        String textVal = "";
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && node.getAutofillValue() != null && node.getAutofillValue().isText()) {
-            String value = node.getAutofillValue().getTextValue().toString();
-            if (hints.contains("password") || name.matches(".*(password|passcode|passwd).*")) values.password = value;
-            else if (hints.contains("username") || hints.contains("email") || name.matches(".*(user|email|login|account).*")) values.username = value;
+            CharSequence cs = node.getAutofillValue().getTextValue();
+            if (cs != null) textVal = cs.toString().trim();
         }
-        for (int i = 0; i < node.getChildCount(); i++) collectSavedValues(node.getChildAt(i), values);
-    }
+        if (textVal.isEmpty() && node.getText() != null) {
+            textVal = node.getText().toString().trim();
+        }
 
-    private boolean hasPasswordField(List<Field> fields) {
-        for (Field field : fields) if (field.password) return true;
-        return false;
+        if (!textVal.isEmpty()) {
+            boolean isPassword = false;
+            boolean isUsername = false;
+
+            int inputType = node.getInputType();
+            int variation = inputType & 0x00000ff0;
+            if (variation == 0x80 || variation == 0x90 || variation == 0xe0 || variation == 0x10 || (inputType & 0x00000081) != 0) {
+                isPassword = true;
+            }
+            if (variation == 0x20 || variation == 0xd0) {
+                isUsername = true;
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                String[] hints = node.getAutofillHints();
+                if (hints != null) {
+                    for (String h : hints) {
+                        String lower = h.toLowerCase(Locale.ROOT);
+                        if (lower.contains("password")) isPassword = true;
+                        if (lower.contains("username") || lower.contains("email") || lower.contains("login") || lower.contains("user")) isUsername = true;
+                    }
+                }
+            }
+
+            String probe = ((node.getHint() == null ? "" : node.getHint()) + " "
+                + (node.getIdEntry() == null ? "" : node.getIdEntry()) + " "
+                + (node.getContentDescription() == null ? "" : node.getContentDescription()))
+                .toLowerCase(Locale.ROOT).replace('_', ' ').replace('-', ' ').replace('.', ' ');
+
+            if (probe.matches(".*\\b(pass|password|passwd|pwd|secret)\\b.*")) isPassword = true;
+            if (probe.matches(".*\\b(user|username|email|login|account|identifier)\\b.*")) isUsername = true;
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && node.getHtmlInfo() != null) {
+                try {
+                    android.view.ViewStructure.HtmlInfo html = node.getHtmlInfo();
+                    if ("input".equalsIgnoreCase(html.getTag())) {
+                        List<Pair<String, String>> attrs = html.getAttributes();
+                        if (attrs != null) {
+                            for (Pair<String, String> attr : attrs) {
+                                String k = attr.first != null ? attr.first.toLowerCase(Locale.ROOT) : "";
+                                String v = attr.second != null ? attr.second.toLowerCase(Locale.ROOT) : "";
+                                if ("type".equals(k) && v.contains("password")) isPassword = true;
+                                if ("autocomplete".equals(k) && v.contains("password")) isPassword = true;
+                                if ("autocomplete".equals(k) && (v.contains("username") || v.contains("email"))) isUsername = true;
+                                if ("name".equals(k) || "id".equals(k) || "placeholder".equals(k)) {
+                                    String nv = v.replace('_', ' ').replace('-', ' ');
+                                    if (nv.matches(".*\\b(pass|password|passwd|pwd)\\b.*")) isPassword = true;
+                                    if (nv.matches(".*\\b(user|username|email|login)\\b.*")) isUsername = true;
+                                }
+                            }
+                        }
+                    }
+                } catch (Exception ignored) {}
+            }
+
+            if (isPassword) {
+                values.password = textVal;
+            } else if (isUsername && values.username.isEmpty()) {
+                values.username = textVal;
+            }
+        }
+
+        for (int i = 0; i < node.getChildCount(); i++) {
+            collectSavedValues(node.getChildAt(i), values);
+        }
     }
 
     private String generatePassword() {
@@ -441,7 +550,7 @@ public class NexVaultAutofillService extends AutofillService {
 
     private static class Field {
         final AutofillId id;
-        final boolean password;
+        boolean password;
         boolean username;
         final boolean focused;
         Field(AutofillId id, boolean password, boolean username, boolean focused) {

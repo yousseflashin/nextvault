@@ -3300,10 +3300,17 @@ function App() {
                           ⚙️ Set NexVault as Autofill Service
                         </button>
                         <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={async () => {
-                          const st = (window as any).nexVault?.loadVault?.();
-                          if (st) {
-                            await syncAutofillCredentials(st.passwords);
-                            showToast('Synced vault credentials to Android hardware keystore!');
+                          try {
+                            await mergeNativeAutofillCredentials();
+                            const st = (window as any).nexVault?.loadVault?.();
+                            if (st) {
+                              syncAutofillCredentials(st);
+                              showToast(`Synced ${st.passwords?.length || 0} credentials with Android Autofill!`);
+                            } else {
+                              showToast('Please unlock your vault first to sync credentials.');
+                            }
+                          } catch {
+                            showToast('Error syncing with Android keystore.');
                           }
                         }}>
                           🔄 Sync Keystore

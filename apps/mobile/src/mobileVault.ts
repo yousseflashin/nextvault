@@ -463,6 +463,7 @@ async function startSession(password: string, state: MobileVaultState) {
   persistEncrypted(state);
   localStorage.removeItem(LEGACY_STORAGE_KEY);
   touchOfflineHeartbeat();
+  syncAutofillCredentials(state);
 }
 
 /** Decrypts the stored vault; throws 'Invalid master password' on failure. */
@@ -476,6 +477,8 @@ async function unlockEnvelope(password: string, env: VaultEnvelope): Promise<Mob
   sessionIter = env.iter;
   cachedState = JSON.parse(naclUtil.encodeUTF8(plain));
   touchOfflineHeartbeat();
+  syncAutofillCredentials(cachedState);
+  mergeNativeAutofillCredentials().catch(() => {});
   return cachedState as MobileVaultState;
 }
 
@@ -517,13 +520,17 @@ export function saveVault(state: MobileVaultState) {
   syncAutofillCredentials(state);
 }
 
-export function syncAutofillCredentials(state = loadVault()) {
-  if (!state || typeof window === 'undefined' || (window as any).Capacitor?.getPlatform?.() !== 'android') return;
-  const credentials = state.passwords.map(entry => ({
-    service: normalizeDomain(entry.service),
-    username: entry.username || '',
-    password: entry.credential
-  }));
+export function syncAutofillCredentials(stateOrPasswords: any = loadVault()) {
+  if (!stateOrPasswords || typeof window === 'undefined' || (window as any).Capacitor?.getPlatform?.() !== 'android') return;
+  const rawList = Array.isArray(stateOrPasswords)
+    ? stateOrPasswords
+    : (Array.isArray(stateOrPasswords.passwords) ? stateOrPasswords.passwords : []);
+  const credentials = rawList.map((entry: any) => ({
+    service: normalizeDomain(entry.service || entry.name || entry.title || ''),
+    rawService: entry.service || '',
+    username: entry.username || entry.email || entry.login || '',
+    password: entry.credential || entry.password || ''
+  })).filter((c: any) => c.service || c.username || c.password);
   AutofillBridge.syncCredentials({ credentialsJson: JSON.stringify(credentials) }).catch(() => {});
 }
 
