@@ -122,7 +122,32 @@ if (androidHome) {
   env.ANDROID_SDK_ROOT = androidHome;
 }
 
-const gradlewPath = join(ROOT, 'apps', 'mobile', 'android', 'gradlew');
+let gradlewPath = join(ROOT, 'apps', 'mobile', 'android', 'gradlew');
+
+// On Java 25+, Gradle 8's Groovy fails with class version 69. Prefer Gradle 9 if available in ~/.gradle cache
+const checkJava = spawnSync('java', ['-version'], { encoding: 'utf8' });
+const verOut = (checkJava.stderr || '') + (checkJava.stdout || '');
+if (/version "(?:2[5-9]|[3-9]\d)/.test(verOut)) {
+  const gradleDistsDir = join(HOME, '.gradle', 'wrapper', 'dists');
+  if (existsSync(gradleDistsDir)) {
+    try {
+      const dists = readdirSync(gradleDistsDir).filter(d => d.startsWith('gradle-9'));
+      for (const d of dists) {
+        const sub = readdirSync(join(gradleDistsDir, d));
+        for (const s of sub) {
+          const cand = join(gradleDistsDir, d, s, d.replace('-bin', '').replace('-all', ''), 'bin', 'gradle');
+          if (existsSync(cand)) {
+            gradlewPath = cand;
+            console.log(`Detected Java 25+: Using compatible Gradle 9 binary: ${gradlewPath}`);
+            break;
+          }
+        }
+        if (gradlewPath !== join(ROOT, 'apps', 'mobile', 'android', 'gradlew')) break;
+      }
+    } catch {}
+  }
+}
+
 const gradleResult = run(gradlewPath, ['-p', join(ROOT, 'apps', 'mobile', 'android'), 'assembleDebug'], { env });
 
 const apkPath = join(ROOT, 'apps', 'mobile', 'android', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');

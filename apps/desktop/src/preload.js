@@ -66,6 +66,17 @@ contextBridge.exposeInMainWorld('nexVault', {
   onExtensionRejected: (callback) => ipcRenderer.on(
     'extension-rejected', (event, data) => callback(data)
   ),
+  grantPeerExtension: (targetPeerId, duration) => ipcRenderer.invoke('grant-peer-extension', targetPeerId, duration),
+  requestPeerToExtend: (targetPeerId, duration) => ipcRenderer.invoke('request-peer-to-extend', targetPeerId, duration),
+  onExtensionGrantReceived: (callback) => ipcRenderer.on(
+    'extension-grant-received', (event, data) => callback(data)
+  ),
+  onExtensionGrantAcknowledged: (callback) => ipcRenderer.on(
+    'extension-grant-acknowledged', (event, data) => callback(data)
+  ),
+  onExtensionPromptReceived: (callback) => ipcRenderer.on(
+    'extension-prompt-received', (event, data) => callback(data)
+  ),
   extendSecurityWindow: (duration, options) => ipcRenderer.invoke('extend-security-window', duration, options),
   nuke: () => ipcRenderer.invoke('nuke'),
   onPeerData: (callback) => ipcRenderer.on('peer-data', (event, data) => callback(data)),

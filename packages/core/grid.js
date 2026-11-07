@@ -376,6 +376,12 @@ class NexGrid extends EventEmitter {
             this.emit('extension-approval-request', fromPeerId, decrypted);
           } else if (decrypted && (decrypted.type === 'extension-approval-response' || decrypted.type === 'extension-approval')) {
             this.emit('extension-approval-response', fromPeerId, decrypted);
+          } else if (decrypted && decrypted.type === 'extension-grant') {
+            this.emit('extension-grant', fromPeerId, decrypted);
+          } else if (decrypted && decrypted.type === 'extension-grant-ack') {
+            this.emit('extension-grant-ack', fromPeerId, decrypted);
+          } else if (decrypted && decrypted.type === 'extension-prompt-request') {
+            this.emit('extension-prompt-request', fromPeerId, decrypted);
           }
           this.emit('secure-message', fromPeerId, decrypted);
           this.emit('message', fromPeerId, decrypted);
@@ -421,6 +427,15 @@ class NexGrid extends EventEmitter {
       this.emit('message', fromPeerId, payload);
     } else if (payload.type === 'extension-approval-response' || payload.type === 'extension-approval') {
       this.emit('extension-approval-response', fromPeerId, payload);
+      this.emit('message', fromPeerId, payload);
+    } else if (payload.type === 'extension-grant') {
+      this.emit('extension-grant', fromPeerId, payload);
+      this.emit('message', fromPeerId, payload);
+    } else if (payload.type === 'extension-grant-ack') {
+      this.emit('extension-grant-ack', fromPeerId, payload);
+      this.emit('message', fromPeerId, payload);
+    } else if (payload.type === 'extension-prompt-request') {
+      this.emit('extension-prompt-request', fromPeerId, payload);
       this.emit('message', fromPeerId, payload);
     } else {
       this.emit('message', fromPeerId, payload);

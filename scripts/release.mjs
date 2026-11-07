@@ -216,6 +216,15 @@ updateFileContent('apps/mobile/src/mobileVault.ts', (content) => {
   return content.replace(/export const CURRENT_VERSION = ['"][^'"]+['"];/, `export const CURRENT_VERSION = '${nextVersion}';`);
 });
 
+// Update Android build.gradle versionCode and versionName
+updateFileContent('apps/mobile/android/app/build.gradle', (content) => {
+  const parts = nextVersion.split('.').map(Number);
+  const vCode = 10000 + (parts[0] || 0) * 1000 + (parts[1] || 0) * 100 + (parts[2] || 0);
+  return content
+    .replace(/versionCode\s+\d+/, `versionCode ${vCode}`)
+    .replace(/versionName\s+['"][^'"]+['"]/, `versionName "${nextVersion}"`);
+});
+
 // Update website downloads and metadata
 const releaseMeta = {
   version: nextVersion,

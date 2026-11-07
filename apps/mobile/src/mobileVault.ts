@@ -10,10 +10,12 @@ import { registerPlugin } from '@capacitor/core';
 
 const AutofillBridge = registerPlugin<{
   syncCredentials(options: { credentialsJson: string }): Promise<void>;
-    readCredentials(): Promise<{ credentialsJson: string }>;
+  readCredentials(): Promise<{ credentialsJson: string }>;
   clearCredentials(): Promise<void>;
   openSettings(): Promise<void>;
   isEnabled(): Promise<{ enabled: boolean }>;
+  openAccessibilitySettings(): Promise<void>;
+  isAccessibilityEnabled(): Promise<{ enabled: boolean }>;
 }>('AutofillBridge');
 
 export interface StoredCredential {
@@ -329,6 +331,9 @@ export interface GridCallbacks {
   onIncomingExtensionRequest?: (request: PeerExtensionRequest) => void;
   onExtensionApproved?: (response: { duration: string; expiresAt: string; approverName: string }) => void;
   onExtensionRejected?: (response: { reason: string }) => void;
+  onExtensionGrantReceived?: (grant: { grantId: string; from: string; granterDeviceName: string; duration: string; newDeadline: string }) => void;
+  onExtensionGrantAcknowledged?: (ack: { grantId: string; from: string; fromDeviceName: string; accepted: boolean; newDeadline: string }) => void;
+  onExtensionPromptReceived?: (prompt: { from: string; fromDeviceName: string; duration: string }) => void;
 }
 
 const STORAGE_KEY = 'nexvault_mobile_vault_v3';
@@ -657,6 +662,56 @@ export function respondToPeerSecurityExtension(peerId: string, requestId: string
   return { success: true };
 }
 
+export function grantPeerSecurityExtension(targetPeerId: string, duration: string = '1week') {
+  const state = loadVault();
+  if (!state || !activeSocket || activeSocket.readyState !== WebSocket.OPEN) {
+    return { success: false, error: 'Mesh relay socket is not active' };
+  }
+
+  const durations: Record<string, number> = {
+    '1week': 7 * 24 * 60 * 60 * 1000,
+    '1month': 30 * 24 * 60 * 60 * 1000,
+    '3months': 90 * 24 * 60 * 60 * 1000
+  };
+  const ms = durations[duration] || durations['1week'];
+  const newDeadline = new Date(Date.now() + ms).toISOString();
+  const grantId = 'grant-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+
+  const grantPayload = {
+    type: 'extension-grant',
+    grantId,
+    targetDeviceId: targetPeerId,
+    granterDeviceId: state.devicePublicKey,
+    granterDeviceName: 'NexVault Mobile',
+    granterPublicKey: state.x25519PublicKey,
+    duration,
+    newDeadline,
+    timestamp: new Date().toISOString()
+  };
+
+  sendPeerMessage(targetPeerId, grantPayload, state, activeSocket);
+  return { success: true, grantId, duration, newDeadline };
+}
+
+export function requestPeerToExtend(targetPeerId: string, duration: string = '1week') {
+  const state = loadVault();
+  if (!state || !activeSocket || activeSocket.readyState !== WebSocket.OPEN) {
+    return { success: false, error: 'Mesh relay socket is not active' };
+  }
+
+  const promptPayload = {
+    type: 'extension-prompt-request',
+    targetDeviceId: targetPeerId,
+    fromDeviceId: state.devicePublicKey,
+    fromDeviceName: 'NexVault Mobile',
+    duration,
+    timestamp: new Date().toISOString()
+  };
+
+  sendPeerMessage(targetPeerId, promptPayload, state, activeSocket);
+  return { success: true };
+}
+
 export function emergencyNukeVault() {
   try {
     clearAutofillCredentials();
@@ -712,6 +767,19 @@ export async function mergeNativeAutofillCredentials() {
 
 export async function openAutofillSettings() {
   return AutofillBridge.openSettings();
+}
+
+export async function openAccessibilitySettings() {
+  return AutofillBridge.openAccessibilitySettings();
+}
+
+export async function isAccessibilityEnabled(): Promise<boolean> {
+  try {
+    const res = await AutofillBridge.isAccessibilityEnabled();
+    return !!res?.enabled;
+  } catch {
+    return false;
+  }
 }
 
 // Sealed box encryption (X25519)
@@ -814,6 +882,52 @@ function handleExtensionResponse(payload: any, callbacks?: GridCallbacks) {
   }
 }
 
+function handleExtensionGrant(
+  grant: any,
+  from: string,
+  callbacks?: GridCallbacks,
+  state?: MobileVaultState | null,
+  socket?: WebSocket | null
+) {
+  if (!grant || !grant.newDeadline) return;
+  const deadline = grant.newDeadline;
+  const duration = grant.duration || '1week';
+  const granterName = grant.granterDeviceName || from;
+
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem('nexvault_offline_deadline', deadline);
+    localStorage.setItem('nexvault_extension_info', JSON.stringify({
+      duration,
+      expiresAt: deadline,
+      approverName: granterName,
+      grantedByPeer: true,
+      approvedAt: new Date().toISOString()
+    }));
+  }
+
+  callbacks?.onLog?.(`⚡ SAFE PERIOD EXTENDED by peer "${granterName}" until ${deadline}!`);
+  callbacks?.onExtensionGrantReceived?.({
+    grantId: grant.grantId,
+    from,
+    granterDeviceName: granterName,
+    duration,
+    newDeadline: deadline
+  });
+
+  if (state && socket && socket.readyState === WebSocket.OPEN) {
+    const ack = {
+      type: 'extension-grant-ack',
+      grantId: grant.grantId,
+      targetDeviceId: from,
+      fromDeviceId: state.devicePublicKey,
+      fromDeviceName: 'NexVault Mobile',
+      accepted: true,
+      newDeadline: deadline
+    };
+    sendPeerMessage(from, ack, state, socket);
+  }
+}
+
 function handleIncomingMobileSignal(from: string, payload: any, socketOrState: any, socketOrCallbacks?: any, maybeCallbacks?: any) {
   if (!payload || typeof payload !== 'object') return;
 
@@ -854,6 +968,14 @@ function handleIncomingMobileSignal(from: string, payload: any, socketOrState: a
         callbacks?.onIncomingExtensionRequest?.(req);
       } else if (decrypted.type === 'extension-approval-response' || decrypted.type === 'extension-approval') {
         handleExtensionResponse(decrypted, callbacks);
+      } else if (decrypted.type === 'extension-grant') {
+        handleExtensionGrant(decrypted, from, callbacks, state, socket || activeSocket);
+      } else if (decrypted.type === 'extension-grant-ack') {
+        callbacks?.onLog?.(`✓ Peer confirmed safe period extension applied!`);
+        callbacks?.onExtensionGrantAcknowledged?.(decrypted);
+      } else if (decrypted.type === 'extension-prompt-request') {
+        callbacks?.onLog?.(`🔔 Peer "${decrypted.fromDeviceName || from}" prompted you to extend safe period`);
+        callbacks?.onExtensionPromptReceived?.(decrypted);
       }
       return;
     } catch (err: any) {
@@ -885,6 +1007,23 @@ function handleIncomingMobileSignal(from: string, payload: any, socketOrState: a
 
   if (payload.type === 'extension-approval-response' || payload.type === 'extension-approval') {
     handleExtensionResponse(payload, callbacks);
+    return;
+  }
+
+  if (payload.type === 'extension-grant') {
+    handleExtensionGrant(payload, from, callbacks, state, socket || activeSocket);
+    return;
+  }
+
+  if (payload.type === 'extension-grant-ack') {
+    callbacks?.onLog?.(`✓ Peer confirmed safe period extension applied!`);
+    callbacks?.onExtensionGrantAcknowledged?.(payload);
+    return;
+  }
+
+  if (payload.type === 'extension-prompt-request') {
+    callbacks?.onLog?.(`🔔 Peer "${payload.fromDeviceName || from}" prompted you to extend safe period`);
+    callbacks?.onExtensionPromptReceived?.(payload);
     return;
   }
 
@@ -2206,12 +2345,15 @@ export function initMobileVault() {
           const plugins = cap.Plugins;
           if (plugins && plugins.AppUpdater && typeof plugins.AppUpdater.installApk === 'function') {
             const res = await plugins.AppUpdater.installApk({ url: downloadUrl });
+            if (res && res.needPermission) {
+              return { success: false, needPermission: true, message: res.message || 'Permission required: Enable "Allow from this source" in Android Settings, then tap Install.' };
+            }
             return { success: true, message: res?.message || 'Package installer launched' };
           }
         }
 
-        window.open(downloadUrl, '_blank');
-        return { success: true, message: 'Opening download link...' };
+        window.open(downloadUrl, '_system');
+        return { success: true, message: 'Opening download link in browser...' };
       } catch (err: any) {
         return { success: false, error: err.message };
       }
@@ -2276,6 +2418,14 @@ export function initMobileVault() {
 
     async respondToPeerSecurityExtension(peerId: string, requestId: string, duration: string, approved: boolean, reason?: string) {
       return respondToPeerSecurityExtension(peerId, requestId, duration, approved, reason);
+    },
+
+    async grantPeerSecurityExtension(targetPeerId: string, duration: string = '1week') {
+      return grantPeerSecurityExtension(targetPeerId, duration);
+    },
+
+    async requestPeerToExtend(targetPeerId: string, duration: string = '1week') {
+      return requestPeerToExtend(targetPeerId, duration);
     },
 
     getAutoLockMinutes(): number | 'never' {

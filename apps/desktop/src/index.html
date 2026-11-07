@@ -88,8 +88,9 @@
 
     .nav-item.active {
       color: #fff;
-      background: var(--nv-surface);
-      border-color: var(--nv-border);
+      background: var(--nv-surface-2);
+      border-color: rgba(16, 185, 129, 0.35);
+      box-shadow: 0 0 14px rgba(16, 185, 129, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.05);
       font-weight: 600;
     }
 
@@ -279,17 +280,19 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0.85rem 1.1rem;
+      padding: 0.85rem 1.15rem;
       background: var(--nv-surface);
       border: 1px solid var(--nv-border);
-      border-radius: var(--nv-radius-sm);
-      margin-bottom: 0.5rem;
-      transition: background 0.15s ease, border-color 0.15s ease;
+      border-radius: var(--nv-radius);
+      margin-bottom: 0.55rem;
+      box-shadow: var(--nv-card-shadow);
+      transition: all 0.16s ease;
     }
 
     .vault-item:hover {
-      border-color: rgba(255, 255, 255, 0.15);
+      border-color: var(--nv-border-strong);
       background: var(--nv-surface-hover);
+      transform: translateY(-1px);
     }
 
     .vault-item-info {
@@ -299,13 +302,13 @@
     }
 
     .vault-service {
-      font-size: 0.9rem;
+      font-size: 0.92rem;
       font-weight: 600;
       color: #fff;
     }
 
     .vault-meta {
-      font-size: 0.75rem;
+      font-size: 0.74rem;
       color: var(--nv-muted);
       display: flex;
       align-items: center;
@@ -315,7 +318,7 @@
     .vault-actions {
       display: flex;
       align-items: center;
-      gap: 0.4rem;
+      gap: 0.45rem;
     }
 
     /* Form rows */
@@ -658,29 +661,47 @@
             <span class="nv-badge" id="vault-count-badge" style="margin-left: auto; font-size: 0.7rem;">0 items</span>
           </div>
 
-          <!-- Add Credential Card (Collapsible) -->
-          <div class="nv-card" id="add-credential-card" style="display: none; margin-bottom: 1.25rem;">
-            <div style="font-weight: 600; margin-bottom: 1rem; color: #fff;" id="credential-card-title">New Credential</div>
-            <div class="form-grid-2">
-              <div class="form-group">
-                <label class="nv-label">Service / Website</label>
-                <input type="text" class="nv-input" id="service" placeholder="e.g. github.com">
+          <!-- Add / Edit Credential Modal Dialog -->
+          <div class="nv-modal-backdrop" id="credential-modal" style="display: none;" onclick="if (event.target === this) closeCredentialModal()">
+            <div class="nv-modal">
+              <div class="nv-modal-header">
+                <h3 class="nv-modal-title" id="credential-modal-title">New Credential</h3>
+                <button class="nv-btn-icon" type="button" onclick="closeCredentialModal()" title="Close (Esc)">✕</button>
               </div>
-              <div class="form-group">
-                <label class="nv-label">Username / Email</label>
-                <input type="text" class="nv-input" id="vault-username" placeholder="user@example.com">
+              <div class="nv-modal-body">
+                <div class="form-grid-2">
+                  <div class="form-group">
+                    <label class="nv-label">Service / Website</label>
+                    <input type="text" class="nv-input" id="service" placeholder="e.g. github.com">
+                  </div>
+                  <div class="form-group">
+                    <label class="nv-label">Username / Email</label>
+                    <input type="text" class="nv-input" id="vault-username" placeholder="user@example.com">
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="nv-label">Password</label>
+                  <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <input type="password" class="nv-input nv-mono" id="vault-password" placeholder="Credential password" oninput="updatePasswordStrengthMeter(this.value)">
+                    <button class="nv-btn nv-btn-ghost nv-btn-sm" type="button" onclick="togglePasswordVisibility('vault-password', this)" title="Show/Hide">👁</button>
+                    <button class="nv-btn nv-btn-ghost nv-btn-sm" type="button" onclick="generateRandomPassword()" style="white-space: nowrap;">⚡ Generate</button>
+                  </div>
+                  <!-- Password Strength Meter -->
+                  <div class="nv-strength-wrap" id="vault-strength-wrap">
+                    <div class="nv-strength-bars">
+                      <div class="nv-strength-bar" id="str-bar-1"></div>
+                      <div class="nv-strength-bar" id="str-bar-2"></div>
+                      <div class="nv-strength-bar" id="str-bar-3"></div>
+                      <div class="nv-strength-bar" id="str-bar-4"></div>
+                    </div>
+                    <div class="nv-strength-label" id="str-label">Enter password</div>
+                  </div>
+                </div>
               </div>
-            </div>
-            <div class="form-group">
-              <label class="nv-label">Password</label>
-              <div style="display: flex; gap: 0.5rem;">
-                <input type="text" class="nv-input" id="vault-password" placeholder="Credential password">
-                <button class="nv-btn nv-btn-ghost" type="button" onclick="generateRandomPassword()" style="white-space: nowrap;">Generate</button>
+              <div class="nv-modal-footer">
+                <button class="nv-btn nv-btn-ghost" type="button" onclick="closeCredentialModal()">Cancel</button>
+                <button class="nv-btn" type="button" id="save-cred-btn" onclick="savePassword()">Save Credential</button>
               </div>
-            </div>
-            <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
-              <button class="nv-btn nv-btn-ghost" type="button" onclick="toggleAddCredentialForm()">Cancel</button>
-              <button class="nv-btn" type="button" id="save-cred-btn" onclick="savePassword()">Save Credential</button>
             </div>
           </div>
 
@@ -726,22 +747,29 @@
             <span class="nv-badge" id="otp-count-badge" style="margin-left: auto; font-size: 0.7rem;">0 items</span>
           </div>
 
-          <!-- Add OTP Form Card -->
-          <div class="nv-card" id="add-otp-card" style="display: none; margin-bottom: 1.25rem;">
-            <div style="font-weight: 600; margin-bottom: 1rem; color: #fff;" id="otp-card-title">Add TOTP Service</div>
-            <div class="form-grid-2">
-              <div class="form-group">
-                <label class="nv-label">Service Name</label>
-                <input type="text" class="nv-input" id="otp-service" placeholder="e.g. GitHub, AWS">
+          <!-- Add OTP Modal Dialog -->
+          <div class="nv-modal-backdrop" id="otp-modal" style="display: none;" onclick="if (event.target === this) closeOtpModal()">
+            <div class="nv-modal">
+              <div class="nv-modal-header">
+                <h3 class="nv-modal-title" id="otp-modal-title">Add TOTP Service</h3>
+                <button class="nv-btn-icon" type="button" onclick="closeOtpModal()" title="Close (Esc)">✕</button>
               </div>
-              <div class="form-group">
-                <label class="nv-label">Secret Key (Base32)</label>
-                <input type="text" class="nv-input nv-mono" id="otp-secret" placeholder="JBSWY3DPEHPK3PXP">
+              <div class="nv-modal-body">
+                <div class="form-grid-2">
+                  <div class="form-group">
+                    <label class="nv-label">Service Name</label>
+                    <input type="text" class="nv-input" id="otp-service" placeholder="e.g. GitHub, AWS">
+                  </div>
+                  <div class="form-group">
+                    <label class="nv-label">Secret Key (Base32)</label>
+                    <input type="text" class="nv-input nv-mono" id="otp-secret" placeholder="JBSWY3DPEHPK3PXP">
+                  </div>
+                </div>
               </div>
-            </div>
-            <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
-              <button class="nv-btn nv-btn-ghost" type="button" onclick="toggleAddOtpForm()">Cancel</button>
-              <button class="nv-btn" type="button" id="save-otp-btn" onclick="saveOTP()">Save TOTP</button>
+              <div class="nv-modal-footer">
+                <button class="nv-btn nv-btn-ghost" type="button" onclick="closeOtpModal()">Cancel</button>
+                <button class="nv-btn" type="button" id="save-otp-btn" onclick="saveOTP()">Save TOTP</button>
+              </div>
             </div>
           </div>
 
@@ -754,6 +782,80 @@
         <!-- ==================== PAGE 3: NEXGRID SYNC ==================== -->
         <div class="app-page" id="page-grid">
           
+          <!-- Live Neural Mesh Topology & Motion Design Visualizer -->
+          <div class="nv-card" style="margin-bottom: 1.25rem; padding: 0; overflow: hidden;">
+            <div class="nv-mesh-toolbar">
+              <div style="display: flex; align-items: center; gap: 0.65rem;">
+                <div style="font-weight: 600; color: #fff; font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem;">
+                  <span class="nv-pulse-dot"></span>
+                  <span>NexGrid Neural Mesh Topology</span>
+                </div>
+                <span class="nv-badge success" id="mesh-topo-status">E2E WebRTC Active</span>
+              </div>
+              <div style="display: flex; gap: 0.45rem; align-items: center; flex-wrap: wrap;">
+                <button class="nv-btn nv-btn-sm" type="button" onclick="desktopMeshVisualizer.beamExtensionGrant()" style="background: linear-gradient(135deg, #10b981, #0ea5e9); color: #000; font-weight: 600;">
+                  ⚡ Beam Safe Period Extension
+                </button>
+                <button class="nv-btn nv-btn-ghost nv-btn-sm" type="button" onclick="desktopMeshVisualizer.pingAllPeers()">
+                  📡 Radar Ping All
+                </button>
+                <button class="nv-btn nv-btn-ghost nv-btn-sm" type="button" onclick="desktopMeshVisualizer.simulateVaultSync()">
+                  🔄 Sync E2E
+                </button>
+              </div>
+            </div>
+
+            <div class="nv-mesh-container" style="border: none; border-radius: 0;">
+              <canvas id="desktop-mesh-canvas" class="nv-mesh-canvas" style="height: 380px;"></canvas>
+
+              <!-- Dynamic Motion Toast -->
+              <div id="desktop-mesh-toast" class="nv-mesh-toast">
+                <span class="nv-pulse-dot"></span>
+                <span id="desktop-mesh-toast-msg">NexGrid motion engine initialized.</span>
+              </div>
+
+              <!-- Node Inspector Panel -->
+              <div id="desktop-mesh-inspector" class="nv-mesh-inspector" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                  <div style="font-weight: 700; color: #fff; font-size: 0.82rem; display: flex; align-items: center; gap: 0.4rem;">
+                    <span id="d-ins-dot" class="nv-pulse-dot"></span>
+                    <span id="d-ins-name">Peer Device</span>
+                  </div>
+                  <button type="button" onclick="desktopMeshVisualizer.closeInspector()" style="background: none; border: none; color: var(--nv-muted); cursor: pointer; font-size: 0.85rem;">✕</button>
+                </div>
+                <div style="font-size: 0.72rem; font-family: var(--nv-font-mono); color: var(--nv-text-secondary); margin-bottom: 0.75rem; display: flex; flex-direction: column; gap: 0.35rem;">
+                  <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 2px;">
+                    <span style="color: var(--nv-muted);">Type:</span>
+                    <span id="d-ins-type" style="color: #fff;">Mobile Phone</span>
+                  </div>
+                  <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 2px;">
+                    <span style="color: var(--nv-muted);">Channel:</span>
+                    <span id="d-ins-channel" style="color: var(--nv-primary);">Direct WebRTC</span>
+                  </div>
+                  <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 2px;">
+                    <span style="color: var(--nv-muted);">Latency:</span>
+                    <span id="d-ins-latency" style="color: var(--nv-accent);">14 ms</span>
+                  </div>
+                  <div style="display: flex; justify-content: space-between;">
+                    <span style="color: var(--nv-muted);">Safe Window:</span>
+                    <span id="d-ins-safe" style="color: var(--nv-primary); font-weight: 700;">23h 48m</span>
+                  </div>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 0.35rem;">
+                  <button class="nv-btn nv-btn-sm" type="button" id="d-btn-extend-1w" style="font-size: 0.72rem; padding: 0.35rem;">
+                    ⚡ Extend Safe Period (+1 Week)
+                  </button>
+                  <button class="nv-btn nv-btn-accent nv-btn-sm" type="button" id="d-btn-extend-1m" style="font-size: 0.72rem; padding: 0.35rem;">
+                    ⚡ Extend Safe Period (+1 Month)
+                  </button>
+                  <button class="nv-btn nv-btn-ghost nv-btn-sm" type="button" id="d-btn-prompt" style="font-size: 0.72rem; padding: 0.35rem;">
+                    🔔 Prompt Peer to Check In
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- Relay Connection Card -->
           <div class="nv-card" style="margin-bottom: 1.25rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
@@ -896,6 +998,31 @@
                 </button>
                 <button class="nv-btn nv-btn-ghost nv-btn-sm" type="button" onclick="requestSecurityExtension(true)" title="For single standalone devices without mesh peers">
                   Standalone Grace Extension
+                </button>
+              </div>
+            </div>
+
+            <!-- Grant Safe Period Extension to Peer Device Card -->
+            <div style="margin-top: 1rem; padding: 1rem; background: rgba(16, 185, 129, 0.06); border-radius: var(--nv-radius-sm); border: 1px solid rgba(16, 185, 129, 0.25);">
+              <div style="font-weight: 600; font-size: 0.85rem; color: #fff; margin-bottom: 0.35rem; display: flex; align-items: center; gap: 0.5rem;">
+                <span class="nv-pulse-dot"></span>
+                <span>Grant Safe Period Extension to Another Device in Mesh</span>
+              </div>
+              <p style="font-size: 0.75rem; color: var(--nv-text-secondary); margin-bottom: 0.85rem;">
+                Extend the safe operating window of another device in your mesh directly from this desktop. Pushes an authoritative signed extension grant across NexGrid.
+              </p>
+              <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+                <label class="nv-label" style="margin-bottom: 0;">Target Peer:</label>
+                <select class="nv-input" id="grant-target-peer-select" style="max-width: 220px;">
+                  <option value="">Select a paired device...</option>
+                </select>
+                <select class="nv-input" id="grant-duration-select" style="max-width: 160px;">
+                  <option value="1week" selected>+1 Week Safe</option>
+                  <option value="1month">+1 Month Safe</option>
+                  <option value="3months">+3 Months Safe</option>
+                </select>
+                <button class="nv-btn nv-btn-sm" type="button" onclick="grantPeerExtensionFromSelect()" style="background: linear-gradient(135deg, #10b981, #0ea5e9); color: #000; font-weight: 600;">
+                  ⚡ Beam Extension to Peer
                 </button>
               </div>
             </div>
@@ -1324,22 +1451,76 @@
     // Vault Credentials Management
     let editingVaultService = null;
 
-    function toggleAddCredentialForm() {
-      const card = $('add-credential-card');
-      const isHidden = card.style.display === 'none';
-      if (isHidden) {
-        card.style.display = 'block';
-        $('add-cred-btn-text').textContent = '✕ Close';
-        $('service').focus();
+    function openCredentialModal(service = null) {
+      editingVaultService = service;
+      const modal = $('credential-modal');
+      if (!modal) return;
+      if (service) {
+        if ($('credential-modal-title')) $('credential-modal-title').textContent = 'Edit Credential';
+        if ($('save-cred-btn')) $('save-cred-btn').textContent = 'Update Credential';
       } else {
-        card.style.display = 'none';
-        $('add-cred-btn-text').textContent = '+ Add Credential';
-        editingVaultService = null;
-        if ($('credential-card-title')) $('credential-card-title').textContent = 'New Credential';
+        if ($('credential-modal-title')) $('credential-modal-title').textContent = 'New Credential';
         if ($('save-cred-btn')) $('save-cred-btn').textContent = 'Save Credential';
         $('service').value = '';
         $('vault-username').value = '';
         $('vault-password').value = '';
+        updatePasswordStrengthMeter('');
+      }
+      modal.style.display = 'flex';
+      setTimeout(() => {
+        if (service) $('vault-password')?.focus();
+        else $('service')?.focus();
+      }, 50);
+    }
+
+    function closeCredentialModal() {
+      const modal = $('credential-modal');
+      if (modal) modal.style.display = 'none';
+      editingVaultService = null;
+    }
+
+    function toggleAddCredentialForm() {
+      openCredentialModal(null);
+    }
+
+    function togglePasswordVisibility(inputId, btnEl) {
+      const inp = $(inputId);
+      if (!inp) return;
+      if (inp.type === 'password') {
+        inp.type = 'text';
+        if (btnEl) btnEl.textContent = '🔒';
+      } else {
+        inp.type = 'password';
+        if (btnEl) btnEl.textContent = '👁';
+      }
+    }
+
+    function updatePasswordStrengthMeter(pass) {
+      let score = 0;
+      if (pass) {
+        if (pass.length >= 8) score++;
+        if (pass.length >= 14) score++;
+        if (/[A-Z]/.test(pass) && /[a-z]/.test(pass)) score++;
+        if (/[0-9]/.test(pass) && /[^A-Za-z0-9]/.test(pass)) score++;
+      }
+      const bars = [$('str-bar-1'), $('str-bar-2'), $('str-bar-3'), $('str-bar-4')];
+      const label = $('str-label');
+      bars.forEach((b, idx) => {
+        if (!b) return;
+        b.className = 'nv-strength-bar';
+        if (idx < score) {
+          if (score === 1) b.classList.add('weak');
+          else if (score === 2) b.classList.add('fair');
+          else if (score === 3) b.classList.add('good');
+          else b.classList.add('strong');
+        }
+      });
+      if (label) {
+        if (!pass) label.textContent = 'Enter password';
+        else if (score === 1) label.textContent = 'Weak';
+        else if (score === 2) label.textContent = 'Fair';
+        else if (score === 3) label.textContent = 'Good';
+        else label.textContent = 'Strong (Excellent entropy)';
       }
     }
 
@@ -1347,15 +1528,11 @@
       try {
         const r = await window.nexVault.getPassword(service);
         if (!r.success) throw new Error(r.error || 'Credential not found');
-        editingVaultService = service;
+        openCredentialModal(service);
         $('service').value = service;
         $('vault-username').value = r.username || '';
         $('vault-password').value = r.password || '';
-        if ($('credential-card-title')) $('credential-card-title').textContent = 'Edit Credential';
-        if ($('save-cred-btn')) $('save-cred-btn').textContent = 'Update Credential';
-        $('add-credential-card').style.display = 'block';
-        $('add-cred-btn-text').textContent = '✕ Close';
-        $('service').focus();
+        updatePasswordStrengthMeter(r.password || '');
       } catch (e) {
         setStatus('Error: ' + e.message);
       }
@@ -1368,6 +1545,7 @@
       window.crypto.getRandomValues(array);
       for (let i = 0; i < 20; i++) res += chars[array[i] % chars.length];
       $('vault-password').value = res;
+      updatePasswordStrengthMeter(res);
     }
 
     async function savePassword() {
@@ -1382,14 +1560,7 @@
             await window.nexVault.deletePassword(editingVaultService);
           }
           setStatus(editingVaultService ? 'Credential updated' : 'Credential saved');
-          $('service').value = '';
-          $('vault-username').value = '';
-          $('vault-password').value = '';
-          editingVaultService = null;
-          if ($('credential-card-title')) $('credential-card-title').textContent = 'New Credential';
-          if ($('save-cred-btn')) $('save-cred-btn').textContent = 'Save Credential';
-          $('add-credential-card').style.display = 'none';
-          $('add-cred-btn-text').textContent = '+ Add Credential';
+          closeCredentialModal();
           listPasswords();
         } else throw new Error(r.error);
       } catch (e) { setStatus('Error: ' + e.message); }
@@ -1436,24 +1607,45 @@
       renderVaultList(filtered, groupMode);
     }
 
+    function toggleGroupAccordion(headerEl) {
+      const card = headerEl.closest('.nv-group-card');
+      if (card) {
+        card.classList.toggle('collapsed');
+      }
+    }
+
     function renderVaultItemHtml(e) {
+      const initial = (e.service.charAt(0) || 'V').toUpperCase();
+      const encService = encodeURIComponent(e.service);
+      const encUser = e.username ? encodeURIComponent(e.username) : '';
       return `
         <div class="vault-item">
           <div style="display: flex; align-items: center; gap: 0.85rem; flex: 1; min-width: 0;">
-            <div class="nv-avatar-monogram">${escapeHtml((e.service.charAt(0) || 'V').toUpperCase())}</div>
-            <div class="vault-item-info">
-              <div class="vault-service">${escapeHtml(e.service)}</div>
+            <div class="nv-avatar-monogram">${escapeHtml(initial)}</div>
+            <div class="vault-item-info" style="min-width: 0;">
+              <div class="vault-service" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(e.service)}</div>
               <div class="vault-meta">
-                ${e.username ? `<span>👤 ${escapeHtml(e.username)}</span>` : ''}
-                <span>Added: ${new Date(e.createdAt).toLocaleDateString()}</span>
+                ${e.username ? `<span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">👤 ${escapeHtml(e.username)}</span>` : '<span style="color: var(--nv-muted);">No username</span>'}
+                <span class="nv-muted">•</span>
+                <span>${new Date(e.createdAt).toLocaleDateString()}</span>
               </div>
             </div>
           </div>
           <div class="vault-actions">
-            <button class="nv-btn nv-btn-ghost nv-btn-sm" id="btn-pass-${encodeURIComponent(e.service)}" onclick="copyPassword(decodeURIComponent('${encodeURIComponent(e.service)}'))">Copy Pass</button>
-            ${e.username ? `<button class="nv-btn nv-btn-ghost nv-btn-sm" id="btn-user-${encodeURIComponent(e.username)}" onclick="copyUsername(decodeURIComponent('${encodeURIComponent(e.username)}'))">Copy User</button>` : ''}
-            <button class="nv-btn nv-btn-ghost nv-btn-sm" onclick="editPassword(decodeURIComponent('${encodeURIComponent(e.service)}'))">Edit</button>
-            <button class="nv-btn nv-btn-ghost nv-btn-sm" style="color: var(--nv-danger);" onclick="deletePassword(decodeURIComponent('${encodeURIComponent(e.service)}'))">Delete</button>
+            <button class="nv-btn nv-btn-sm" id="btn-pass-${encService}" onclick="copyPassword(decodeURIComponent('${encService}'))" title="Copy password">
+              ⚡ Pass
+            </button>
+            ${e.username ? `
+              <button class="nv-btn nv-btn-ghost nv-btn-sm" id="btn-user-${encUser}" onclick="copyUsername(decodeURIComponent('${encUser}'))" title="Copy username">
+                👤 User
+              </button>
+            ` : ''}
+            <button class="nv-btn-icon" onclick="editPassword(decodeURIComponent('${encService}'))" title="Edit credential">
+              ✏️
+            </button>
+            <button class="nv-btn-icon" style="color: var(--nv-danger);" onclick="deletePassword(decodeURIComponent('${encService}'))" title="Delete credential">
+              🗑
+            </button>
           </div>
         </div>
       `;
@@ -1504,8 +1696,9 @@
         const countText = count === 1 ? '1 credential' : `${count} credentials`;
         return `
           <div class="nv-group-card">
-            <div class="nv-group-header">
+            <div class="nv-group-header" onclick="toggleGroupAccordion(this)" title="Click to collapse / expand">
               <div class="nv-group-title">
+                <span class="nv-group-chevron">▼</span>
                 <span>📁</span>
                 <span>${escapeHtml(grp.label)}</span>
               </div>
@@ -1615,41 +1808,43 @@
       `;
     }
 
-    function toggleAddOtpForm() {
-      const card = $('add-otp-card');
-      const isHidden = card.style.display === 'none';
-      if (isHidden) {
-        editingOtpService = null;
-        if ($('otp-card-title')) $('otp-card-title').textContent = 'Add TOTP Service';
-        if ($('save-otp-btn')) $('save-otp-btn').textContent = 'Save TOTP';
-        $('otp-service').value = '';
-        $('otp-secret').value = '';
-        card.style.display = 'block';
-        $('add-otp-btn-text').textContent = '✕ Close';
-        $('otp-service').focus();
+    function openOtpModal(service = null) {
+      editingOtpService = service;
+      const modal = $('otp-modal');
+      if (!modal) return;
+      if (service) {
+        if ($('otp-modal-title')) $('otp-modal-title').textContent = 'Edit Authenticator';
+        if ($('save-otp-btn')) $('save-otp-btn').textContent = 'Update TOTP';
       } else {
-        card.style.display = 'none';
-        $('add-otp-btn-text').textContent = '+ Add Authenticator';
-        editingOtpService = null;
-        if ($('otp-card-title')) $('otp-card-title').textContent = 'Add TOTP Service';
+        if ($('otp-modal-title')) $('otp-modal-title').textContent = 'Add TOTP Service';
         if ($('save-otp-btn')) $('save-otp-btn').textContent = 'Save TOTP';
         $('otp-service').value = '';
         $('otp-secret').value = '';
       }
+      modal.style.display = 'flex';
+      setTimeout(() => {
+        if (service) $('otp-secret')?.focus();
+        else $('otp-service')?.focus();
+      }, 50);
+    }
+
+    function closeOtpModal() {
+      const modal = $('otp-modal');
+      if (modal) modal.style.display = 'none';
+      editingOtpService = null;
+    }
+
+    function toggleAddOtpForm() {
+      openOtpModal(null);
     }
 
     async function editOTP(service) {
       try {
         const r = await window.nexVault.getOTPDetails(service);
         if (!r.success) throw new Error(r.error || 'Authenticator not found');
-        editingOtpService = service;
+        openOtpModal(service);
         $('otp-service').value = r.service || service;
         $('otp-secret').value = r.secret || '';
-        if ($('otp-card-title')) $('otp-card-title').textContent = 'Edit Authenticator';
-        if ($('save-otp-btn')) $('save-otp-btn').textContent = 'Update TOTP';
-        $('add-otp-card').style.display = 'block';
-        $('add-otp-btn-text').textContent = '✕ Close';
-        $('otp-service').focus();
       } catch (e) {
         setStatus('Error: ' + e.message);
       }
@@ -1666,17 +1861,33 @@
             await window.nexVault.deleteOTP(editingOtpService);
           }
           setStatus(editingOtpService ? 'Authenticator updated' : 'Authenticator added');
-          $('otp-service').value = '';
-          $('otp-secret').value = '';
-          editingOtpService = null;
-          if ($('otp-card-title')) $('otp-card-title').textContent = 'Add TOTP Service';
-          if ($('save-otp-btn')) $('save-otp-btn').textContent = 'Save TOTP';
-          $('add-otp-card').style.display = 'none';
-          $('add-otp-btn-text').textContent = '+ Add Authenticator';
+          closeOtpModal();
           listOTPs();
         } else throw new Error(r.error);
       } catch (e) { setStatus('Error: ' + e.message); }
     }
+
+    document.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        $('vault-search-input')?.focus();
+      }
+      if (e.key === 'Escape') {
+        closeCredentialModal();
+        closeOtpModal();
+        if (typeof closeBulkImportModal === 'function') closeBulkImportModal();
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        const credModal = $('credential-modal');
+        if (credModal && credModal.style.display !== 'none') {
+          savePassword();
+        }
+        const otpModal = $('otp-modal');
+        if (otpModal && otpModal.style.display !== 'none') {
+          saveOTP();
+        }
+      }
+    });
 
     async function listOTPs() {
       try {
@@ -1929,23 +2140,490 @@
       try {
         const res = await window.nexVault.getTrustedDevices();
         const devices = res.devices || [];
+        
+        // Update target peer select in Security Center
+        const selectEl = $('grant-target-peer-select');
+        if (selectEl) {
+          selectEl.innerHTML = '<option value="">Select a paired device...</option>' + 
+            devices.map(d => `<option value="${escapeHtml(d.deviceId)}">${escapeHtml(d.deviceName || d.deviceId.slice(0, 14))}</option>`).join('');
+        }
+
+        if (typeof desktopMeshVisualizer !== 'undefined') {
+          desktopMeshVisualizer.updateNodes(devices);
+        }
+
         if (!devices.length) {
           container.innerHTML = '<div class="nv-empty" style="padding: 1rem;">No paired devices yet. Mobile devices will appear here once linked.</div>';
           return;
         }
         container.innerHTML = devices.map(d => `
-          <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.65rem 0.85rem; background: var(--nv-bg-2); border: 1px solid var(--nv-border); border-radius: var(--nv-radius-sm); margin-bottom: 0.5rem;">
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 0.95rem; background: var(--nv-bg-2); border: 1px solid var(--nv-border); border-radius: var(--nv-radius-sm); margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
             <div>
-              <div style="font-weight: 600; color: #fff;">${escapeHtml(d.deviceName || 'Device')}</div>
+              <div style="font-weight: 600; color: #fff; display: flex; align-items: center; gap: 0.4rem;">
+                <span class="nv-pulse-dot" style="width: 6px; height: 6px;"></span>
+                <span>${escapeHtml(d.deviceName || 'NexVault Node')}</span>
+              </div>
               <div style="font-size: 0.72rem; color: var(--nv-muted); font-family: var(--nv-font-mono);">${escapeHtml(d.deviceId)}</div>
             </div>
-            <button class="nv-btn nv-btn-ghost nv-btn-sm" style="color: var(--nv-danger);" onclick="removeTrustedDeviceUI('${escapeHtml(d.deviceId)}')">Revoke</button>
+            <div style="display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap;">
+              <button class="nv-btn nv-btn-sm" style="font-size: 0.7rem; padding: 0.25rem 0.5rem;" onclick="grantPeerExtensionUI('${escapeHtml(d.deviceId)}', '1week')">
+                ⚡ +1W Safe
+              </button>
+              <button class="nv-btn nv-btn-accent nv-btn-sm" style="font-size: 0.7rem; padding: 0.25rem 0.5rem;" onclick="grantPeerExtensionUI('${escapeHtml(d.deviceId)}', '1month')">
+                ⚡ +1M Safe
+              </button>
+              <button class="nv-btn nv-btn-ghost nv-btn-sm" style="font-size: 0.7rem; padding: 0.25rem 0.5rem;" onclick="requestPeerToExtendUI('${escapeHtml(d.deviceId)}', '1week')">
+                🔔 Prompt
+              </button>
+              <button class="nv-btn nv-btn-ghost nv-btn-sm" style="color: var(--nv-danger); font-size: 0.7rem; padding: 0.25rem 0.5rem;" onclick="removeTrustedDeviceUI('${escapeHtml(d.deviceId)}')">
+                Revoke
+              </button>
+            </div>
           </div>
         `).join('');
       } catch (err) {
         console.error('Failed to load trusted devices:', err);
       }
     }
+
+    async function grantPeerExtensionUI(deviceId, duration = '1week') {
+      setStatus(`Beaming safe period extension (${duration}) to peer...`);
+      try {
+        desktopMeshVisualizer.beamExtensionGrant(deviceId, duration);
+        if (window.electronAPI?.grantPeerExtension) {
+          const res = await window.electronAPI.grantPeerExtension(deviceId, duration);
+          if (res.success) {
+            setStatus(`✓ Successfully granted ${duration} safe period extension!`);
+            gridLog(`Granted ${duration} safe period extension to peer ${deviceId}`);
+          }
+        }
+      } catch (err) {
+        setStatus('Grant notice: ' + err.message);
+      }
+    }
+
+    async function requestPeerToExtendUI(deviceId, duration = '1week') {
+      setStatus('Prompting peer to check in and extend safe period...');
+      try {
+        if (window.electronAPI?.requestPeerToExtend) {
+          await window.electronAPI.requestPeerToExtend(deviceId, duration);
+          setStatus('✓ Extension prompt dispatched to peer');
+          desktopMeshVisualizer.showToast('🔔 Extension prompt dispatched to peer');
+        }
+      } catch (err) {
+        setStatus('Prompt notice: ' + err.message);
+      }
+    }
+
+    async function grantPeerExtensionFromSelect() {
+      const select = $('grant-target-peer-select');
+      const durSelect = $('grant-duration-select');
+      const peerId = select ? select.value : '';
+      const dur = durSelect ? durSelect.value : '1week';
+      if (!peerId) {
+        alert('Please select a paired peer device from the dropdown first.');
+        return;
+      }
+      await grantPeerExtensionUI(peerId, dur);
+    }
+
+    // Motion Design Neural Mesh Visualizer Engine
+    const desktopMeshVisualizer = {
+      canvas: null,
+      ctx: null,
+      nodes: [
+        { id: 0, name: "This Desktop Node", type: "desktop", icon: "🖥️", x: 0.5, y: 0.5, isLocal: true, safeHours: 24, latency: 0, status: "Local Core", color: "#10b981", deviceId: "local" }
+      ],
+      defaultDemoNodes: [
+        { id: 1, name: "MacBook Pro M3", type: "laptop", icon: "💻", x: 0.22, y: 0.32, isLocal: false, safeHours: 23.8, latency: 14, status: "Direct WebRTC", color: "#0ea5e9", deviceId: "peer-mac" },
+        { id: 2, name: "Pixel 8 Pro", type: "mobile", icon: "📱", x: 0.78, y: 0.30, isLocal: false, safeHours: 18.2, latency: 18, status: "Direct WebRTC", color: "#10b981", deviceId: "peer-pixel" },
+        { id: 3, name: "Linux Node", type: "desktop", icon: "🖥️", x: 0.70, y: 0.75, isLocal: false, safeHours: 720, latency: 9, status: "Relay Encrypted", color: "#f59e0b", deviceId: "peer-linux" }
+      ],
+      packets: [],
+      ripples: [],
+      selectedNode: null,
+      frame: 0,
+      initialized: false,
+
+      init() {
+        this.canvas = $('desktop-mesh-canvas');
+        if (!this.canvas) return;
+        this.ctx = this.canvas.getContext('2d');
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+        this.canvas.addEventListener('click', (e) => this.handleClick(e));
+        this.startLoop();
+        this.initialized = true;
+      },
+
+      resize() {
+        if (!this.canvas) return;
+        const rect = this.canvas.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        this.canvas.width = rect.width * dpr;
+        this.canvas.height = rect.height * dpr;
+        if (this.ctx) this.ctx.scale(dpr, dpr);
+      },
+
+      updateNodes(trustedDevices) {
+        const local = this.nodes[0];
+        if (!trustedDevices || !trustedDevices.length) {
+          this.nodes = [local, ...this.defaultDemoNodes];
+          if ($('mesh-topo-status')) $('mesh-topo-status').textContent = 'Simulation Mode';
+          return;
+        }
+
+        if ($('mesh-topo-status')) $('mesh-topo-status').textContent = `${trustedDevices.length} Peers Linked`;
+        const angles = [0.35 * Math.PI, 0.85 * Math.PI, 1.35 * Math.PI, 1.85 * Math.PI, 0.1 * Math.PI];
+        const newNodes = [local];
+        trustedDevices.forEach((d, idx) => {
+          const angle = angles[idx % angles.length];
+          const dist = 0.35;
+          const x = 0.5 + Math.cos(angle) * dist;
+          const y = 0.5 + Math.sin(angle) * (dist * 0.85);
+          const isPhone = /android|phone|pixel|galaxy|ios|mobile/i.test(d.deviceName || '');
+          newNodes.push({
+            id: idx + 1,
+            name: d.deviceName || 'NexVault Node',
+            type: isPhone ? 'mobile' : 'laptop',
+            icon: isPhone ? '📱' : '💻',
+            x: Math.max(0.15, Math.min(0.85, x)),
+            y: Math.max(0.15, Math.min(0.85, y)),
+            isLocal: false,
+            safeHours: 24,
+            latency: 12 + (idx * 4),
+            status: 'Direct WebRTC',
+            color: '#0ea5e9',
+            deviceId: d.deviceId
+          });
+        });
+        this.nodes = newNodes;
+      },
+
+      addPacket(fromIndex, toIndex, type, payload) {
+        const from = this.nodes[fromIndex];
+        const to = this.nodes[toIndex];
+        if (!from || !to) return;
+        this.packets.push({
+          from, to,
+          progress: 0,
+          speed: 0.016 + Math.random() * 0.008,
+          type: type || 'extension-grant',
+          payload: payload || {},
+          size: type === 'extension-grant' ? 7 : 4,
+          color: type === 'extension-grant' ? '#10b981' : (type === 'ping' ? '#0ea5e9' : '#f59e0b'),
+          tail: []
+        });
+      },
+
+      addRipple(x, y, color) {
+        this.ripples.push({
+          x, y,
+          radius: 6,
+          maxRadius: 40,
+          alpha: 0.9,
+          color: color || '#10b981'
+        });
+      },
+
+      showToast(msg, isSuccess = true) {
+        const toast = $('desktop-mesh-toast');
+        const text = $('desktop-mesh-toast-msg');
+        if (!toast || !text) return;
+        text.textContent = msg;
+        toast.style.borderColor = isSuccess ? 'rgba(16, 185, 129, 0.6)' : 'rgba(14, 165, 233, 0.6)';
+        toast.classList.add('active');
+        clearTimeout(window._meshToastTimer);
+        window._meshToastTimer = setTimeout(() => {
+          toast.classList.remove('active');
+        }, 3600);
+      },
+
+      beamExtensionGrant(targetId, duration = '1week') {
+        let targetNode = null;
+        if (typeof targetId === 'number') {
+          targetNode = this.nodes[targetId];
+        } else if (typeof targetId === 'string') {
+          targetNode = this.nodes.find(n => n.deviceId === targetId);
+        }
+        if (!targetNode) {
+          const peers = this.nodes.filter(n => !n.isLocal);
+          if (!peers.length) return this.showToast('No peer nodes available to beam extension');
+          targetNode = peers[0];
+        }
+
+        const durLabel = duration === '1week' ? '+7 Days' : '+30 Days';
+        this.showToast(`⚡ Beaming Safe Period Extension to "${targetNode.name}" (${durLabel})...`);
+        this.addPacket(0, this.nodes.indexOf(targetNode), 'extension-grant', { duration, durLabel, targetName: targetNode.name });
+
+        if (targetNode.deviceId && targetNode.deviceId !== 'peer-mac' && targetNode.deviceId !== 'peer-pixel' && window.electronAPI?.grantPeerExtension) {
+          window.electronAPI.grantPeerExtension(targetNode.deviceId, duration).catch(() => {});
+        }
+      },
+
+      pingAllPeers() {
+        this.showToast('📡 Radar ping broadcasted across all encrypted mesh channels');
+        for (let i = 1; i < this.nodes.length; i++) {
+          setTimeout(() => this.addPacket(0, i, 'ping', { latency: this.nodes[i].latency }), i * 110);
+        }
+      },
+
+      simulateVaultSync() {
+        this.showToast('🔄 Synchronizing encrypted database records across mesh nodes...');
+        for (let i = 1; i < this.nodes.length; i++) {
+          setTimeout(() => this.addPacket(0, i, 'sync', {}), i * 140);
+        }
+      },
+
+      handleClick(e) {
+        if (!this.canvas) return;
+        const rect = this.canvas.getBoundingClientRect();
+        const clickX = e.clientX - rect.left;
+        const clickY = e.clientY - rect.top;
+
+        let found = null;
+        for (const node of this.nodes) {
+          const nx = node.x * rect.width;
+          const ny = node.y * rect.height;
+          const dist = Math.hypot(clickX - nx, clickY - ny);
+          if (dist < 32) {
+            found = node;
+            break;
+          }
+        }
+
+        if (found) {
+          this.selectedNode = found;
+          this.openInspector(found);
+        } else {
+          this.closeInspector();
+        }
+      },
+
+      openInspector(node) {
+        const ins = $('desktop-mesh-inspector');
+        if (!ins) return;
+        $('d-ins-name').textContent = node.name;
+        $('d-ins-type').textContent = node.type.toUpperCase() + (node.isLocal ? ' (Local)' : ' (Peer)');
+        $('d-ins-channel').textContent = node.isLocal ? 'Loopback IPC' : node.status;
+        $('d-ins-latency').textContent = node.isLocal ? '0 ms' : node.latency + ' ms';
+        $('d-ins-safe').textContent = node.safeHours > 48 ? Math.round(node.safeHours / 24) + 'd remaining' : node.safeHours.toFixed(1) + 'h remaining';
+        $('d-ins-dot').style.backgroundColor = node.color;
+        ins.style.display = 'block';
+
+        const btn1w = $('d-btn-extend-1w');
+        const btn1m = $('d-btn-extend-1m');
+        const btnPrompt = $('d-btn-prompt');
+
+        if (btn1w) btn1w.onclick = () => this.beamExtensionGrant(this.nodes.indexOf(node), '1week');
+        if (btn1m) btn1m.onclick = () => this.beamExtensionGrant(this.nodes.indexOf(node), '1month');
+        if (btnPrompt) btnPrompt.onclick = () => {
+          this.showToast(`🔔 Prompted peer "${node.name}" to check in`);
+          if (node.deviceId && window.electronAPI?.requestPeerToExtend) {
+            window.electronAPI.requestPeerToExtend(node.deviceId, '1week').catch(() => {});
+          }
+        };
+      },
+
+      closeInspector() {
+        const ins = $('desktop-mesh-inspector');
+        if (ins) ins.style.display = 'none';
+        this.selectedNode = null;
+      },
+
+      handleIncomingExtensionGrant(grant) {
+        this.showToast(`⚡ Safe Period Extended by "${grant.granterDeviceName || 'Peer'}"!`, true);
+        this.addRipple(this.nodes[0].x * this.canvas.width / (window.devicePixelRatio||1), this.nodes[0].y * this.canvas.height / (window.devicePixelRatio||1), '#10b981');
+      },
+
+      handleGrantAck(ack) {
+        this.showToast(`✓ Peer confirmed safe period extension applied!`, true);
+      },
+
+      startLoop() {
+        const loop = () => {
+          this.frame++;
+          if (this.canvas && this.ctx) {
+            this.render();
+          }
+          requestAnimationFrame(loop);
+        };
+        requestAnimationFrame(loop);
+      },
+
+      render() {
+        const rect = this.canvas.getBoundingClientRect();
+        const W = rect.width;
+        const H = rect.height;
+        const ctx = this.ctx;
+
+        ctx.clearRect(0, 0, W, H);
+
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.025)';
+        ctx.lineWidth = 1;
+        const gridSize = 36;
+        for (let x = 0; x < W; x += gridSize) {
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, H);
+          ctx.stroke();
+        }
+        for (let y = 0; y < H; y += gridSize) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(W, y);
+          ctx.stroke();
+        }
+
+        const local = this.nodes[0];
+        const lx = local.x * W;
+        const ly = local.y * H;
+
+        for (let i = 1; i < this.nodes.length; i++) {
+          const peer = this.nodes[i];
+          const px = peer.x * W;
+          const py = peer.y * H;
+
+          ctx.beginPath();
+          ctx.moveTo(lx, ly);
+          ctx.lineTo(px, py);
+          ctx.strokeStyle = 'rgba(16, 185, 129, 0.16)';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.setLineDash([6, 14]);
+          ctx.lineDashOffset = -this.frame * 0.45;
+          ctx.moveTo(lx, ly);
+          ctx.lineTo(px, py);
+          ctx.strokeStyle = 'rgba(14, 165, 233, 0.35)';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+
+        for (let i = this.ripples.length - 1; i >= 0; i--) {
+          const r = this.ripples[i];
+          r.radius += 1.2;
+          r.alpha -= 0.02;
+          if (r.alpha <= 0 || r.radius >= r.maxRadius) {
+            this.ripples.splice(i, 1);
+            continue;
+          }
+          ctx.beginPath();
+          ctx.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
+          ctx.strokeStyle = r.color;
+          ctx.globalAlpha = Math.max(0, r.alpha);
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          ctx.globalAlpha = 1.0;
+        }
+
+        for (let i = this.packets.length - 1; i >= 0; i--) {
+          const p = this.packets[i];
+          p.progress += p.speed;
+
+          const x1 = p.from.x * W;
+          const y1 = p.from.y * H;
+          const x2 = p.to.x * W;
+          const y2 = p.to.y * H;
+
+          const curX = x1 + (x2 - x1) * p.progress;
+          const curY = y1 + (y2 - y1) * p.progress;
+
+          p.tail.push({ x: curX, y: curY });
+          if (p.tail.length > 12) p.tail.shift();
+
+          for (let t = 0; t < p.tail.length; t++) {
+            const pt = p.tail[t];
+            const alpha = (t / p.tail.length) * 0.7;
+            ctx.beginPath();
+            ctx.arc(pt.x, pt.y, p.size * (t / p.tail.length), 0, Math.PI * 2);
+            ctx.fillStyle = p.color;
+            ctx.globalAlpha = alpha;
+            ctx.fill();
+          }
+          ctx.globalAlpha = 1.0;
+
+          ctx.beginPath();
+          ctx.arc(curX, curY, p.size, 0, Math.PI * 2);
+          ctx.fillStyle = p.color;
+          ctx.shadowColor = p.color;
+          ctx.shadowBlur = 14;
+          ctx.fill();
+          ctx.shadowBlur = 0;
+
+          if (p.progress >= 1.0) {
+            this.addRipple(x2, y2, p.color);
+            if (p.type === 'extension-grant') {
+              this.showToast(`✓ Safe Period extended for "${p.to.name}" (${p.payload.durLabel})!`);
+              p.to.safeHours += p.payload.duration === '1week' ? 168 : 720;
+              this.packets.push({
+                from: p.to, to: p.from, progress: 0, speed: 0.025, type: 'ack', size: 4, color: '#34d399', tail: []
+              });
+            } else if (p.type === 'ping') {
+              this.packets.push({
+                from: p.to, to: p.from, progress: 0, speed: 0.03, type: 'pong', size: 3, color: '#0ea5e9', tail: []
+              });
+            }
+            this.packets.splice(i, 1);
+          }
+        }
+
+        for (const node of this.nodes) {
+          const nx = node.x * W;
+          const ny = node.y * H;
+          const isSelected = this.selectedNode === node;
+
+          if (node.isLocal) {
+            const pulse = Math.sin(this.frame * 0.05) * 5;
+            ctx.beginPath();
+            ctx.arc(nx, ny, 30 + pulse, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(16, 185, 129, 0.12)';
+            ctx.fill();
+          }
+
+          if (isSelected) {
+            ctx.beginPath();
+            ctx.arc(nx, ny, 26, 0, Math.PI * 2);
+            ctx.strokeStyle = node.color;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+          }
+
+          ctx.beginPath();
+          ctx.arc(nx, ny, 20, 0, Math.PI * 2);
+          ctx.fillStyle = '#0f172a';
+          ctx.shadowColor = node.color;
+          ctx.shadowBlur = node.isLocal ? 16 : 8;
+          ctx.fill();
+          ctx.shadowBlur = 0;
+
+          ctx.strokeStyle = node.color;
+          ctx.lineWidth = node.isLocal ? 2.5 : 1.5;
+          ctx.stroke();
+
+          ctx.font = '15px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(node.icon, nx, ny);
+
+          ctx.font = '11px -apple-system, sans-serif';
+          ctx.fillStyle = '#ffffff';
+          ctx.fillText(node.name, nx, ny + 32);
+
+          ctx.font = '9px monospace';
+          ctx.fillStyle = node.color;
+          const sub = node.isLocal ? '● LOCAL CORE' : `● ${node.latency}ms`;
+          ctx.fillText(sub, nx, ny + 44);
+        }
+
+        if (this.frame % 160 === 0 && this.packets.length < 4) {
+          const rnd = 1 + Math.floor(Math.random() * (this.nodes.length - 1));
+          this.addPacket(0, rnd, 'heartbeat', {});
+        }
+      }
+    };
 
     async function removeTrustedDeviceUI(deviceId) {
       if (!confirm('Revoke trust for this device?')) return;
@@ -2372,6 +3050,9 @@
         }
         checkForUpdates(false);
         checkExtensionStatus();
+        if (typeof desktopMeshVisualizer !== 'undefined') {
+          desktopMeshVisualizer.init();
+        }
       } catch (err) {
         console.error('Startup profile check notice:', err);
       }
@@ -2454,9 +3135,39 @@
           setStatus(`❌ Extension request declined: ${data.reason || 'Declined'}`);
         });
       }
+      if (window.nexVault.onExtensionGrantReceived) {
+        window.nexVault.onExtensionGrantReceived((grant) => {
+          if (typeof desktopMeshVisualizer !== 'undefined') {
+            desktopMeshVisualizer.handleIncomingExtensionGrant(grant);
+          }
+          setStatus(`⚡ Safe period extended by "${grant.grantedBy || grant.granterDeviceName || 'Peer'}" until ${new Date(grant.expiresAt).toLocaleDateString()}!`);
+          refreshSecurityStatus();
+          loadTrustLedger();
+        });
+      }
+      if (window.nexVault.onExtensionGrantAcknowledged) {
+        window.nexVault.onExtensionGrantAcknowledged((ack) => {
+          if (typeof desktopMeshVisualizer !== 'undefined') {
+            desktopMeshVisualizer.handleGrantAck(ack);
+          }
+          setStatus(`✓ Peer confirmed safe period extension applied!`);
+        });
+      }
+      if (window.nexVault.onExtensionPromptReceived) {
+        window.nexVault.onExtensionPromptReceived((prompt) => {
+          if (typeof desktopMeshVisualizer !== 'undefined') {
+            desktopMeshVisualizer.showToast(`🔔 Peer "${prompt.fromDeviceName || 'Peer'}" prompted you to check in!`);
+          }
+          setStatus(`🔔 Peer "${prompt.fromDeviceName || 'Peer'}" prompted you to check in`);
+        });
+      }
     }
 
     // Expose helpers
+    window.desktopMeshVisualizer = desktopMeshVisualizer;
+    window.grantPeerExtensionUI = grantPeerExtensionUI;
+    window.requestPeerToExtendUI = requestPeerToExtendUI;
+    window.grantPeerExtensionFromSelect = grantPeerExtensionFromSelect;
     window.navigateTo = navigateTo;
     window.approvePeerExtension = approvePeerExtension;
     window.rejectPeerExtension = rejectPeerExtension;

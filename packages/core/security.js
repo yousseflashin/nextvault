@@ -311,6 +311,99 @@ class NexVaultSecurity extends EventEmitter {
     };
   }
 
+  grantPeerExtension(targetDeviceId, duration = '1week', options = {}) {
+    const extensions = {
+      '1week': 7 * 24 * 60 * 60,
+      '1month': 30 * 24 * 60 * 60,
+      '3months': ABSOLUTE_OFFLINE_SECONDS
+    };
+    const seconds = extensions[duration] || extensions['1week'];
+    const newDeadline = new Date(Date.now() + seconds * 1000).toISOString();
+    const granterPublicKey = this.store.get('device.publicKey') || '';
+    const granterDeviceName = this.store.get('user.username') || 'NexVault Node';
+    const grantId = 'grant-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+
+    const grant = {
+      type: 'extension-grant',
+      grantId,
+      targetDeviceId,
+      granterDeviceId: granterPublicKey,
+      granterPublicKey,
+      granterDeviceName,
+      duration,
+      newDeadline,
+      timestamp: new Date().toISOString()
+    };
+
+    if (this.ledger) {
+      this.ledger.append('security-window-extension-granted-to-peer', {
+        grantId,
+        targetDeviceId,
+        duration,
+        newDeadline
+      });
+    }
+
+    this.emit('broadcast-extension-grant', { grant, targetDeviceId });
+    return { success: true, grant };
+  }
+
+  applyPeerExtensionGrant(grantData) {
+    if (!grantData || !grantData.duration) {
+      throw new Error('Invalid grant data');
+    }
+    const duration = grantData.duration;
+    const expiresAt = grantData.newDeadline || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    const granterName = grantData.granterDeviceName || grantData.granterDeviceId || 'Mesh Peer';
+
+    this.store.set('security.extension', {
+      duration,
+      requestedAt: grantData.timestamp || new Date().toISOString(),
+      expiresAt,
+      grantedBy: granterName,
+      granterDeviceId: grantData.granterDeviceId,
+      grantId: grantData.grantId
+    });
+    this.store.set('security.offlineDeadline', expiresAt);
+    this.resetCountdown();
+
+    if (this.ledger) {
+      this.ledger.append('security-window-extended-by-peer-grant', {
+        duration,
+        grantedBy: granterName,
+        granterDeviceId: grantData.granterDeviceId,
+        grantId: grantData.grantId,
+        expiresAt
+      });
+    }
+
+    this.emit('extension-grant-received', {
+      duration,
+      expiresAt,
+      grantedBy: granterName,
+      grantId: grantData.grantId
+    });
+
+    const myPublicKey = this.store.get('device.publicKey') || '';
+    const myDeviceName = this.store.get('user.username') || 'NexVault Node';
+
+    return {
+      success: true,
+      duration,
+      expiresAt,
+      grantedBy: granterName,
+      ack: {
+        type: 'extension-grant-ack',
+        grantId: grantData.grantId,
+        targetDeviceId: grantData.granterDeviceId,
+        fromDeviceId: myPublicKey,
+        fromDeviceName: myDeviceName,
+        accepted: true,
+        newDeadline: expiresAt
+      }
+    };
+  }
+
   handlePeerApproval(approvalData) {
     if (!this.pendingExtension) return false;
 

@@ -149,4 +149,36 @@ describe('NexVault Security', () => {
     expect(rejectedEvent).toBeDefined();
     expect(rejectedEvent.reason).toBe('User declined');
   });
+
+  test('should grant peer extension and apply grant on target peer', () => {
+    // Device A grants extension to Device B
+    const targetPeerId = 'target-peer-device-id-999';
+    const grantResult = security.grantPeerExtension(targetPeerId, '1month');
+    expect(grantResult.success).toBe(true);
+    expect(grantResult.grant).toBeDefined();
+    expect(grantResult.grant.type).toBe('extension-grant');
+    expect(grantResult.grant.targetDeviceId).toBe(targetPeerId);
+    expect(grantResult.grant.duration).toBe('1month');
+
+    // Device B receives and applies the grant
+    const targetSecurity = new NexVaultSecurity();
+    targetSecurity.initializeNewUser('targetuser', 'targetpassword');
+
+    let grantReceivedEvent = null;
+    targetSecurity.on('extension-grant-received', (data) => {
+      grantReceivedEvent = data;
+    });
+
+    const applyResult = targetSecurity.applyPeerExtensionGrant(grantResult.grant);
+    expect(applyResult.success).toBe(true);
+    expect(applyResult.ack).toBeDefined();
+    expect(applyResult.ack.type).toBe('extension-grant-ack');
+    expect(applyResult.ack.accepted).toBe(true);
+    expect(grantReceivedEvent).toBeDefined();
+
+    const targetStatus = targetSecurity.getSecurityStatus();
+    expect(targetStatus.extension).toBeDefined();
+    expect(targetStatus.extension.duration).toBe('1month');
+    expect(targetStatus.extension.grantedBy).toBeDefined();
+  });
 });

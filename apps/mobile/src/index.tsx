@@ -12,10 +12,14 @@ import {
   syncAutofillCredentials,
   mergeNativeAutofillCredentials,
   openAutofillSettings,
+  openAccessibilitySettings,
+  isAccessibilityEnabled,
   getSecurityWindowStatus,
   extendOfflineSecurityWindow,
   requestPeerSecurityExtension,
   respondToPeerSecurityExtension,
+  grantPeerSecurityExtension,
+  requestPeerToExtend,
   emergencyNukeVault,
   type PeerExtensionRequest
 } from './mobileVault';
@@ -99,6 +103,366 @@ function StatusPill({ ok, label }: { ok: boolean; label: string }) {
 
 function Card({ children, style }: { children: ReactNode; style?: CSSProperties }) {
   return <div className="nv-card" style={style}>{children}</div>;
+}
+
+function MobileMeshVisualizer({
+  trustedDevices,
+  onExtendPeer,
+  showToast
+}: {
+  trustedDevices: { deviceId: string; deviceName?: string }[];
+  onExtendPeer: (peerId: string, duration: string) => void;
+  showToast: (msg: string) => void;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [selectedNode, setSelectedNode] = useState<any | null>(null);
+  const nodesRef = useRef<any[]>([]);
+  const packetsRef = useRef<any[]>([]);
+  const ripplesRef = useRef<any[]>([]);
+
+  const defaultNodes = useMemo(() => [
+    { id: 0, name: "This Phone", type: "mobile", icon: "📱", x: 0.5, y: 0.5, isLocal: true, safeHours: 24, latency: 0, color: "#10b981", deviceId: "local" },
+    { id: 1, name: "MacBook Pro", type: "laptop", icon: "💻", x: 0.22, y: 0.32, isLocal: false, safeHours: 23.8, latency: 14, color: "#0ea5e9", deviceId: "peer-mac" },
+    { id: 2, name: "Linux Node", type: "desktop", icon: "🖥️", x: 0.78, y: 0.32, isLocal: false, safeHours: 720, latency: 9, color: "#f59e0b", deviceId: "peer-linux" },
+    { id: 3, name: "Workstation", type: "desktop", icon: "🖥️", x: 0.5, y: 0.82, isLocal: false, safeHours: 168, latency: 16, color: "#a855f7", deviceId: "peer-work" }
+  ], []);
+
+  useEffect(() => {
+    if (!trustedDevices.length) {
+      nodesRef.current = defaultNodes;
+    } else {
+      const angles = [0.3 * Math.PI, 0.8 * Math.PI, 1.3 * Math.PI, 1.8 * Math.PI];
+      const newNodes = [
+        { id: 0, name: "This Phone", type: "mobile", icon: "📱", x: 0.5, y: 0.5, isLocal: true, safeHours: 24, latency: 0, color: "#10b981", deviceId: "local" }
+      ];
+      trustedDevices.forEach((d, idx) => {
+        const a = angles[idx % angles.length];
+        const dist = 0.36;
+        const x = 0.5 + Math.cos(a) * dist;
+        const y = 0.5 + Math.sin(a) * (dist * 0.85);
+        newNodes.push({
+          id: idx + 1,
+          name: d.deviceName || 'Peer Node',
+          type: 'desktop',
+          icon: '💻',
+          x: Math.max(0.16, Math.min(0.84, x)),
+          y: Math.max(0.18, Math.min(0.82, y)),
+          isLocal: false,
+          safeHours: 24,
+          latency: 14 + idx * 4,
+          color: '#0ea5e9',
+          deviceId: d.deviceId
+        });
+      });
+      nodesRef.current = newNodes;
+    }
+  }, [trustedDevices, defaultNodes]);
+
+  const addPacket = (fromIdx: number, toIdx: number, type: string, payload: any) => {
+    const from = nodesRef.current[fromIdx];
+    const to = nodesRef.current[toIdx];
+    if (!from || !to) return;
+    packetsRef.current.push({
+      from, to,
+      progress: 0,
+      speed: 0.02,
+      type, payload,
+      size: type === 'extension-grant' ? 6 : 4,
+      color: type === 'extension-grant' ? '#10b981' : (type === 'ping' ? '#0ea5e9' : '#f59e0b'),
+      tail: []
+    });
+  };
+
+  const handleBeam = (dur = '1week') => {
+    const peers = nodesRef.current.filter(n => !n.isLocal);
+    if (!peers.length) {
+      showToast('No peer devices connected');
+      return;
+    }
+    const target = selectedNode && !selectedNode.isLocal ? selectedNode : peers[0];
+    const targetIdx = nodesRef.current.indexOf(target);
+    const durLabel = dur === '1week' ? '+7 Days' : '+30 Days';
+    showToast(`⚡ Beaming Safe Period Extension to "${target.name}" (${durLabel})...`);
+    addPacket(0, targetIdx, 'extension-grant', { dur, durLabel, targetName: target.name });
+    if (target.deviceId && target.deviceId !== 'peer-mac' && target.deviceId !== 'peer-linux') {
+      onExtendPeer(target.deviceId, dur);
+    }
+  };
+
+  const handlePing = () => {
+    showToast('📡 Radar ping broadcasted to all mesh peers');
+    for (let i = 1; i < nodesRef.current.length; i++) {
+      setTimeout(() => addPacket(0, i, 'ping', {}), i * 120);
+    }
+  };
+
+  const handleSync = () => {
+    showToast('🔄 Syncing encrypted credentials with mesh peers...');
+    for (let i = 1; i < nodesRef.current.length; i++) {
+      setTimeout(() => addPacket(0, i, 'sync', {}), i * 140);
+    }
+  };
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let animId: number;
+    let frame = 0;
+
+    const resize = () => {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.scale(dpr, dpr);
+    };
+    resize();
+    window.addEventListener('resize', resize);
+
+    const render = () => {
+      frame++;
+      const rect = canvas.getBoundingClientRect();
+      const W = rect.width;
+      const H = rect.height;
+
+      ctx.clearRect(0, 0, W, H);
+
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+      ctx.lineWidth = 1;
+      const gs = 32;
+      for (let x = 0; x < W; x += gs) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+      }
+      for (let y = 0; y < H; y += gs) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+      }
+
+      const nodes = nodesRef.current;
+      if (!nodes || !nodes.length) {
+        animId = requestAnimationFrame(render);
+        return;
+      }
+
+      const local = nodes[0];
+      const lx = local.x * W;
+      const ly = local.y * H;
+
+      for (let i = 1; i < nodes.length; i++) {
+        const p = nodes[i];
+        const px = p.x * W;
+        const py = p.y * H;
+
+        ctx.beginPath();
+        ctx.moveTo(lx, ly);
+        ctx.lineTo(px, py);
+        ctx.strokeStyle = 'rgba(16, 185, 129, 0.16)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.setLineDash([5, 10]);
+        ctx.lineDashOffset = -frame * 0.45;
+        ctx.moveTo(lx, ly);
+        ctx.lineTo(px, py);
+        ctx.strokeStyle = 'rgba(14, 165, 233, 0.35)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      const ripples = ripplesRef.current;
+      for (let i = ripples.length - 1; i >= 0; i--) {
+        const r = ripples[i];
+        r.radius += 1.2;
+        r.alpha -= 0.025;
+        if (r.alpha <= 0 || r.radius >= 35) {
+          ripples.splice(i, 1);
+          continue;
+        }
+        ctx.beginPath();
+        ctx.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
+        ctx.strokeStyle = r.color;
+        ctx.globalAlpha = Math.max(0, r.alpha);
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.globalAlpha = 1.0;
+      }
+
+      const packets = packetsRef.current;
+      for (let i = packets.length - 1; i >= 0; i--) {
+        const p = packets[i];
+        p.progress += p.speed;
+
+        const x1 = p.from.x * W;
+        const y1 = p.from.y * H;
+        const x2 = p.to.x * W;
+        const y2 = p.to.y * H;
+
+        const curX = x1 + (x2 - x1) * p.progress;
+        const curY = y1 + (y2 - y1) * p.progress;
+
+        p.tail.push({ x: curX, y: curY });
+        if (p.tail.length > 10) p.tail.shift();
+
+        for (let t = 0; t < p.tail.length; t++) {
+          const pt = p.tail[t];
+          ctx.beginPath();
+          ctx.arc(pt.x, pt.y, p.size * (t / p.tail.length), 0, Math.PI * 2);
+          ctx.fillStyle = p.color;
+          ctx.globalAlpha = (t / p.tail.length) * 0.7;
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1.0;
+
+        ctx.beginPath();
+        ctx.arc(curX, curY, p.size, 0, Math.PI * 2);
+        ctx.fillStyle = p.color;
+        ctx.shadowColor = p.color;
+        ctx.shadowBlur = 12;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        if (p.progress >= 1.0) {
+          ripples.push({ x: x2, y: y2, radius: 5, alpha: 0.9, color: p.color });
+          if (p.type === 'extension-grant') {
+            showToast(`✓ Safe Period extended for "${p.to.name}" (${p.payload.durLabel})!`);
+            packets.push({ from: p.to, to: p.from, progress: 0, speed: 0.025, type: 'ack', size: 4, color: '#34d399', tail: [] });
+          }
+          packets.splice(i, 1);
+        }
+      }
+
+      for (const node of nodes) {
+        const nx = node.x * W;
+        const ny = node.y * H;
+        const isSel = selectedNode?.id === node.id;
+
+        if (node.isLocal) {
+          const pulse = Math.sin(frame * 0.05) * 4;
+          ctx.beginPath();
+          ctx.arc(nx, ny, 26 + pulse, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(16, 185, 129, 0.12)';
+          ctx.fill();
+        }
+
+        if (isSel) {
+          ctx.beginPath();
+          ctx.arc(nx, ny, 24, 0, Math.PI * 2);
+          ctx.strokeStyle = node.color;
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+
+        ctx.beginPath();
+        ctx.arc(nx, ny, 18, 0, Math.PI * 2);
+        ctx.fillStyle = '#0f172a';
+        ctx.shadowColor = node.color;
+        ctx.shadowBlur = node.isLocal ? 14 : 6;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        ctx.strokeStyle = node.color;
+        ctx.lineWidth = node.isLocal ? 2 : 1.5;
+        ctx.stroke();
+
+        ctx.font = '14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(node.icon, nx, ny);
+
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(node.name, nx, ny + 28);
+      }
+
+      animId = requestAnimationFrame(render);
+    };
+
+    animId = requestAnimationFrame(render);
+    return () => {
+      window.removeEventListener('resize', resize);
+      cancelAnimationFrame(animId);
+    };
+  }, [selectedNode, showToast]);
+
+  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const cx = e.clientX - rect.left;
+    const cy = e.clientY - rect.top;
+
+    let found = null;
+    for (const node of nodesRef.current) {
+      const nx = node.x * rect.width;
+      const ny = node.y * rect.height;
+      if (Math.hypot(cx - nx, cy - ny) < 28) {
+        found = node;
+        break;
+      }
+    }
+    setSelectedNode(found);
+  };
+
+  return (
+    <Card style={{ marginBottom: '1rem', padding: 0, overflow: 'hidden' }}>
+      <div className="nv-mesh-toolbar" style={{ padding: '0.65rem 0.85rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+          <span className="nv-pulse-dot" />
+          <span style={{ fontWeight: 600, fontSize: '0.85rem', color: '#fff' }}>Mesh Neural Topology</span>
+        </div>
+        <div style={{ display: 'flex', gap: '0.35rem' }}>
+          <button className="nv-btn nv-btn-sm" onClick={() => handleBeam('1week')} style={{ background: 'linear-gradient(135deg, #10b981, #0ea5e9)', color: '#000', fontWeight: 600, fontSize: '0.72rem', padding: '0.25rem 0.5rem' }}>
+            ⚡ Extend
+          </button>
+          <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={handlePing} style={{ fontSize: '0.72rem', padding: '0.25rem 0.5rem' }}>
+            📡 Ping
+          </button>
+          <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={handleSync} style={{ fontSize: '0.72rem', padding: '0.25rem 0.5rem' }}>
+            🔄 Sync
+          </button>
+        </div>
+      </div>
+
+      <div style={{ position: 'relative', width: '100%', height: '260px', background: '#04060a' }}>
+        <canvas ref={canvasRef} onClick={handleCanvasClick} style={{ width: '100%', height: '100%', display: 'block' }} />
+
+        {selectedNode && (
+          <div style={{
+            position: 'absolute', bottom: '8px', left: '8px', right: '8px',
+            background: 'rgba(15, 23, 42, 0.95)', border: '1px solid rgba(16, 185, 129, 0.3)',
+            borderRadius: 'var(--nv-radius-sm)', padding: '0.65rem 0.85rem',
+            backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.6)'
+          }}>
+            <div>
+              <div style={{ fontWeight: 700, color: '#fff', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span>{selectedNode.icon}</span>
+                <span>{selectedNode.name}</span>
+                {selectedNode.isLocal && <span className="nv-badge success" style={{ fontSize: '0.6rem', marginLeft: '4px' }}>Local</span>}
+              </div>
+              <div style={{ fontSize: '0.65rem', color: 'var(--nv-muted)', fontFamily: 'var(--nv-font-mono)' }}>
+                {selectedNode.isLocal ? 'Active Core' : `● ${selectedNode.latency}ms • Direct WebRTC`}
+              </div>
+            </div>
+            {!selectedNode.isLocal && (
+              <div style={{ display: 'flex', gap: '0.35rem' }}>
+                <button className="nv-btn nv-btn-sm" onClick={() => handleBeam('1week')} style={{ fontSize: '0.68rem', padding: '0.25rem 0.45rem' }}>
+                  ⚡ +1W
+                </button>
+                <button className="nv-btn nv-btn-accent nv-btn-sm" onClick={() => handleBeam('1month')} style={{ fontSize: '0.68rem', padding: '0.25rem 0.45rem' }}>
+                  ⚡ +1M
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </Card>
+  );
 }
 
 function QrScannerModal({
@@ -432,6 +796,7 @@ function App() {
   const [vaultSort, setVaultSort] = useState<'date-desc' | 'date-asc' | 'name-asc' | 'name-desc' | 'user-asc'>('date-desc');
   const [vaultFilter, setVaultFilter] = useState<'all' | 'has-user' | 'no-user'>('all');
   const [vaultGroup, setVaultGroup] = useState<'none' | 'site' | 'account' | 'letter'>('none');
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [quickFillView, setQuickFillView] = useState<QuickFillView>('vault');
   const [quickFillSearch, setQuickFillSearch] = useState('');
   const [quickFillStatus, setQuickFillStatus] = useState('Ready');
@@ -442,6 +807,26 @@ function App() {
   const [service, setService] = useState('');
   const [vaultUsername, setVaultUsername] = useState('');
   const [credential, setCredential] = useState('');
+
+  function generateMobilePassword() {
+    const chars = 'abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%^&*-_+=';
+    let res = '';
+    const array = new Uint32Array(20);
+    window.crypto.getRandomValues(array);
+    for (let i = 0; i < 20; i++) res += chars[array[i] % chars.length];
+    setCredential(res);
+    showToast('Generated strong 20-character password');
+  }
+
+  function getPasswordScore(pass: string) {
+    if (!pass) return 0;
+    let s = 0;
+    if (pass.length >= 8) s++;
+    if (pass.length >= 14) s++;
+    if (/[A-Z]/.test(pass) && /[a-z]/.test(pass)) s++;
+    if (/[0-9]/.test(pass) && /[^A-Za-z0-9]/.test(pass)) s++;
+    return s;
+  }
 
   // OTP State
   const [otpItems, setOtpItems] = useState<{ service: string; code?: string }[]>([]);
@@ -457,6 +842,18 @@ function App() {
   const [securityDeadlineStatus, setSecurityDeadlineStatus] = useState<{ isWithinWindow: boolean; deadline: string; remainingSeconds: number; isExpired: boolean } | null>(null);
   const [selectedExtension, setSelectedExtension] = useState<'1week' | '1month' | '3months'>('1week');
   const [incomingExtensionRequest, setIncomingExtensionRequest] = useState<PeerExtensionRequest | null>(null);
+  const [incomingExtensionGrant, setIncomingExtensionGrant] = useState<{
+    grantId: string;
+    from: string;
+    granterDeviceName: string;
+    duration: string;
+    newDeadline: string;
+  } | null>(null);
+  const [incomingExtensionPrompt, setIncomingExtensionPrompt] = useState<{
+    from: string;
+    fromDeviceName: string;
+    duration: string;
+  } | null>(null);
   const [pendingExtensionRequest, setPendingExtensionRequest] = useState<{ requestId: string; duration: string; expiresAt: string; peersCount?: number } | null>(() => {
     try {
       const saved = localStorage.getItem('nexvault_pending_extension_request');
@@ -487,6 +884,18 @@ function App() {
 
   // Instant Copy Feedback
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  // Accessibility Autofill Overlay State
+  const [a11yEnabled, setA11yEnabled] = useState(false);
+
+  useEffect(() => {
+    isAccessibilityEnabled().then(setA11yEnabled).catch(() => {});
+    const onWindowFocus = () => {
+      isAccessibilityEnabled().then(setA11yEnabled).catch(() => {});
+    };
+    window.addEventListener('focus', onWindowFocus);
+    return () => window.removeEventListener('focus', onWindowFocus);
+  }, []);
 
   function markCopied(key: string) {
     setCopiedKey(key);
@@ -564,14 +973,22 @@ function App() {
       const res = await (window as any).nexVault.applyUpdate(updateInfo?.downloadUrl);
       if (res && res.success) {
         showToast('Package installer launched. Confirm to update in-place.');
+      } else if (res && res.needPermission) {
+        showToast(res.message || 'Enable unknown app installation for NextVault, then tap Install again.');
       } else {
-        showToast(res?.error || 'Update failed');
+        showToast(res?.error || res?.message || 'Update failed. You can use the browser download option.');
       }
     } catch (e: any) {
       showToast('Error applying update: ' + e.message);
     } finally {
       setIsUpdating(false);
     }
+  }
+
+  function onDownloadApkInBrowser() {
+    const url = updateInfo?.downloadUrl || `https://github.com/yousseflashin/nextvault/releases/latest`;
+    window.open(url, '_system');
+    showToast('Opening APK download in browser...');
   }
 
   const log = (msg: string) => setGridLog(prev => [...prev.slice(-30), `>> ${msg}`]);
@@ -747,6 +1164,26 @@ function App() {
     setIncomingExtensionRequest(null);
   }
 
+  function onGrantPeerExtension(targetPeerId: string, duration: string = '1week') {
+    const res = grantPeerSecurityExtension(targetPeerId, duration);
+    if (res.success) {
+      showToast(`⚡ Safe Period Extension (${duration}) beamed to peer!`);
+      log(`⚡ Safe Period Extension (${duration}) beamed to peer ${targetPeerId}`);
+    } else {
+      showToast(res.error || 'Failed to beam extension');
+    }
+  }
+
+  function onRequestPeerToExtend(targetPeerId: string, duration: string = '1week') {
+    const res = requestPeerToExtend(targetPeerId, duration);
+    if (res.success) {
+      showToast('🔔 Extension prompt dispatched to peer');
+      log(`🔔 Extension prompt dispatched to peer ${targetPeerId}`);
+    } else {
+      showToast(res.error || 'Failed to prompt peer');
+    }
+  }
+
   function onCheckInNow() {
     if (typeof localStorage !== 'undefined') {
       const dayMs = 24 * 60 * 60 * 1000;
@@ -895,6 +1332,21 @@ function App() {
           try { localStorage.removeItem('nexvault_pending_extension_request'); } catch {}
           showToast(`❌ Extension request declined: ${data.reason || 'Declined'}`);
           log(`❌ Extension request declined: ${data.reason || 'Declined'}`);
+        },
+        onExtensionGrantReceived: (grant: any) => {
+          setIncomingExtensionGrant(grant);
+          setSecurityDeadlineStatus(getSecurityWindowStatus());
+          showToast(`⚡ Safe period extended by "${grant.granterDeviceName}" until ${new Date(grant.newDeadline).toLocaleDateString()}!`);
+          log(`⚡ Safe period extended by "${grant.granterDeviceName}" until ${grant.newDeadline}!`);
+        },
+        onExtensionGrantAcknowledged: (_ack: any) => {
+          showToast(`✓ Peer confirmed extension applied!`);
+          log(`✓ Peer confirmed extension applied!`);
+        },
+        onExtensionPromptReceived: (prompt: any) => {
+          setIncomingExtensionPrompt(prompt);
+          showToast(`🔔 Peer "${prompt.fromDeviceName}" requested to extend safe period`);
+          log(`🔔 Peer "${prompt.fromDeviceName}" requested safe period extension`);
         }
       });
       if (r.success) {
@@ -1358,13 +1810,20 @@ function App() {
               <div style={{ fontWeight: 600, color: '#fff', fontSize: '0.82rem' }}>Update Available: v{updateInfo.latestVersion}</div>
               <div style={{ fontSize: '0.72rem', color: 'var(--nv-muted)' }}>A newer Android APK is available.</div>
             </div>
-            <div style={{ display: 'flex', gap: '0.4rem' }}>
+            <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
               <button
                 className="nv-btn nv-btn-accent nv-btn-sm"
                 disabled={isUpdating}
                 onClick={onApplyMobileUpdate}
               >
                 {isUpdating ? 'Installing...' : 'Update & Install'}
+              </button>
+              <button
+                className="nv-btn nv-btn-ghost nv-btn-sm"
+                onClick={onDownloadApkInBrowser}
+                title="Download APK file directly in your web browser"
+              >
+                Browser Download
               </button>
               <button
                 className="nv-btn nv-btn-ghost nv-btn-sm"
@@ -1708,12 +2167,32 @@ function App() {
                           value={vaultUsername}
                           onChange={e => setVaultUsername(e.target.value)}
                         />
-                        <input
-                          className="nv-input"
-                          placeholder="Credential / Password"
-                          value={credential}
-                          onChange={e => setCredential(e.target.value)}
-                        />
+                        <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                          <input
+                            className="nv-input nv-mono"
+                            placeholder="Credential / Password"
+                            value={credential}
+                            onChange={e => setCredential(e.target.value)}
+                          />
+                          <button
+                            type="button"
+                            className="nv-btn nv-btn-ghost nv-btn-sm"
+                            style={{ whiteSpace: 'nowrap', padding: '0.45rem 0.65rem' }}
+                            onClick={generateMobilePassword}
+                            title="Generate strong random password"
+                          >
+                            ⚡ Gen
+                          </button>
+                        </div>
+                        {/* Password strength meter */}
+                        <div className="nv-strength-wrap" style={{ marginTop: '0.15rem', marginBottom: '0.4rem' }}>
+                          <div className="nv-strength-bars">
+                            <div className={`nv-strength-bar ${getPasswordScore(credential) >= 1 ? (getPasswordScore(credential) === 1 ? 'weak' : getPasswordScore(credential) === 2 ? 'fair' : getPasswordScore(credential) === 3 ? 'good' : 'strong') : ''}`}></div>
+                            <div className={`nv-strength-bar ${getPasswordScore(credential) >= 2 ? (getPasswordScore(credential) === 2 ? 'fair' : getPasswordScore(credential) === 3 ? 'good' : 'strong') : ''}`}></div>
+                            <div className={`nv-strength-bar ${getPasswordScore(credential) >= 3 ? (getPasswordScore(credential) === 3 ? 'good' : 'strong') : ''}`}></div>
+                            <div className={`nv-strength-bar ${getPasswordScore(credential) >= 4 ? 'strong' : ''}`}></div>
+                          </div>
+                        </div>
                         <div className="nv-btn-row">
                           <button className="nv-btn" onClick={onSavePassword}>{editingVaultService ? 'Update Credential' : 'Save Credential'}</button>
                           <button className="nv-btn nv-btn-ghost" onClick={() => {
@@ -1733,69 +2212,81 @@ function App() {
                       No credentials found matching filter. Connect to Desktop via NexGrid to sync your logins!
                     </div>
                   ) : groupedVaultItems ? (
-                    groupedVaultItems.map(grp => (
-                      <div className="nv-group-card" key={grp.key}>
-                        <div className="nv-group-header">
-                          <div className="nv-group-title">
-                            <span>📁</span>
-                            <span>{grp.label}</span>
-                          </div>
-                          <span className="nv-badge" style={{ fontSize: '0.65rem' }}>
-                            {grp.items.length} {grp.items.length === 1 ? 'item' : 'items'}
-                          </span>
-                        </div>
-                        <div className="nv-group-items">
-                          {grp.items.map(v => (
-                            <div className="nv-vault-item" key={v.service}>
-                              <div className="nv-vault-left">
-                                <div className="nv-avatar-monogram">
-                                  {(v.service.charAt(0) || 'V').toUpperCase()}
-                                </div>
-                                <div className="nv-vault-info">
-                                  <span className="nv-vault-service">{v.service}</span>
-                                  <span className="nv-vault-meta">
-                                    {v.username ? `👤 ${v.username}` : `Saved ${new Date(v.createdAt).toLocaleDateString()}`}
-                                  </span>
-                                </div>
-                              </div>
-                              <div className="nv-vault-actions">
-                                <button
-                                  className="nv-btn nv-btn-sm"
-                                  style={copiedKey === `pass-${v.service}` ? { background: 'rgba(16, 185, 129, 0.2)', borderColor: 'var(--nv-primary)', color: 'var(--nv-primary)' } : { background: 'transparent' }}
-                                  onClick={() => copyPassword(v.service)}
-                                >
-                                  {copiedKey === `pass-${v.service}` ? '✓ Copied' : 'Copy'}
-                                </button>
-                                {v.username && (
-                                  <button
-                                    className="nv-btn nv-btn-sm"
-                                    style={copiedKey === `user-${v.username}` ? { background: 'rgba(16, 185, 129, 0.2)', borderColor: 'var(--nv-primary)', color: 'var(--nv-primary)' } : { background: 'transparent' }}
-                                    onClick={() => copyUsername(v.username!)}
-                                  >
-                                    {copiedKey === `user-${v.username}` ? '✓ User' : 'User'}
-                                  </button>
-                                )}
-                                <button
-                                  className="nv-btn nv-btn-ghost nv-btn-sm"
-                                  onClick={() => editPassword(v.service)}
-                                  title="Edit credential"
-                                >
-                                  Edit
-                                </button>
-                                <button
-                                  className="nv-btn nv-btn-ghost nv-btn-sm"
-                                  style={{ color: 'var(--nv-danger)', padding: '0.35rem 0.55rem' }}
-                                  onClick={() => deletePassword(v.service)}
-                                  title="Delete credential"
-                                >
-                                  ✕
-                                </button>
-                              </div>
+                    groupedVaultItems.map(grp => {
+                      const isCollapsed = !!collapsedGroups[grp.key];
+                      return (
+                        <div className={`nv-group-card ${isCollapsed ? 'collapsed' : ''}`} key={grp.key}>
+                          <div
+                            className="nv-group-header"
+                            onClick={() => setCollapsedGroups(prev => ({ ...prev, [grp.key]: !prev[grp.key] }))}
+                            title="Tap to expand / collapse"
+                          >
+                            <div className="nv-group-title">
+                              <span className="nv-group-chevron" style={{ transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}>▼</span>
+                              <span>📁</span>
+                              <span>{grp.label}</span>
                             </div>
-                          ))}
+                            <span className="nv-badge" style={{ fontSize: '0.65rem' }}>
+                              {grp.items.length} {grp.items.length === 1 ? 'item' : 'items'}
+                            </span>
+                          </div>
+                          {!isCollapsed && (
+                            <div className="nv-group-items">
+                              {grp.items.map(v => (
+                                <div className="nv-vault-item" key={v.service}>
+                                  <div className="nv-vault-left">
+                                    <div className="nv-avatar-monogram">
+                                      {(v.service.charAt(0) || 'V').toUpperCase()}
+                                    </div>
+                                    <div className="nv-vault-info">
+                                      <span className="nv-vault-service">{v.service}</span>
+                                      <span className="nv-vault-meta">
+                                        {v.username ? `👤 ${v.username}` : `Saved ${new Date(v.createdAt).toLocaleDateString()}`}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <div className="nv-vault-actions">
+                                    <button
+                                      className="nv-btn nv-btn-sm"
+                                      style={copiedKey === `pass-${v.service}` ? { background: 'rgba(16, 185, 129, 0.25)', borderColor: 'var(--nv-primary)', color: 'var(--nv-primary)' } : {}}
+                                      onClick={() => copyPassword(v.service)}
+                                      title="Copy password"
+                                    >
+                                      {copiedKey === `pass-${v.service}` ? '✓ Copied' : '⚡ Pass'}
+                                    </button>
+                                    {v.username && (
+                                      <button
+                                        className="nv-btn nv-btn-ghost nv-btn-sm"
+                                        style={copiedKey === `user-${v.username}` ? { background: 'rgba(16, 185, 129, 0.25)', borderColor: 'var(--nv-primary)', color: 'var(--nv-primary)' } : {}}
+                                        onClick={() => copyUsername(v.username!)}
+                                        title="Copy username"
+                                      >
+                                        {copiedKey === `user-${v.username}` ? '✓ User' : '👤 User'}
+                                      </button>
+                                    )}
+                                    <button
+                                      className="nv-btn-icon"
+                                      onClick={() => editPassword(v.service)}
+                                      title="Edit credential"
+                                    >
+                                      ✏️
+                                    </button>
+                                    <button
+                                      className="nv-btn-icon"
+                                      style={{ color: 'var(--nv-danger)' }}
+                                      onClick={() => deletePassword(v.service)}
+                                      title="Delete credential"
+                                    >
+                                      🗑
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    ))
+                      );
+                    })
                   ) : (
                     filteredVaultItems.map(v => (
                       <div className="nv-vault-item" key={v.service}>
@@ -1813,34 +2304,36 @@ function App() {
                         <div className="nv-vault-actions">
                           <button
                             className="nv-btn nv-btn-sm"
-                            style={copiedKey === `pass-${v.service}` ? { background: 'rgba(16, 185, 129, 0.2)', borderColor: 'var(--nv-primary)', color: 'var(--nv-primary)' } : { background: 'transparent' }}
+                            style={copiedKey === `pass-${v.service}` ? { background: 'rgba(16, 185, 129, 0.25)', borderColor: 'var(--nv-primary)', color: 'var(--nv-primary)' } : {}}
                             onClick={() => copyPassword(v.service)}
+                            title="Copy password"
                           >
-                            {copiedKey === `pass-${v.service}` ? '✓ Copied' : 'Copy'}
+                            {copiedKey === `pass-${v.service}` ? '✓ Copied' : '⚡ Pass'}
                           </button>
                           {v.username && (
                             <button
-                              className="nv-btn nv-btn-sm"
-                              style={copiedKey === `user-${v.username}` ? { background: 'rgba(16, 185, 129, 0.2)', borderColor: 'var(--nv-primary)', color: 'var(--nv-primary)' } : { background: 'transparent' }}
+                              className="nv-btn nv-btn-ghost nv-btn-sm"
+                              style={copiedKey === `user-${v.username}` ? { background: 'rgba(16, 185, 129, 0.25)', borderColor: 'var(--nv-primary)', color: 'var(--nv-primary)' } : {}}
                               onClick={() => copyUsername(v.username!)}
+                              title="Copy username"
                             >
-                              {copiedKey === `user-${v.username}` ? '✓ User' : 'User'}
+                              {copiedKey === `user-${v.username}` ? '✓ User' : '👤 User'}
                             </button>
                           )}
                           <button
-                            className="nv-btn nv-btn-ghost nv-btn-sm"
+                            className="nv-btn-icon"
                             onClick={() => editPassword(v.service)}
                             title="Edit credential"
                           >
-                            Edit
+                            ✏️
                           </button>
                           <button
-                            className="nv-btn nv-btn-ghost nv-btn-sm"
-                            style={{ color: 'var(--nv-danger)', padding: '0.35rem 0.55rem' }}
+                            className="nv-btn-icon"
+                            style={{ color: 'var(--nv-danger)' }}
                             onClick={() => deletePassword(v.service)}
                             title="Delete credential"
                           >
-                            ✕
+                            🗑
                           </button>
                         </div>
                       </div>
@@ -2026,6 +2519,13 @@ function App() {
               {/* PAGE 3: NEXGRID */}
               {activeTab === 'grid' && (
                 <div>
+                  {/* Neural Mesh Topology & Motion Design Visualizer */}
+                  <MobileMeshVisualizer
+                    trustedDevices={trustedDevices}
+                    onExtendPeer={onGrantPeerExtension}
+                    showToast={showToast}
+                  />
+
                   <Card style={{ marginBottom: '1rem' }}>
                     <div className="nv-panel-header">
                       <span className="nv-panel-title">NexGrid P2P Mesh</span>
@@ -2126,25 +2626,56 @@ function App() {
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'space-between',
-                            padding: '0.5rem 0.65rem',
+                            padding: '0.65rem 0.75rem',
                             background: 'var(--nv-bg-2)',
                             border: '1px solid var(--nv-border)',
                             borderRadius: 'var(--nv-radius-sm)',
-                            marginBottom: '0.4rem',
-                            fontSize: '0.75rem'
+                            marginBottom: '0.45rem',
+                            fontSize: '0.75rem',
+                            flexWrap: 'wrap',
+                            gap: '0.5rem'
                           }}
                         >
                           <div>
-                            <div style={{ fontWeight: 600, color: '#fff' }}>{d.deviceName || 'Desktop'}</div>
+                            <div style={{ fontWeight: 600, color: '#fff', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <span className="nv-pulse-dot" style={{ width: '6px', height: '6px' }} />
+                              <span>{d.deviceName || 'Desktop Node'}</span>
+                            </div>
                             <div style={{ fontSize: '0.65rem', color: 'var(--nv-muted)', fontFamily: 'var(--nv-font-mono)' }}>{d.deviceId}</div>
                           </div>
-                          <button
-                            className="nv-btn nv-btn-ghost nv-btn-sm"
-                            style={{ color: 'var(--nv-danger)', padding: '0.2rem 0.45rem', fontSize: '0.65rem' }}
-                            onClick={() => onRevokeDevice(d.deviceId)}
-                          >
-                            Revoke
-                          </button>
+                          <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
+                            <button
+                              className="nv-btn nv-btn-sm"
+                              style={{ fontSize: '0.65rem', padding: '0.2rem 0.45rem' }}
+                              onClick={() => onGrantPeerExtension(d.deviceId, '1week')}
+                              title="Extend peer safe window by 1 week"
+                            >
+                              ⚡ +1W
+                            </button>
+                            <button
+                              className="nv-btn nv-btn-accent nv-btn-sm"
+                              style={{ fontSize: '0.65rem', padding: '0.2rem 0.45rem' }}
+                              onClick={() => onGrantPeerExtension(d.deviceId, '1month')}
+                              title="Extend peer safe window by 1 month"
+                            >
+                              ⚡ +1M
+                            </button>
+                            <button
+                              className="nv-btn nv-btn-ghost nv-btn-sm"
+                              style={{ fontSize: '0.65rem', padding: '0.2rem 0.45rem' }}
+                              onClick={() => onRequestPeerToExtend(d.deviceId, '1week')}
+                              title="Prompt peer to extend safe period"
+                            >
+                              🔔
+                            </button>
+                            <button
+                              className="nv-btn nv-btn-ghost nv-btn-sm"
+                              style={{ color: 'var(--nv-danger)', padding: '0.2rem 0.45rem', fontSize: '0.65rem' }}
+                              onClick={() => onRevokeDevice(d.deviceId)}
+                            >
+                              Revoke
+                            </button>
+                          </div>
                         </div>
                       ))
                     )}
@@ -2160,6 +2691,53 @@ function App() {
               {/* PAGE 4: SECURITY CENTER */}
               {activeTab === 'security' && (
                 <div>
+                  {/* Incoming Extension Grant from Peer Alert Card */}
+                  {incomingExtensionGrant && (
+                    <Card style={{ marginBottom: '1rem', borderColor: 'var(--nv-primary)', background: 'rgba(16, 185, 129, 0.12)', boxShadow: '0 0 16px rgba(16, 185, 129, 0.25)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                        <div style={{ fontWeight: 700, color: '#fff', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span className="nv-pulse-dot" />
+                          <span>Safe Period Extended by Peer!</span>
+                        </div>
+                        <span className="nv-badge success">{incomingExtensionGrant.duration}</span>
+                      </div>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--nv-text-secondary)', margin: '0 0 0.5rem' }}>
+                        Peer <strong>"{incomingExtensionGrant.granterDeviceName}"</strong> granted this device a safe period extension until <strong>{new Date(incomingExtensionGrant.newDeadline).toLocaleDateString()}</strong>.
+                      </p>
+                      <button className="nv-btn nv-btn-sm" onClick={() => setIncomingExtensionGrant(null)}>
+                        Dismiss
+                      </button>
+                    </Card>
+                  )}
+
+                  {/* Incoming Extension Prompt from Peer Alert Card */}
+                  {incomingExtensionPrompt && (
+                    <Card style={{ marginBottom: '1rem', borderColor: 'var(--nv-accent)', background: 'rgba(14, 165, 233, 0.12)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                        <div style={{ fontWeight: 700, color: '#fff', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span>🔔</span>
+                          <span>Peer Requested Extension</span>
+                        </div>
+                        <span className="nv-badge" style={{ background: 'var(--nv-accent)', color: '#fff' }}>{incomingExtensionPrompt.duration}</span>
+                      </div>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--nv-text-secondary)', margin: '0 0 0.5rem' }}>
+                        Peer <strong>"{incomingExtensionPrompt.fromDeviceName}"</strong> requested that this device extend its safe period.
+                      </p>
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <button className="nv-btn nv-btn-sm" onClick={() => {
+                          onCheckInNow();
+                          onRequestSecurityExtension(false);
+                          setIncomingExtensionPrompt(null);
+                        }}>
+                          ✓ Accept &amp; Extend
+                        </button>
+                        <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={() => setIncomingExtensionPrompt(null)}>
+                          Dismiss
+                        </button>
+                      </div>
+                    </Card>
+                  )}
+
                   {/* Incoming Peer Extension Request Alert Card */}
                   {incomingExtensionRequest && (
                     <Card style={{ marginBottom: '1rem', borderColor: 'var(--nv-primary)', background: 'rgba(16, 185, 129, 0.08)', boxShadow: '0 0 15px rgba(16, 185, 129, 0.2)' }}>
@@ -2269,6 +2847,36 @@ function App() {
                         </button>
                       </div>
                     </div>
+
+                    {/* Grant Peer Extension Directly From Mobile */}
+                    <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: 'rgba(16, 185, 129, 0.06)', borderRadius: 'var(--nv-radius-sm)', border: '1px solid rgba(16, 185, 129, 0.25)' }}>
+                      <div style={{ fontWeight: 600, fontSize: '0.8rem', color: '#fff', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <span className="nv-pulse-dot" style={{ width: '6px', height: '6px' }} />
+                        <span>Grant Safe Period to Peer Device</span>
+                      </div>
+                      <p style={{ fontSize: '0.7rem', color: 'var(--nv-text-secondary)', margin: '0 0 0.5rem' }}>
+                        Extend the safe operating window of another device in your mesh without requiring that device to initiate it.
+                      </p>
+                      {trustedDevices.length === 0 ? (
+                        <div style={{ fontSize: '0.7rem', color: 'var(--nv-muted)' }}>No paired peers enrolled yet. Pair a peer in the Mesh tab first.</div>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                          {trustedDevices.map(d => (
+                            <div key={d.deviceId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.35rem 0.5rem', background: 'var(--nv-bg-2)', borderRadius: 'var(--nv-radius-sm)', fontSize: '0.72rem' }}>
+                              <span style={{ fontWeight: 600, color: '#fff' }}>{d.deviceName || 'Peer Node'}</span>
+                              <div style={{ display: 'flex', gap: '0.25rem' }}>
+                                <button className="nv-btn nv-btn-sm" style={{ fontSize: '0.65rem', padding: '0.2rem 0.45rem' }} onClick={() => onGrantPeerExtension(d.deviceId, '1week')}>
+                                  ⚡ +1W
+                                </button>
+                                <button className="nv-btn nv-btn-accent nv-btn-sm" style={{ fontSize: '0.65rem', padding: '0.2rem 0.45rem' }} onClick={() => onGrantPeerExtension(d.deviceId, '1month')}>
+                                  ⚡ +1M
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </Card>
 
                   {/* Cryptographic Protection Card */}
@@ -2305,35 +2913,55 @@ function App() {
                   <Card style={{ marginBottom: '1rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
                       <div style={{ fontWeight: 600, color: '#fff' }}>Android &amp; Google Chrome Autofill</div>
-                      <span className="nv-badge success">Enabled</span>
+                      <span className="nv-badge success">Active</span>
                     </div>
                     <p style={{ fontSize: '0.75rem', color: 'var(--nv-muted)', margin: '0 0 0.75rem' }}>
-                      NextVault provides system-level autofill for native Android apps and mobile web browsers (Google Chrome, Brave, Firefox, Edge).
+                      NextVault provides dual-engine autofill: a resilient floating overlay for Google Chrome, Brave, Firefox &amp; Edge, plus standard Android system autofill.
                     </p>
-                    
-                    <div style={{ background: 'var(--nv-bg-2)', padding: '0.75rem', borderRadius: 'var(--nv-radius-sm)', border: '1px solid var(--nv-border)', marginBottom: '0.75rem' }}>
-                      <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#fff', marginBottom: '0.35rem' }}>📱 Chrome Web Autofill Setup:</div>
-                      <ol style={{ fontSize: '0.72rem', color: 'var(--nv-text-secondary)', margin: 0, paddingLeft: '1.2rem', lineHeight: '1.5' }}>
-                        <li>Tap <strong>"Open Autofill Settings"</strong> below and set NexVault as your Android autofill service.</li>
-                        <li>In <strong>Google Chrome</strong>: tap <strong>⋮ (Menu) → Settings → Autofill options</strong>.</li>
-                        <li>Select <strong>"Autofill using another service"</strong>.</li>
-                        <li>Tap <strong>"Sync Vault to Native Autofill"</strong> below to prime stored logins into Android KeyStore.</li>
-                      </ol>
-                    </div>
 
-                    <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                      <button className="nv-btn nv-btn-accent nv-btn-sm" onClick={openAutofillSettings}>
-                        ⚙️ Open Android Autofill Settings
-                      </button>
-                      <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={async () => {
-                        const st = (window as any).nexVault?.loadVault?.();
-                        if (st) {
-                          await syncAutofillCredentials(st.passwords);
-                          showToast('Synced vault credentials to Android native keystore!');
-                        }
+                    {/* Section 1: Accessibility Overlay (Bitdefender/Bitwarden-style floating pill) */}
+                    <div style={{ background: 'var(--nv-bg-2)', padding: '0.75rem', borderRadius: 'var(--nv-radius-sm)', border: '1px solid var(--nv-border)', marginBottom: '0.75rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                        <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#fff' }}>🛡️ Chrome &amp; Browser Overlay Service:</div>
+                        <span className={`nv-badge ${a11yEnabled ? 'success' : 'warning'}`}>
+                          {a11yEnabled ? 'Active' : 'Setup Required'}
+                        </span>
+                      </div>
+                      <p style={{ fontSize: '0.72rem', color: 'var(--nv-text-secondary)', margin: '0 0 0.5rem', lineHeight: '1.45' }}>
+                        Operates on top of Google Chrome and all mobile browsers. When focusing a login textbox, a floating glassmorphic NexVault pill appears to fill credentials in one tap.
+                      </p>
+                      <div style={{ fontSize: '0.70rem', color: '#00ff9d', marginBottom: '0.6rem' }}>
+                        🔒 <strong>Strict Field Filter:</strong> Only detects username, email, and password textboxes. Addresses, zip codes, and search bars are strictly excluded.
+                      </div>
+                      <button className="nv-btn nv-btn-accent nv-btn-sm" onClick={async () => {
+                        await openAccessibilitySettings();
+                        showToast('Enable "NexVault Autofill Overlay" under Downloaded Apps');
                       }}>
-                        🔄 Sync Vault to Native Autofill
+                        ⚙️ {a11yEnabled ? 'Configure Accessibility Service' : 'Enable Overlay in Accessibility'}
                       </button>
+                    </div>
+                    
+                    {/* Section 2: Standard Android Autofill Framework */}
+                    <div style={{ background: 'var(--nv-bg-2)', padding: '0.75rem', borderRadius: 'var(--nv-radius-sm)', border: '1px solid var(--nv-border)', marginBottom: '0.75rem' }}>
+                      <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#fff', marginBottom: '0.35rem' }}>📱 Standard Android Autofill Framework:</div>
+                      <ol style={{ fontSize: '0.72rem', color: 'var(--nv-text-secondary)', margin: '0 0 0.5rem', paddingLeft: '1.2rem', lineHeight: '1.5' }}>
+                        <li>Tap <strong>"Open Autofill Settings"</strong> below and set NexVault as default autofill service.</li>
+                        <li>Tap <strong>"Sync Vault to Native Keystore"</strong> below to prime stored logins into Android KeyStore.</li>
+                      </ol>
+                      <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                        <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={openAutofillSettings}>
+                          ⚙️ Open Android Autofill Settings
+                        </button>
+                        <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={async () => {
+                          const st = (window as any).nexVault?.loadVault?.();
+                          if (st) {
+                            await syncAutofillCredentials(st.passwords);
+                            showToast('Synced vault credentials to Android native keystore!');
+                          }
+                        }}>
+                          🔄 Sync Vault to Native Keystore
+                        </button>
+                      </div>
                     </div>
                   </Card>
 
@@ -2396,13 +3024,22 @@ function App() {
                         Check for Updates
                       </button>
                       {updateInfo && updateInfo.hasUpdate && (
-                        <button
-                          className="nv-btn nv-btn-accent nv-btn-sm"
-                          disabled={isUpdating}
-                          onClick={onApplyMobileUpdate}
-                        >
-                          {isUpdating ? 'Installing...' : `Install v${updateInfo.latestVersion}`}
-                        </button>
+                        <>
+                          <button
+                            className="nv-btn nv-btn-accent nv-btn-sm"
+                            disabled={isUpdating}
+                            onClick={onApplyMobileUpdate}
+                          >
+                            {isUpdating ? 'Installing...' : `Install v${updateInfo.latestVersion}`}
+                          </button>
+                          <button
+                            className="nv-btn nv-btn-ghost nv-btn-sm"
+                            onClick={onDownloadApkInBrowser}
+                            title="Directly download the APK file in browser"
+                          >
+                            Browser Download
+                          </button>
+                        </>
                       )}
                     </div>
                   </Card>

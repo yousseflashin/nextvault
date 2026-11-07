@@ -676,6 +676,42 @@ nexGrid.on('extension-approval-response', (peerId, message) => {
   nexVaultSecurity.handlePeerApproval(message);
 });
 
+nexGrid.on('extension-grant', (peerId, message) => {
+  try {
+    const result = nexVaultSecurity.applyPeerExtensionGrant(message);
+    if (result.ack) {
+      nexGrid.sendSecureMessage(peerId, result.ack);
+    }
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('extension-grant-received', {
+        peerId,
+        ...message,
+        ...result
+      });
+    }
+  } catch (err) {
+    console.error('[NexVault Desktop] Error applying extension grant:', err);
+  }
+});
+
+nexGrid.on('extension-grant-ack', (peerId, message) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('extension-grant-acknowledged', {
+      peerId,
+      ...message
+    });
+  }
+});
+
+nexGrid.on('extension-prompt-request', (peerId, message) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('extension-prompt-received', {
+      peerId,
+      ...message
+    });
+  }
+});
+
 nexVaultSecurity.on('broadcast-approval-request', (data) => {
   const broadcastPayload = {
     type: 'extension-approval-request',
@@ -1412,6 +1448,37 @@ ipcMain.handle('reject-extension', async (event, peerId, requestId, reason) => {
       fromDeviceId: peerId
     }, false, reason || 'Declined by desktop user');
     nexGrid.sendSecureMessage(peerId, responsePayload);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('grant-peer-extension', async (event, targetPeerId, duration = '1week') => {
+  try {
+    const result = nexVaultSecurity.grantPeerExtension(targetPeerId, duration);
+    if (result.grant && targetPeerId) {
+      nexGrid.sendSecureMessage(targetPeerId, result.grant);
+    }
+    return { success: true, ...result };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('request-peer-to-extend', async (event, targetPeerId, duration = '1week') => {
+  try {
+    const promptPayload = {
+      type: 'extension-prompt-request',
+      fromDeviceId: nexVaultSecurity.getToken().publicKey,
+      fromDeviceName: 'NexVault Desktop',
+      targetDeviceId: targetPeerId,
+      duration,
+      timestamp: new Date().toISOString()
+    };
+    if (targetPeerId) {
+      nexGrid.sendSecureMessage(targetPeerId, promptPayload);
+    }
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };

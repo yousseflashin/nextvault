@@ -260,22 +260,79 @@
     return pw;
   }
 
-  function isPasswordInput(el) {
-    if (!el || el.tagName !== 'INPUT') return false;
-    if (el.type === 'password') return true;
+  // Explicit non-credential blacklist: addresses, shipping, billing, search, notes, etc.
+  const NON_CREDENTIAL_KEYWORDS = [
+    // Address & Location fields
+    'address', 'addr', 'street', 'city', 'state', 'zip', 'zipcode', 'postal', 'postcode',
+    'country', 'province', 'region', 'county', 'apt', 'suite', 'unit', 'floor', 'building',
+    'po_box', 'pobox', 'door', 'delivery', 'shipping', 'billing', 'destination', 'location',
+    // Search, Query & Filters
+    'search', 'query', 'filter', 'keyword', 'find',
+    // Non-credential Personal info
+    'first_name', 'firstname', 'first-name', 'fname', 'last_name', 'lastname', 'last-name', 'lname',
+    'middle_name', 'middlename', 'full_name', 'fullname', 'cardholder', 'bday', 'birthday', 'birthdate',
+    'gender', 'sex', 'ssn', 'tax', 'vat', 'company', 'organization', 'department',
+    // Financial / Payment
+    'card', 'cc-', 'cc_', 'cvv', 'cvc', 'exp', 'expiry', 'coupon', 'promo', 'discount', 'voucher',
+    // Generic Content / Communication
+    'comment', 'message', 'note', 'notes', 'bio', 'description', 'feedback', 'review', 'subject', 'topic', 'qty', 'quantity', 'amount', 'price'
+  ];
+
+  const NON_CREDENTIAL_AUTOCOMPLETE = [
+    'street-address', 'address-line1', 'address-line2', 'address-line3',
+    'address-level1', 'address-level2', 'address-level3', 'address-level4',
+    'country', 'country-name', 'postal-code', 'cc-name', 'cc-given-name',
+    'cc-family-name', 'cc-number', 'cc-exp', 'cc-exp-month', 'cc-exp-year',
+    'cc-csc', 'cc-type', 'shipping', 'billing', 'given-name', 'family-name',
+    'additional-name', 'honorific-prefix', 'honorific-suffix', 'organization',
+    'bday', 'sex', 'transaction-currency', 'transaction-amount'
+  ];
+
+  function isBlacklistedNonCredentialInput(el) {
+    if (!el || el.tagName !== 'INPUT') return true;
+
+    // Reject non-textual input types
+    const type = (el.type || '').toLowerCase();
+    if (['hidden', 'submit', 'button', 'checkbox', 'radio', 'file', 'image', 'reset', 'search', 'date', 'datetime-local', 'month', 'week', 'time', 'number', 'range', 'color'].includes(type)) {
+      return true;
+    }
+
+    // Reject known non-credential autocomplete attributes
     const auto = (el.getAttribute('autocomplete') || '').toLowerCase();
-    return auto === 'current-password' || auto === 'new-password';
+    for (const val of NON_CREDENTIAL_AUTOCOMPLETE) {
+      if (auto.includes(val)) return true;
+    }
+
+    // Build probe text from attributes, label texts, and aria annotations
+    const labels = Array.from(el.labels || []).map(l => l.innerText || l.textContent || '').join(' ');
+    const probe = [
+      el.name,
+      el.id,
+      el.placeholder,
+      el.getAttribute('aria-label'),
+      el.getAttribute('aria-description'),
+      labels
+    ].filter(Boolean).join(' ').toLowerCase();
+
+    // Check against blacklisted keywords using word boundary or token boundary
+    for (const keyword of NON_CREDENTIAL_KEYWORDS) {
+      const regex = new RegExp(`(^|[^a-z0-9])${keyword}([^a-z0-9]|$)`, 'i');
+      if (regex.test(probe)) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
-  function isIdentifierInput(el) {
+  function isPasswordInput(el) {
     if (!el || el.tagName !== 'INPUT') return false;
-    if (isPasswordInput(el)) return false;
-    const type = (el.type || '').toLowerCase();
-    if (type === 'email' || type === 'tel') return true;
-    if (type !== 'text' && type !== '') return false;
+    if (el.disabled || el.readOnly || el.type === 'hidden') return false;
+    if (isBlacklistedNonCredentialInput(el)) return false;
 
+    if (el.type === 'password') return true;
     const auto = (el.getAttribute('autocomplete') || '').toLowerCase();
-    if (auto.includes('username') || auto.includes('email') || auto.includes('tel')) return true;
+    if (auto === 'current-password' || auto === 'new-password') return true;
 
     const probe = [
       el.name,
@@ -284,7 +341,44 @@
       el.getAttribute('aria-label')
     ].filter(Boolean).join(' ').toLowerCase();
 
-    return /user|email|login|account|phone|mobile|identifier|member/i.test(probe);
+    return /\b(password|passwd|pwd|passcode|secret_key|master_key)\b/i.test(probe);
+  }
+
+  function isIdentifierInput(el) {
+    if (!el || el.tagName !== 'INPUT') return false;
+    if (el.disabled || el.readOnly || el.type === 'hidden') return false;
+    if (isPasswordInput(el)) return false;
+    if (isBlacklistedNonCredentialInput(el)) return false;
+
+    const type = (el.type || '').toLowerCase();
+    if (type !== 'text' && type !== 'email' && type !== 'tel' && type !== '') return false;
+
+    const auto = (el.getAttribute('autocomplete') || '').toLowerCase();
+    if (auto.includes('username') || auto.includes('email')) return true;
+
+    const labels = Array.from(el.labels || []).map(l => l.innerText || l.textContent || '').join(' ');
+    const probe = [
+      el.name,
+      el.id,
+      el.placeholder,
+      el.getAttribute('aria-label'),
+      labels
+    ].filter(Boolean).join(' ').toLowerCase();
+
+    // Strict positive credential check: username, email, user_id, login, signin, member_id, handle
+    const isCred = /\b(username|user_id|userid|user_name|login_id|login|signin|sign_in|auth|member_id|handle|email)\b/i.test(probe);
+    if (isCred) return true;
+
+    if (type === 'email') return true;
+
+    // Only accept tel/phone if the input specifically occurs in an auth context
+    if (type === 'tel' || /\b(phone|mobile)\b/i.test(probe)) {
+      if (/\b(login|auth|signin|sign_in|account|credential)\b/i.test(probe) || auto.includes('username')) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   function isLoginInput(el) {
@@ -304,15 +398,15 @@
   }
 
   function findPasswordField(context) {
-    return context.querySelector('input[type="password"], input[autocomplete="current-password"], input[autocomplete="new-password"]');
+    const passCandidates = Array.from(context.querySelectorAll('input[type="password"], input[autocomplete="current-password"], input[autocomplete="new-password"], input[type="text"]'));
+    for (const cand of passCandidates) {
+      if (isPasswordInput(cand)) return cand;
+    }
+    return null;
   }
 
   function findUsernameField(context, passField) {
-    // 1. Direct autocomplete or email/tel
-    const explicit = context.querySelector('input[autocomplete*="username"], input[autocomplete*="email"], input[type="email"], input[type="tel"]');
-    if (explicit) return explicit;
-
-    // 2. Query all visible inputs in the context
+    // 1. Direct positive match for username/email
     const inputs = Array.from(context.querySelectorAll('input:not([type="hidden"]):not([disabled]):not([readonly])'));
     for (const input of inputs) {
       if (input !== passField && isIdentifierInput(input)) {
@@ -320,14 +414,14 @@
       }
     }
 
-    // 3. Preceding input before password
+    // 2. Preceding input before password ONLY if it strictly qualifies as an identifier
+    // (Never blindly select an address, name, or arbitrary text input!)
     if (passField) {
       const idx = inputs.indexOf(passField);
       if (idx > 0) {
         for (let i = idx - 1; i >= 0; i--) {
           const inp = inputs[i];
-          const t = (inp.type || '').toLowerCase();
-          if (t === 'text' || t === 'email' || t === 'tel' || t === '') {
+          if (isIdentifierInput(inp)) {
             return inp;
           }
         }

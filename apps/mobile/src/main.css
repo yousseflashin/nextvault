@@ -336,18 +336,19 @@
 
 .nv-nav-button.active::after {
   background: var(--nv-primary);
-  box-shadow: 0 0 8px var(--nv-primary);
+  box-shadow: 0 0 10px var(--nv-primary);
 }
 
 .nv-nav-button .nav-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.18s ease;
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), filter 0.18s ease;
 }
 
 .nv-nav-button.active .nav-icon {
-  transform: translateY(-1px);
+  transform: translateY(-2px);
+  filter: drop-shadow(0 0 6px rgba(16, 185, 129, 0.45));
 }
 
 /* Vault and OTP cards */
@@ -355,18 +356,19 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.8rem 0.95rem;
+  padding: 0.82rem 1rem;
   background: var(--nv-surface);
   border: 1px solid var(--nv-border);
-  border-radius: var(--nv-radius-sm);
+  border-radius: var(--nv-radius);
   margin-bottom: 0.55rem;
-  transition: all 0.15s ease;
+  box-shadow: var(--nv-card-shadow);
+  transition: all 0.16s ease;
   gap: 0.75rem;
 }
 
 .nv-vault-item:hover {
   background: var(--nv-surface-hover);
-  border-color: rgba(255, 255, 255, 0.12);
+  border-color: var(--nv-border-strong);
   transform: translateY(-1px);
 }
 

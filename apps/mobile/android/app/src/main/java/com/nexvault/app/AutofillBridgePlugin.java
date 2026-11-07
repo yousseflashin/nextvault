@@ -56,4 +56,41 @@ public class AutofillBridgePlugin extends Plugin {
         result.put("enabled", enabled);
         call.resolve(result);
     }
+
+    @PluginMethod
+    public void isAccessibilityEnabled(PluginCall call) {
+        boolean enabled = false;
+        try {
+            android.view.accessibility.AccessibilityManager am =
+                (android.view.accessibility.AccessibilityManager) getContext().getSystemService(android.content.Context.ACCESSIBILITY_SERVICE);
+            if (am != null) {
+                java.util.List<android.accessibilityservice.AccessibilityServiceInfo> list =
+                    am.getEnabledAccessibilityServiceList(android.accessibilityservice.AccessibilityServiceInfo.FEEDBACK_ALL_MASK);
+                String expected = getContext().getPackageName() + "/" + NexVaultAccessibilityService.class.getName();
+                String shortExpected = getContext().getPackageName() + "/.NexVaultAccessibilityService";
+                if (list != null) {
+                    for (android.accessibilityservice.AccessibilityServiceInfo info : list) {
+                        String id = info.getId();
+                        if (id != null && (id.equals(expected) || id.equals(shortExpected) || id.contains("NexVaultAccessibilityService"))) {
+                            enabled = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+        JSObject result = new JSObject();
+        result.put("enabled", enabled);
+        call.resolve(result);
+    }
+
+    @PluginMethod
+    public void openAccessibilitySettings(PluginCall call) {
+        try {
+            Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(intent);
+        } catch (Exception ignored) {}
+        call.resolve();
+    }
 }

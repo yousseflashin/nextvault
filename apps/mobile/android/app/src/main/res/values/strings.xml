@@ -4,4 +4,6 @@
     <string name="title_activity_main">NexVault</string>
     <string name="package_name">com.nexvault.app</string>
     <string name="custom_url_scheme">com.nexvault.app</string>
+    <string name="accessibility_service_label">NexVault Autofill Overlay</string>
+    <string name="accessibility_service_description">Enables NexVault to automatically detect login fields and show a floating autofill overlay on top of web browsers (Google Chrome, Brave, Firefox, Edge) and Android apps.</string>
 </resources>

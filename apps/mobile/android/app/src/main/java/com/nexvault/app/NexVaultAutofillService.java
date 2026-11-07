@@ -55,14 +55,6 @@ public class NexVaultAutofillService extends AutofillService {
                 hasPassword |= field.password;
                 hasUsername |= field.username;
             }
-            if (hasPassword && !hasUsername) {
-                for (Field field : fields) {
-                    if (!field.password) {
-                        field.username = true;
-                        break;
-                    }
-                }
-            }
             fields.removeIf(field -> !field.password && !field.username);
 
             if (domain.isEmpty() || fields.isEmpty()) {
@@ -131,17 +123,15 @@ public class NexVaultAutofillService extends AutofillService {
         String[] hints = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ? node.getAutofillHints() : null;
         String hintText = hints == null ? "" : String.join(" ", hints).toLowerCase(Locale.ROOT);
 
-        int inputType = node.getInputType();
-        boolean password = hintText.contains("password")
-            || (inputType & 0x00000081) != 0
-            || (inputType & 0x000000e0) != 0; // textPassword or textWebPassword
-
         String fieldName = ((node.getHint() == null ? "" : node.getHint()) + " "
             + (node.getIdEntry() == null ? "" : node.getIdEntry()) + " "
             + (node.getContentDescription() == null ? "" : node.getContentDescription())).toLowerCase(Locale.ROOT);
 
-        boolean username = hintText.contains("username") || hintText.contains("email") || hintText.contains("phone")
-            || fieldName.matches(".*(user|email|login|account|phone|identifier).*");
+        // Check if field is blacklisted (address, shipping, billing, search, notes, etc.)
+        boolean blacklisted = isBlacklistedField(fieldName, hintText);
+
+        boolean password = false;
+        boolean username = false;
 
         // Inspect HTML Info if available (Chrome and WebViews)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && node.getHtmlInfo() != null) {
@@ -151,28 +141,53 @@ public class NexVaultAutofillService extends AutofillService {
                 if ("input".equalsIgnoreCase(tag)) {
                     List<Pair<String, String>> attrs = htmlInfo.getAttributes();
                     if (attrs != null) {
+                        StringBuilder htmlProbe = new StringBuilder();
                         for (Pair<String, String> attr : attrs) {
                             String key = attr.first != null ? attr.first.toLowerCase(Locale.ROOT) : "";
                             String val = attr.second != null ? attr.second.toLowerCase(Locale.ROOT) : "";
+                            htmlProbe.append(" ").append(key).append("=").append(val);
                             if ("type".equals(key)) {
                                 if (val.contains("password")) password = true;
-                                if (val.contains("email") || val.contains("text")) username |= !password;
+                                if (val.contains("email")) username = true;
                             } else if ("autocomplete".equals(key)) {
                                 if (val.contains("password")) password = true;
                                 if (val.contains("username") || val.contains("email")) username = true;
                             } else if ("name".equals(key) || "id".equals(key) || "placeholder".equals(key)) {
-                                if (val.contains("pass")) password = true;
-                                if (val.contains("user") || val.contains("email") || val.contains("login")) username = true;
+                                if (val.matches(".*\\b(pass|password|passwd|pwd)\\b.*")) password = true;
+                                if (val.matches(".*\\b(user|username|email|login|userid|user_id)\\b.*")) username = true;
                             }
+                        }
+                        if (isBlacklistedField(htmlProbe.toString(), "")) {
+                            blacklisted = true;
                         }
                     }
                 }
             } catch (Exception ignored) {}
         }
 
-        boolean ordinaryTextInput = node.getAutofillId() != null && node.getInputType() != 0 && node.getChildCount() == 0;
-        if (node.getAutofillId() != null && (password || username || ordinaryTextInput)) {
-            fields.add(new Field(node.getAutofillId(), password, username));
+        if (!blacklisted) {
+            int inputType = node.getInputType();
+            if (hintText.contains("password")
+                || (inputType & 0x00000081) != 0
+                || (inputType & 0x000000e0) != 0) {
+                password = true;
+            }
+
+            if (hintText.contains("username") || hintText.contains("email")
+                || fieldName.matches(".*\\b(user|username|email|login|account|identifier|userid|user_id)\\b.*")) {
+                username = true;
+            }
+
+            // Only recognize phone in explicit auth/login context
+            if (fieldName.matches(".*\\b(phone|mobile)\\b.*") && fieldName.matches(".*\\b(login|auth|signin|account)\\b.*")) {
+                username = true;
+            }
+
+            if (password) username = false;
+
+            if (node.getAutofillId() != null && (password || username)) {
+                fields.add(new Field(node.getAutofillId(), password, username));
+            }
         }
 
         for (int i = 0; i < node.getChildCount(); i++) {
@@ -182,6 +197,35 @@ public class NexVaultAutofillService extends AutofillService {
             }
         }
         return domain;
+    }
+
+    private static boolean isBlacklistedField(String probe, String hintText) {
+        if (probe == null) probe = "";
+        if (hintText == null) hintText = "";
+        String combined = (probe + " " + hintText).toLowerCase(Locale.ROOT);
+
+        // Strict blacklist for addresses, shipping, search, personal info, financial, etc.
+        String blacklistPattern = ".*\\b("
+            + "address|addr|street|city|state|zip|zipcode|postal|postcode|country|province|region|county|"
+            + "apt|suite|unit|floor|building|po_box|pobox|delivery|shipping|billing|destination|location|"
+            + "search|query|filter|find|keyword|"
+            + "first_name|firstname|fname|last_name|lastname|lname|middle_name|full_name|fullname|cardholder|bday|birthday|gender|sex|tax|vat|company|"
+            + "card|cvv|cvc|exp|coupon|promo|discount|voucher|"
+            + "comment|message|note|notes|bio|description|feedback|review|subject|qty|quantity|amount|price"
+            + ")\\b.*";
+
+        if (combined.matches(blacklistPattern)) {
+            return true;
+        }
+
+        // Check autofill hints
+        if (combined.contains("postaladdress") || combined.contains("postalcode") || combined.contains("streetaddress")
+            || combined.contains("addressline") || combined.contains("creditcard") || combined.contains("birthdate")) {
+            return true;
+        }
+
+        return false;
+    }
     }
 
     private RemoteViews presentation(String service, String username) {
