@@ -78,6 +78,25 @@ public class NexVaultAccessibilityService extends AccessibilityService {
     }
 
     @Override
+    protected void onServiceConnected() {
+        super.onServiceConnected();
+        AccessibilityServiceInfo info = getServiceInfo();
+        if (info != null) {
+            info.eventTypes = AccessibilityEvent.TYPE_VIEW_FOCUSED
+                | AccessibilityEvent.TYPE_VIEW_CLICKED
+                | AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED
+                | AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+                | AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED;
+            info.feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC;
+            info.flags |= AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+                | AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
+                | AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS;
+            info.notificationTimeout = 100;
+            setServiceInfo(info);
+        }
+    }
+
+    @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
         if (event == null) return;
         int eventType = event.getEventType();
@@ -91,11 +110,26 @@ public class NexVaultAccessibilityService extends AccessibilityService {
             }
         }
 
-        if (eventType == AccessibilityEvent.TYPE_VIEW_FOCUSED || eventType == AccessibilityEvent.TYPE_VIEW_CLICKED) {
+        if (eventType == AccessibilityEvent.TYPE_VIEW_FOCUSED
+            || eventType == AccessibilityEvent.TYPE_VIEW_CLICKED
+            || eventType == AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED
+            || eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
             AccessibilityNodeInfo source = event.getSource();
             if (source != null) {
                 try {
-                    handleFocusedNode(source, event.getPackageName() != null ? event.getPackageName().toString() : "");
+                    String packageName = event.getPackageName() != null ? event.getPackageName().toString() : "";
+                    AccessibilityNodeInfo focused = source.isEditable() ? source : findFocusedEditable(source);
+                    if (focused == null) {
+                        AccessibilityNodeInfo root = getRootInActiveWindow();
+                        focused = findFocusedEditable(root);
+                        if (root != null && root != focused) root.recycle();
+                    }
+                    if (focused != null) {
+                        handleFocusedNode(focused, packageName);
+                        if (focused != source) focused.recycle();
+                    } else {
+                        hideOverlay();
+                    }
                 } finally {
                     source.recycle();
                 }
@@ -182,6 +216,15 @@ public class NexVaultAccessibilityService extends AccessibilityService {
 
     private boolean isPasswordNode(AccessibilityNodeInfo node) {
         if (node.isPassword()) return true;
+
+        int inputType = node.getInputType();
+        int variation = inputType & 0x00000ff0;
+        if (variation == 0x00000080
+            || variation == 0x00000090
+            || variation == 0x000000e0
+            || variation == 0x00000010) {
+            return true;
+        }
 
         String probe = getNodeProbe(node);
         return probe.matches(".*\\b(password|passwd|pwd|passcode|secret_key|master_key)\\b.*");
@@ -280,10 +323,7 @@ public class NexVaultAccessibilityService extends AccessibilityService {
     private String normalizePackageName(String pkg) {
         if (pkg == null) return "";
         String s = pkg.trim().toLowerCase(Locale.ROOT);
-        if (s.startsWith("com.")) s = s.substring(4);
-        else if (s.startsWith("org.")) s = s.substring(4);
-        int dotIdx = s.indexOf('.');
-        return dotIdx > 0 ? s.substring(0, dotIdx) : s;
+        return s;
     }
 
     private List<JSONObject> findCredentialsForDomain(String domain) {
@@ -294,19 +334,53 @@ public class NexVaultAccessibilityService extends AccessibilityService {
             String jsonStr = NativeCredentialStore.read(this);
             JSONArray array = new JSONArray(jsonStr);
             String normTarget = cleanUrl(domain);
+            String targetStem = packageStem(normTarget);
 
             for (int i = 0; i < array.length(); i++) {
                 JSONObject cred = array.getJSONObject(i);
                 String service = cleanUrl(cred.optString("service", ""));
                 if (service.isEmpty()) continue;
 
-                if (service.equals(normTarget) || service.contains(normTarget) || normTarget.contains(service)) {
+                String serviceStem = packageStem(service);
+                if (service.equals(normTarget)
+                    || service.contains(normTarget)
+                    || normTarget.contains(service)
+                    || (!targetStem.isEmpty() && targetStem.equals(serviceStem))) {
                     matches.add(cred);
                 }
             }
         } catch (Exception ignored) {}
 
         return matches;
+    }
+
+    private String packageStem(String value) {
+        if (value == null || value.isEmpty()) return "";
+        String[] parts = value.toLowerCase(Locale.ROOT).split("\\.");
+        for (int i = parts.length - 1; i >= 0; i--) {
+            String part = parts[i];
+            if (!part.isEmpty()
+                && !part.equals("android")
+                && !part.equals("app")
+                && !part.equals("com")
+                && !part.equals("org")
+                && !part.equals("net")
+                && !part.equals("io")
+                && !part.equals("co")) return part;
+        }
+        return "";
+    }
+
+    private AccessibilityNodeInfo findFocusedEditable(AccessibilityNodeInfo node) {
+        if (node == null) return null;
+        if (node.isEditable() && node.isFocused()) return node;
+        for (int i = 0; i < node.getChildCount(); i++) {
+            AccessibilityNodeInfo child = node.getChild(i);
+            AccessibilityNodeInfo focused = findFocusedEditable(child);
+            if (focused != null) return focused;
+            if (child != null) child.recycle();
+        }
+        return null;
     }
 
     private void performAutofill(String domain, String username, String password, boolean isPassFocused) {
@@ -357,6 +431,7 @@ public class NexVaultAccessibilityService extends AccessibilityService {
 
     private void fillNodeText(AccessibilityNodeInfo node, String text) {
         if (node == null || text == null) return;
+        node.performAction(AccessibilityNodeInfo.ACTION_FOCUS);
         Bundle arguments = new Bundle();
         arguments.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text);
         node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments);

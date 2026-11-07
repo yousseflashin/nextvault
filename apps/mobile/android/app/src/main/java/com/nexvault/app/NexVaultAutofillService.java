@@ -2,6 +2,7 @@ package com.nexvault.app;
 
 import android.app.assist.AssistStructure;
 import android.content.Context;
+import android.content.ComponentName;
 import android.service.autofill.AutofillService;
 import android.service.autofill.Dataset;
 import android.service.autofill.FillCallback;
@@ -47,6 +48,13 @@ public class NexVaultAutofillService extends AutofillService {
                         domain = foundDomain;
                     }
                 }
+            }
+
+            // Native apps do not expose a web domain. Use the hosting activity
+            // package as the stable service identity for credential matching.
+            if (domain.isEmpty()) {
+                ComponentName activity = structure.getActivityComponent();
+                if (activity != null) domain = activity.getPackageName();
             }
 
             boolean hasPassword = false;
