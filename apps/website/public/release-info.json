@@ -1,30 +1,30 @@
 {
   "schemaVersion": 2,
-  "version": "0.1.36",
-  "tag": "v0.1.36",
-  "publishedAt": "2026-11-07T18:43:26.891Z",
-  "releaseUrl": "https://github.com/yousseflashin/nextvault/releases/tag/v0.1.36",
+  "version": "0.1.37",
+  "tag": "v0.1.37",
+  "publishedAt": "2026-11-07T20:01:31.948Z",
+  "releaseUrl": "https://github.com/yousseflashin/nextvault/releases/tag/v0.1.37",
   "desktop": {
     "platform": "linux-x86_64",
     "arch": "x86_64",
     "format": "AppImage",
-    "filename": "NexVault-0.1.36-x86_64.AppImage",
-    "url": "https://github.com/yousseflashin/nextvault/releases/download/v0.1.36/NexVault-0.1.36-x86_64.AppImage",
-    "size": 132108095,
+    "filename": "NexVault-0.1.37-x86_64.AppImage",
+    "url": "https://github.com/yousseflashin/nextvault/releases/download/v0.1.37/NexVault-0.1.37-x86_64.AppImage",
+    "size": 132108064,
     "sizeFormatted": "126.0 MB",
-    "sha256": "b07b0c447999e7f8ff65778c45118a92cfc28956c56b4a9c631295a5e3f4024b",
+    "sha256": "587e5ab114ff054cd9bb7bd7cc2dc78962521f3425b4213fc02f6a47e3bd9242",
     "requirements": "Linux x86_64 · glibc 2.35+ (Ubuntu 22.04+, Debian 12+, Fedora 36+)"
   },
   "mobile": {
     "platform": "android",
     "arch": "universal",
     "format": "APK",
-    "filename": "NexVault-0.1.36.apk",
-    "url": "https://github.com/yousseflashin/nextvault/releases/download/v0.1.36/NexVault-0.1.36.apk",
-    "size": 13268043,
+    "filename": "NexVault-0.1.37.apk",
+    "url": "https://github.com/yousseflashin/nextvault/releases/download/v0.1.37/NexVault-0.1.37.apk",
+    "size": 13272787,
     "sizeFormatted": "12.7 MB",
-    "sha256": "4ce7921f9293b6572d6d669253b46a53637725595ad50b094fe9fdca26c932b4",
-    "versionCode": 101036,
+    "sha256": "f2f5499435688a4f3a5333d0a19287adf0751d7ebb86d0d97b06798139591d04",
+    "versionCode": 101037,
     "requirements": "Android 7.0+ (API 24+ · ARM64 / x86_64)"
   }
 }
