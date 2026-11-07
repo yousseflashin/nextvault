@@ -71,17 +71,15 @@ public class NexVaultAutofillService extends AutofillService {
             JSONArray credentials = new JSONArray(NativeCredentialStore.read(this));
             FillResponse.Builder response = new FillResponse.Builder();
             boolean matched = false;
-            int matchedCount = 0;
 
             for (int i = 0; i < credentials.length(); i++) {
                 JSONObject credential = credentials.getJSONObject(i);
                 String service = credential.optString("service");
                 if (!matches(domain, service)) continue;
 
-                Dataset.Builder dataset = createDataset(service, credential.optString("username"), credential.optString("password"), fields, request, matchedCount);
+                Dataset.Builder dataset = createDataset(service, credential.optString("username"), credential.optString("password"), fields);
                 response.addDataset(dataset.build());
                 matched = true;
-                matchedCount++;
             }
 
             // 1Password Fallback Method:
@@ -92,14 +90,14 @@ public class NexVaultAutofillService extends AutofillService {
                 for (int i = 0; i < limit; i++) {
                     JSONObject credential = credentials.getJSONObject(i);
                     String service = credential.optString("service", "Saved Login");
-                    Dataset.Builder dataset = createDataset(service, credential.optString("username"), credential.optString("password"), fields, request, i);
+                    Dataset.Builder dataset = createDataset(service, credential.optString("username"), credential.optString("password"), fields);
                     response.addDataset(dataset.build());
                     matched = true;
                 }
             }
 
             if (passwordFocused) {
-                Dataset.Builder generator = createGeneratorDataset(fields, request);
+                Dataset.Builder generator = createGeneratorDataset(fields);
                 response.addDataset(generator.build());
                 matched = true;
 
@@ -117,7 +115,7 @@ public class NexVaultAutofillService extends AutofillService {
         }
     }
 
-    private Dataset.Builder createDataset(String service, String username, String password, List<Field> fields, FillRequest request, int index) {
+    private Dataset.Builder createDataset(String service, String username, String password, List<Field> fields) {
         RemoteViews rv = presentation(service, username);
         Dataset.Builder dataset = new Dataset.Builder(rv);
 
@@ -128,13 +126,10 @@ public class NexVaultAutofillService extends AutofillService {
             }
         }
 
-        // Attach modern keyboard inline suggestion chip (Gboard, Samsung Keyboard, SwiftKey)
-        attachInlinePresentation(dataset, service, username, request, index);
-
         return dataset;
     }
 
-    private Dataset.Builder createGeneratorDataset(List<Field> fields, FillRequest request) {
+    private Dataset.Builder createGeneratorDataset(List<Field> fields) {
         RemoteViews rv = presentation("NEXVAULT", "⚡ Generate strong password");
         Dataset.Builder dataset = new Dataset.Builder(rv);
         String generated = generatePassword();
@@ -145,38 +140,7 @@ public class NexVaultAutofillService extends AutofillService {
             }
         }
 
-        attachInlinePresentation(dataset, "⚡ Generate Password", "NexVault", request, 99);
         return dataset;
-    }
-
-    private void attachInlinePresentation(Dataset.Builder dataset, String title, String subtitle, FillRequest request, int index) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && request != null) {
-            try {
-                android.view.inputmethod.InlineSuggestionsRequest inlineRequest = request.getInlineSuggestionsRequest();
-                if (inlineRequest != null) {
-                    List<android.view.inputmethod.InlinePresentationSpec> specs = inlineRequest.getInlinePresentationSpecs();
-                    if (specs != null && !specs.isEmpty()) {
-                        android.view.inputmethod.InlinePresentationSpec spec = specs.get(Math.min(index, specs.size() - 1));
-                        android.net.Uri uri = android.net.Uri.parse("content://com.nexvault.app.autofill/" + System.currentTimeMillis() + "/" + index);
-                        android.app.slice.Slice.Builder sliceBuilder = new android.app.slice.Slice.Builder(uri, new android.app.slice.SliceSpec("inline", 1));
-
-                        String displayTitle = (subtitle != null && !subtitle.isEmpty()) ? subtitle : title;
-                        String displaySub = (subtitle != null && !subtitle.isEmpty()) ? title : "NexVault";
-
-                        sliceBuilder.addText(displayTitle, "title", java.util.Collections.singletonList("title"));
-                        if (displaySub != null && !displaySub.isEmpty()) {
-                            sliceBuilder.addText(displaySub, "subtitle", java.util.Collections.singletonList("subtitle"));
-                        }
-
-                        android.service.autofill.InlinePresentation inlinePresentation =
-                            new android.service.autofill.InlinePresentation(sliceBuilder.build(), spec, false);
-                        dataset.setInlinePresentation(inlinePresentation);
-                    }
-                }
-            } catch (Throwable ignored) {
-                // Inline chip not supported by active keyboard; standard RemoteViews dropdown remains active
-            }
-        }
     }
 
     private String collectFields(AssistStructure.ViewNode node, List<Field> fields) {
