@@ -57,11 +57,9 @@ public class NexVaultAutofillService extends AutofillService {
                 if (activity != null) domain = activity.getPackageName();
             }
 
-            boolean hasPassword = false;
-            boolean hasUsername = false;
+            boolean passwordFocused = false;
             for (Field field : fields) {
-                hasPassword |= field.password;
-                hasUsername |= field.username;
+                passwordFocused |= field.password && field.focused;
             }
             fields.removeIf(field -> !field.password && !field.username);
 
@@ -87,7 +85,19 @@ public class NexVaultAutofillService extends AutofillService {
                 matched = true;
             }
 
-            if (hasPasswordField(fields)) {
+            if (!matched && isBrowserPackage(domain) && credentials.length() == 1) {
+                JSONObject credential = credentials.getJSONObject(0);
+                Dataset.Builder dataset = new Dataset.Builder(
+                    presentation(credential.optString("service", "Saved login"), credential.optString("username")));
+                for (Field field : fields) {
+                    String value = field.password ? credential.optString("password") : credential.optString("username");
+                    if (!value.isEmpty()) dataset.setValue(field.id, AutofillValue.forText(value));
+                }
+                response.addDataset(dataset.build());
+                matched = true;
+            }
+
+            if (passwordFocused) {
                 Dataset.Builder generator = new Dataset.Builder(presentation("NEXVAULT", "Generate strong password"));
                 String generated = generatePassword();
                 for (Field field : fields) {
@@ -194,7 +204,7 @@ public class NexVaultAutofillService extends AutofillService {
             if (password) username = false;
 
             if (node.getAutofillId() != null && (password || username)) {
-                fields.add(new Field(node.getAutofillId(), password, username));
+                fields.add(new Field(node.getAutofillId(), password, username, node.isFocused()));
             }
         }
 
@@ -266,6 +276,16 @@ public class NexVaultAutofillService extends AutofillService {
         }
 
         return false;
+    }
+
+    private boolean isBrowserPackage(String value) {
+        String normalized = normalize(value);
+        return normalized.contains("chrome")
+            || normalized.contains("firefox")
+            || normalized.contains("brave")
+            || normalized.contains("opera")
+            || normalized.contains("edge")
+            || normalized.contains("browser");
     }
 
     private String extractStem(String host) {
@@ -384,10 +404,12 @@ public class NexVaultAutofillService extends AutofillService {
         final AutofillId id;
         final boolean password;
         boolean username;
-        Field(AutofillId id, boolean password, boolean username) {
+        final boolean focused;
+        Field(AutofillId id, boolean password, boolean username, boolean focused) {
             this.id = id;
             this.password = password;
             this.username = username;
+            this.focused = focused;
         }
     }
 }

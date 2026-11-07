@@ -174,6 +174,9 @@ public class NexVaultAccessibilityService extends AccessibilityService {
 
         // 4. Query credentials matching this domain/package
         List<JSONObject> matchingCreds = findCredentialsForDomain(targetDomain);
+        if (matchingCreds.isEmpty() && isBrowser && extractBrowserDomain().isEmpty()) {
+            matchingCreds = findSingleBrowserCredential();
+        }
         if (!matchingCreds.isEmpty()) {
             final String resolvedDomain = targetDomain;
             JSONObject topCred = matchingCreds.get(0);
@@ -286,6 +289,10 @@ public class NexVaultAccessibilityService extends AccessibilityService {
         if (node == null || out.size() >= 3) return;
 
         String resId = node.getViewIdResourceName();
+        CharSequence text = node.getText();
+        CharSequence hint = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ? node.getHintText() : null;
+        String textValue = text == null ? "" : text.toString();
+        String hintValue = hint == null ? "" : hint.toString().toLowerCase(Locale.ROOT);
         if (resId != null) {
             String lower = resId.toLowerCase(Locale.ROOT);
             if (lower.contains("url_bar") || lower.contains("location_bar") || lower.contains("search_box")
@@ -295,6 +302,11 @@ public class NexVaultAccessibilityService extends AccessibilityService {
                 return;
             }
         }
+        if (!textValue.isEmpty() && isLikelyUrl(textValue)
+            && (node.isEditable() || hintValue.contains("address") || hintValue.contains("web"))) {
+            out.add(node);
+            return;
+        }
 
         for (int i = 0; i < node.getChildCount(); i++) {
             AccessibilityNodeInfo child = node.getChild(i);
@@ -302,6 +314,11 @@ public class NexVaultAccessibilityService extends AccessibilityService {
                 findUrlBarNodes(child, out);
             }
         }
+    }
+
+    private boolean isLikelyUrl(String value) {
+        String candidate = value.trim().toLowerCase(Locale.ROOT);
+        return candidate.matches("^(https?://)?[a-z0-9][a-z0-9.-]+\\.[a-z]{2,}([/:].*)?$");
     }
 
     private String cleanUrl(String raw) {
@@ -354,6 +371,20 @@ public class NexVaultAccessibilityService extends AccessibilityService {
         return matches;
     }
 
+    private List<JSONObject> findSingleBrowserCredential() {
+        List<JSONObject> matches = new ArrayList<>();
+        try {
+            JSONArray array = new JSONArray(NativeCredentialStore.read(this));
+            for (int i = 0; i < array.length(); i++) {
+                JSONObject credential = array.getJSONObject(i);
+                if (!credential.optString("username").isEmpty() || !credential.optString("password").isEmpty()) {
+                    matches.add(credential);
+                }
+            }
+        } catch (Exception ignored) {}
+        return matches.size() == 1 ? matches : new ArrayList<>();
+    }
+
     private String packageStem(String value) {
         if (value == null || value.isEmpty()) return "";
         String[] parts = value.toLowerCase(Locale.ROOT).split("\\.");
@@ -400,6 +431,11 @@ public class NexVaultAccessibilityService extends AccessibilityService {
                 if (passwordNode == null && isPasswordNode(node)) {
                     passwordNode = node;
                 } else if (usernameNode == null && isUsernameNode(node)) {
+                    usernameNode = node;
+                } else if (usernameNode == null && !isPasswordNode(node)) {
+                    // Some native apps expose no username hint or resource id.
+                    // Once a password field exists, the remaining editable login
+                    // field is the safest username candidate.
                     usernameNode = node;
                 }
             }
