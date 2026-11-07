@@ -24,6 +24,15 @@ const AutofillBridge = registerPlugin<{
   isEnabled(): Promise<{ enabled: boolean }>;
   openAccessibilitySettings(): Promise<void>;
   isAccessibilityEnabled(): Promise<{ enabled: boolean }>;
+  openAppDetailsSettings(): Promise<void>;
+  getDiagnosticStatus(): Promise<{
+    sdkInt: number;
+    hasRestrictedSettings: boolean;
+    packageName: string;
+    isAccessibilityEnabled: boolean;
+    isAutofillEnabled: boolean;
+  }>;
+  setSecureWindow(options: { enable: boolean }): Promise<void>;
 }>('AutofillBridge');
 
 export interface StoredCredential {
@@ -524,6 +533,63 @@ export function clearAutofillCredentials() {
 
 const DEFAULT_OFFLINE_WINDOW_MS = 24 * 60 * 60 * 1000;
 
+export interface DeviceSecurityPolicy {
+  profile: 'permissive' | 'balanced' | 'strict';
+  allowBrowserAutofill: boolean;
+  allowScreenshots: boolean;
+  keepAutofillOnBackground: boolean;
+  relaxedOfflineCheckin: boolean;
+  offlineGraceDays: number;
+}
+
+export const DEFAULT_SECURITY_POLICY: DeviceSecurityPolicy = {
+  profile: 'balanced',
+  allowBrowserAutofill: true,
+  allowScreenshots: true,
+  keepAutofillOnBackground: true,
+  relaxedOfflineCheckin: true,
+  offlineGraceDays: 30
+};
+
+export function getSecurityPolicy(): DeviceSecurityPolicy {
+  if (typeof localStorage === 'undefined') return DEFAULT_SECURITY_POLICY;
+  try {
+    const raw = localStorage.getItem('nexvault_security_policy');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return { ...DEFAULT_SECURITY_POLICY, ...parsed };
+    }
+  } catch {}
+  return DEFAULT_SECURITY_POLICY;
+}
+
+export function saveSecurityPolicy(policy: Partial<DeviceSecurityPolicy>): DeviceSecurityPolicy {
+  const current = getSecurityPolicy();
+  const updated: DeviceSecurityPolicy = { ...current, ...policy };
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem('nexvault_security_policy', JSON.stringify(updated));
+  }
+
+  // Apply screenshot permission to native window
+  if (typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform?.()) {
+    AutofillBridge.setSecureWindow({ enable: !updated.allowScreenshots }).catch(() => {});
+  }
+
+  // If relaxed offline checkin is enabled, extend deadline to match grace window
+  if (updated.relaxedOfflineCheckin && updated.offlineGraceDays > 1) {
+    const minMs = updated.offlineGraceDays * 24 * 60 * 60 * 1000;
+    const currentDeadline = getOfflineSecurityDeadline();
+    if (currentDeadline - Date.now() < minMs) {
+      const newDeadline = Date.now() + minMs;
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('nexvault_offline_deadline', new Date(newDeadline).toISOString());
+      }
+    }
+  }
+
+  return updated;
+}
+
 export function getOfflineSecurityDeadline(): number {
   if (typeof localStorage === 'undefined') return Date.now() + DEFAULT_OFFLINE_WINDOW_MS;
   const stored = localStorage.getItem('nexvault_offline_deadline');
@@ -531,18 +597,23 @@ export function getOfflineSecurityDeadline(): number {
     const time = new Date(stored).getTime();
     if (!isNaN(time)) return time;
   }
-  const defaultDeadline = Date.now() + DEFAULT_OFFLINE_WINDOW_MS;
+  const policy = getSecurityPolicy();
+  const graceMs = policy.relaxedOfflineCheckin && policy.offlineGraceDays > 1
+    ? policy.offlineGraceDays * 24 * 60 * 60 * 1000
+    : DEFAULT_OFFLINE_WINDOW_MS;
+  const defaultDeadline = Date.now() + graceMs;
   localStorage.setItem('nexvault_offline_deadline', new Date(defaultDeadline).toISOString());
   return defaultDeadline;
 }
 
 export function touchOfflineHeartbeat() {
   if (typeof localStorage === 'undefined') return;
-  const stored = localStorage.getItem('nexvault_offline_deadline');
-  if (!stored) {
-    const newDeadline = Date.now() + DEFAULT_OFFLINE_WINDOW_MS;
-    localStorage.setItem('nexvault_offline_deadline', new Date(newDeadline).toISOString());
-  }
+  const policy = getSecurityPolicy();
+  const graceMs = policy.relaxedOfflineCheckin && policy.offlineGraceDays > 1
+    ? policy.offlineGraceDays * 24 * 60 * 60 * 1000
+    : DEFAULT_OFFLINE_WINDOW_MS;
+  const newDeadline = Date.now() + graceMs;
+  localStorage.setItem('nexvault_offline_deadline', new Date(newDeadline).toISOString());
 }
 
 export function getSecurityWindowStatus() {
@@ -782,6 +853,36 @@ export async function isAccessibilityEnabled(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+export async function openAppDetailsSettings(): Promise<void> {
+  return AutofillBridge.openAppDetailsSettings();
+}
+
+export async function getAutofillDiagnosticStatus(): Promise<{
+  sdkInt: number;
+  hasRestrictedSettings: boolean;
+  packageName: string;
+  isAccessibilityEnabled: boolean;
+  isAutofillEnabled: boolean;
+}> {
+  try {
+    return await AutofillBridge.getDiagnosticStatus();
+  } catch {
+    return {
+      sdkInt: 0,
+      hasRestrictedSettings: false,
+      packageName: 'com.nexvault.app',
+      isAccessibilityEnabled: false,
+      isAutofillEnabled: false
+    };
+  }
+}
+
+export async function setSecureWindow(enable: boolean): Promise<void> {
+  try {
+    await AutofillBridge.setSecureWindow({ enable });
+  } catch {}
 }
 
 // Sealed box encryption (X25519)

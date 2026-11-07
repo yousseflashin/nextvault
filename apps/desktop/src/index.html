@@ -788,9 +788,9 @@
               <div style="display: flex; align-items: center; gap: 0.65rem;">
                 <div style="font-weight: 600; color: #fff; font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem;">
                   <span class="nv-pulse-dot"></span>
-                  <span>NexGrid Neural Mesh Topology</span>
+                  <span>NexGrid Serverless Mesh Topology</span>
                 </div>
-                <span class="nv-badge success" id="mesh-topo-status">E2E WebRTC Active</span>
+                <span class="nv-badge success" id="mesh-topo-status">Decentralized P2P Active</span>
               </div>
               <div style="display: flex; gap: 0.45rem; align-items: center; flex-wrap: wrap;">
                 <button class="nv-btn nv-btn-sm" type="button" onclick="desktopMeshVisualizer.beamExtensionGrant()" style="background: linear-gradient(135deg, #10b981, #0ea5e9); color: #000; font-weight: 600;">
@@ -1302,7 +1302,12 @@
 
       if (pageId === 'vault') listPasswords();
       if (pageId === 'otp') listOTPs();
-      if (pageId === 'grid') loadTrustedDevicesUI();
+      if (pageId === 'grid') {
+        loadTrustedDevicesUI();
+        if (typeof desktopMeshVisualizer !== 'undefined') {
+          setTimeout(() => desktopMeshVisualizer.resize(), 50);
+        }
+      }
     }
 
     // Auth Tab switching
@@ -2227,23 +2232,24 @@
       await grantPeerExtensionUI(peerId, dur);
     }
 
-    // Motion Design Neural Mesh Visualizer Engine
+    // Serverless Peer-to-Peer Mesh Visualizer Engine (Decentralized, No Central Host)
     const desktopMeshVisualizer = {
       canvas: null,
       ctx: null,
       nodes: [
-        { id: 0, name: "This Desktop Node", type: "desktop", icon: "🖥️", x: 0.5, y: 0.5, isLocal: true, safeHours: 24, latency: 0, status: "Local Core", color: "#10b981", deviceId: "local" }
+        { id: 0, name: "This Node (Linux)", type: "desktop", icon: "🖥️", x: 0.5, y: 0.5, isLocal: true, safeHours: 24, latency: 0, status: "Local Enclave", color: "#10b981", deviceId: "local" }
       ],
       defaultDemoNodes: [
-        { id: 1, name: "MacBook Pro M3", type: "laptop", icon: "💻", x: 0.22, y: 0.32, isLocal: false, safeHours: 23.8, latency: 14, status: "Direct WebRTC", color: "#0ea5e9", deviceId: "peer-mac" },
-        { id: 2, name: "Pixel 8 Pro", type: "mobile", icon: "📱", x: 0.78, y: 0.30, isLocal: false, safeHours: 18.2, latency: 18, status: "Direct WebRTC", color: "#10b981", deviceId: "peer-pixel" },
-        { id: 3, name: "Linux Node", type: "desktop", icon: "🖥️", x: 0.70, y: 0.75, isLocal: false, safeHours: 720, latency: 9, status: "Relay Encrypted", color: "#f59e0b", deviceId: "peer-linux" }
+        { id: 1, name: "Pixel 8 Pro (Android)", type: "mobile", icon: "📱", x: 0.22, y: 0.35, isLocal: false, safeHours: 18.2, latency: 16, status: "Direct P2P WebRTC", color: "#0ea5e9", deviceId: "peer-pixel" },
+        { id: 2, name: "Laptop Node (macOS)", type: "laptop", icon: "💻", x: 0.78, y: 0.35, isLocal: false, safeHours: 23.8, latency: 12, status: "Direct P2P WebRTC", color: "#10b981", deviceId: "peer-mac" },
+        { id: 3, name: "Remote Peer (Workstation)", type: "desktop", icon: "🖥️", x: 0.50, y: 0.82, isLocal: false, safeHours: 720, latency: 8, status: "Direct P2P WebRTC", color: "#f59e0b", deviceId: "peer-linux" }
       ],
       packets: [],
       ripples: [],
       selectedNode: null,
       frame: 0,
       initialized: false,
+      loopStarted: false,
 
       init() {
         this.canvas = $('desktop-mesh-canvas');
@@ -2252,28 +2258,48 @@
         this.resize();
         window.addEventListener('resize', () => this.resize());
         this.canvas.addEventListener('click', (e) => this.handleClick(e));
-        this.startLoop();
+
+        // Use ResizeObserver on container so switching tabs or resizing layout always updates canvas immediately
+        const container = this.canvas.closest('.nv-mesh-container') || this.canvas.parentElement;
+        if (container && window.ResizeObserver) {
+          try {
+            const ro = new ResizeObserver(() => this.resize());
+            ro.observe(container);
+          } catch {}
+        }
+
+        if (!this.loopStarted) {
+          this.startLoop();
+          this.loopStarted = true;
+        }
         this.initialized = true;
       },
 
       resize() {
         if (!this.canvas) return;
         const rect = this.canvas.getBoundingClientRect();
+        if (!rect.width || !rect.height) return;
         const dpr = window.devicePixelRatio || 1;
-        this.canvas.width = rect.width * dpr;
-        this.canvas.height = rect.height * dpr;
-        if (this.ctx) this.ctx.scale(dpr, dpr);
+        const targetW = Math.round(rect.width * dpr);
+        const targetH = Math.round(rect.height * dpr);
+        if (this.canvas.width !== targetW || this.canvas.height !== targetH) {
+          this.canvas.width = targetW;
+          this.canvas.height = targetH;
+        }
+        if (this.ctx) {
+          this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        }
       },
 
       updateNodes(trustedDevices) {
-        const local = this.nodes[0];
+        const local = this.nodes[0] || { id: 0, name: "This Node (Linux)", type: "desktop", icon: "🖥️", x: 0.5, y: 0.5, isLocal: true, safeHours: 24, latency: 0, status: "Local Enclave", color: "#10b981", deviceId: "local" };
         if (!trustedDevices || !trustedDevices.length) {
           this.nodes = [local, ...this.defaultDemoNodes];
-          if ($('mesh-topo-status')) $('mesh-topo-status').textContent = 'Simulation Mode';
+          if ($('mesh-topo-status')) $('mesh-topo-status').textContent = 'Serverless Demo Mesh';
           return;
         }
 
-        if ($('mesh-topo-status')) $('mesh-topo-status').textContent = `${trustedDevices.length} Peers Linked`;
+        if ($('mesh-topo-status')) $('mesh-topo-status').textContent = `${trustedDevices.length} P2P Peers Linked`;
         const angles = [0.35 * Math.PI, 0.85 * Math.PI, 1.35 * Math.PI, 1.85 * Math.PI, 0.1 * Math.PI];
         const newNodes = [local];
         trustedDevices.forEach((d, idx) => {
@@ -2284,7 +2310,7 @@
           const isPhone = /android|phone|pixel|galaxy|ios|mobile/i.test(d.deviceName || '');
           newNodes.push({
             id: idx + 1,
-            name: d.deviceName || 'NexVault Node',
+            name: d.deviceName || 'NexVault Peer',
             type: isPhone ? 'mobile' : 'laptop',
             icon: isPhone ? '📱' : '💻',
             x: Math.max(0.15, Math.min(0.85, x)),
@@ -2292,7 +2318,7 @@
             isLocal: false,
             safeHours: 24,
             latency: 12 + (idx * 4),
-            status: 'Direct WebRTC',
+            status: 'P2P WebRTC Direct',
             color: '#0ea5e9',
             deviceId: d.deviceId
           });
@@ -2353,7 +2379,7 @@
         }
 
         const durLabel = duration === '1week' ? '+7 Days' : '+30 Days';
-        this.showToast(`⚡ Beaming Safe Period Extension to "${targetNode.name}" (${durLabel})...`);
+        this.showToast(`⚡ Beaming Safe Period Extension to peer "${targetNode.name}" (${durLabel})...`);
         this.addPacket(0, this.nodes.indexOf(targetNode), 'extension-grant', { duration, durLabel, targetName: targetNode.name });
 
         if (targetNode.deviceId && targetNode.deviceId !== 'peer-mac' && targetNode.deviceId !== 'peer-pixel' && window.electronAPI?.grantPeerExtension) {
@@ -2362,16 +2388,20 @@
       },
 
       pingAllPeers() {
-        this.showToast('📡 Radar ping broadcasted across all encrypted mesh channels');
+        this.showToast('📡 P2P ping broadcasted across all encrypted mesh channels');
         for (let i = 1; i < this.nodes.length; i++) {
           setTimeout(() => this.addPacket(0, i, 'ping', { latency: this.nodes[i].latency }), i * 110);
         }
       },
 
       simulateVaultSync() {
-        this.showToast('🔄 Synchronizing encrypted database records across mesh nodes...');
+        this.showToast('🔄 Synchronizing encrypted records peer-to-peer across mesh...');
         for (let i = 1; i < this.nodes.length; i++) {
-          setTimeout(() => this.addPacket(0, i, 'sync', {}), i * 140);
+          setTimeout(() => this.addPacket(0, i, 'sync', {}), i * 120);
+        }
+        // Also exchange packets between peers to show true decentralized mesh
+        if (this.nodes.length > 2) {
+          setTimeout(() => this.addPacket(1, 2, 'sync', {}), 300);
         }
       },
 
@@ -2404,8 +2434,8 @@
         const ins = $('desktop-mesh-inspector');
         if (!ins) return;
         $('d-ins-name').textContent = node.name;
-        $('d-ins-type').textContent = node.type.toUpperCase() + (node.isLocal ? ' (Local)' : ' (Peer)');
-        $('d-ins-channel').textContent = node.isLocal ? 'Loopback IPC' : node.status;
+        $('d-ins-type').textContent = node.isLocal ? 'LOCAL PEER' : 'REMOTE PEER (' + node.type.toUpperCase() + ')';
+        $('d-ins-channel').textContent = node.isLocal ? 'Local Enclave' : (node.status || 'Direct P2P');
         $('d-ins-latency').textContent = node.isLocal ? '0 ms' : node.latency + ' ms';
         $('d-ins-safe').textContent = node.safeHours > 48 ? Math.round(node.safeHours / 24) + 'd remaining' : node.safeHours.toFixed(1) + 'h remaining';
         $('d-ins-dot').style.backgroundColor = node.color;
@@ -2432,8 +2462,9 @@
       },
 
       handleIncomingExtensionGrant(grant) {
-        this.showToast(`⚡ Safe Period Extended by "${grant.granterDeviceName || 'Peer'}"!`, true);
-        this.addRipple(this.nodes[0].x * this.canvas.width / (window.devicePixelRatio||1), this.nodes[0].y * this.canvas.height / (window.devicePixelRatio||1), '#10b981');
+        this.showToast(`⚡ Safe Period Extended by peer "${grant.granterDeviceName || 'Peer'}"!`, true);
+        const rect = this.canvas ? this.canvas.getBoundingClientRect() : { width: 600, height: 380 };
+        this.addRipple(this.nodes[0].x * rect.width, this.nodes[0].y * rect.height, '#10b981');
       },
 
       handleGrantAck(ack) {
@@ -2452,13 +2483,26 @@
       },
 
       render() {
+        if (!this.canvas || !this.ctx) return;
         const rect = this.canvas.getBoundingClientRect();
         const W = rect.width;
         const H = rect.height;
-        const ctx = this.ctx;
+        if (W <= 0 || H <= 0) return; // Tab is hidden; skip rendering until visible
 
+        const dpr = window.devicePixelRatio || 1;
+        const targetW = Math.round(W * dpr);
+        const targetH = Math.round(H * dpr);
+
+        if (this.canvas.width !== targetW || this.canvas.height !== targetH) {
+          this.canvas.width = targetW;
+          this.canvas.height = targetH;
+        }
+
+        const ctx = this.ctx;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctx.clearRect(0, 0, W, H);
 
+        // Background subtle grid
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.025)';
         ctx.lineWidth = 1;
         const gridSize = 36;
@@ -2475,33 +2519,38 @@
           ctx.stroke();
         }
 
-        const local = this.nodes[0];
-        const lx = local.x * W;
-        const ly = local.y * H;
+        // Draw true decentralized serverless peer-to-peer mesh links (interconnected, no central host)
+        for (let i = 0; i < this.nodes.length; i++) {
+          for (let j = i + 1; j < this.nodes.length; j++) {
+            const n1 = this.nodes[i];
+            const n2 = this.nodes[j];
+            const x1 = n1.x * W;
+            const y1 = n1.y * H;
+            const x2 = n2.x * W;
+            const y2 = n2.y * H;
 
-        for (let i = 1; i < this.nodes.length; i++) {
-          const peer = this.nodes[i];
-          const px = peer.x * W;
-          const py = peer.y * H;
+            // Link line
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.strokeStyle = (i === 0 || j === 0) ? 'rgba(16, 185, 129, 0.22)' : 'rgba(14, 165, 233, 0.15)';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
 
-          ctx.beginPath();
-          ctx.moveTo(lx, ly);
-          ctx.lineTo(px, py);
-          ctx.strokeStyle = 'rgba(16, 185, 129, 0.16)';
-          ctx.lineWidth = 2;
-          ctx.stroke();
-
-          ctx.beginPath();
-          ctx.setLineDash([6, 14]);
-          ctx.lineDashOffset = -this.frame * 0.45;
-          ctx.moveTo(lx, ly);
-          ctx.lineTo(px, py);
-          ctx.strokeStyle = 'rgba(14, 165, 233, 0.35)';
-          ctx.lineWidth = 1.5;
-          ctx.stroke();
-          ctx.setLineDash([]);
+            // Animated peer pulse on link
+            ctx.beginPath();
+            ctx.setLineDash([4, 12]);
+            ctx.lineDashOffset = -this.frame * 0.45;
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.strokeStyle = 'rgba(0, 212, 255, 0.35)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            ctx.setLineDash([]);
+          }
         }
 
+        // Animated Ripples
         for (let i = this.ripples.length - 1; i >= 0; i--) {
           const r = this.ripples[i];
           r.radius += 1.2;
@@ -2519,6 +2568,7 @@
           ctx.globalAlpha = 1.0;
         }
 
+        // In-flight P2P Packets
         for (let i = this.packets.length - 1; i >= 0; i--) {
           const p = this.packets[i];
           p.progress += p.speed;
@@ -2556,7 +2606,7 @@
           if (p.progress >= 1.0) {
             this.addRipple(x2, y2, p.color);
             if (p.type === 'extension-grant') {
-              this.showToast(`✓ Safe Period extended for "${p.to.name}" (${p.payload.durLabel})!`);
+              this.showToast(`✓ Safe Period extended for peer "${p.to.name}" (${p.payload.durLabel})!`);
               p.to.safeHours += p.payload.duration === '1week' ? 168 : 720;
               this.packets.push({
                 from: p.to, to: p.from, progress: 0, speed: 0.025, type: 'ack', size: 4, color: '#34d399', tail: []
@@ -2570,6 +2620,7 @@
           }
         }
 
+        // Render Peer Nodes (Serverless equal peers)
         for (const node of this.nodes) {
           const nx = node.x * W;
           const ny = node.y * H;
@@ -2614,13 +2665,18 @@
 
           ctx.font = '9px monospace';
           ctx.fillStyle = node.color;
-          const sub = node.isLocal ? '● LOCAL CORE' : `● ${node.latency}ms`;
+          const sub = node.isLocal ? '● LOCAL PEER' : `● ${node.latency}ms P2P`;
           ctx.fillText(sub, nx, ny + 44);
         }
 
-        if (this.frame % 160 === 0 && this.packets.length < 4) {
-          const rnd = 1 + Math.floor(Math.random() * (this.nodes.length - 1));
-          this.addPacket(0, rnd, 'heartbeat', {});
+        // Periodically trigger background serverless peer sync packets
+        if (this.frame % 150 === 0 && this.packets.length < 4 && this.nodes.length > 1) {
+          const fromIdx = Math.floor(Math.random() * this.nodes.length);
+          let toIdx = Math.floor(Math.random() * this.nodes.length);
+          while (toIdx === fromIdx) {
+            toIdx = Math.floor(Math.random() * this.nodes.length);
+          }
+          this.addPacket(fromIdx, toIdx, 'heartbeat', {});
         }
       }
     };
@@ -3090,12 +3146,19 @@
       if (window.nexVault.onPeerJoined) {
         window.nexVault.onPeerJoined((peer) => {
           gridLog(`Peer joined: ${peer.deviceName || 'Peer'} (${peer.deviceId})`);
+          loadTrustedDevicesUI();
+          if (typeof desktopMeshVisualizer !== 'undefined') {
+            desktopMeshVisualizer.showToast(`📡 Mesh peer joined: ${peer.deviceName || 'Peer'}`);
+          }
         });
       }
       if (window.nexVault.onPeerPaired) {
         window.nexVault.onPeerPaired(({ peerId, deviceName }) => {
           gridLog(`Device paired: "${deviceName}" (${peerId})`);
           loadTrustedDevicesUI();
+          if (typeof desktopMeshVisualizer !== 'undefined') {
+            desktopMeshVisualizer.showToast(`🎉 New peer linked to mesh: "${deviceName}"!`);
+          }
         });
       }
       if (window.nexVault.onVaultUpdated) {
@@ -3104,11 +3167,17 @@
           listPasswords();
           listOTPs();
           loadTrustedDevicesUI();
+          if (typeof desktopMeshVisualizer !== 'undefined') {
+            desktopMeshVisualizer.simulateVaultSync();
+          }
         });
       }
       if (window.nexVault.onVaultSyncedToPeers) {
         window.nexVault.onVaultSyncedToPeers(({ count }) => {
           gridLog(`Broadcasted updated credentials to ${count} mesh peer(s).`);
+          if (typeof desktopMeshVisualizer !== 'undefined') {
+            desktopMeshVisualizer.simulateVaultSync();
+          }
         });
       }
       if (window.nexVault.onGridStatus) {

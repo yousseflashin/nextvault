@@ -15,6 +15,12 @@ import {
   isAutofillEnabled,
   openAccessibilitySettings,
   isAccessibilityEnabled,
+  openAppDetailsSettings,
+  getAutofillDiagnosticStatus,
+  setSecureWindow,
+  getSecurityPolicy,
+  saveSecurityPolicy,
+  type DeviceSecurityPolicy,
   getSecurityWindowStatus,
   extendOfflineSecurityWindow,
   requestPeerSecurityExtension,
@@ -776,6 +782,169 @@ function BulkImportModal({
   );
 }
 
+function RestrictedSettingsGuideModal({
+  onClose,
+  showToast,
+  diagStatus
+}: {
+  onClose: () => void;
+  showToast: (msg: string) => void;
+  diagStatus: { sdkInt: number; hasRestrictedSettings: boolean; packageName: string } | null;
+}) {
+  const [copiedAdb, setCopiedAdb] = useState(false);
+  const pkg = diagStatus?.packageName || 'com.nexvault.app';
+  const adbCmd = `adb shell cmd appops set ${pkg} ACCESS_RESTRICTED_SETTINGS allow`;
+
+  const copyAdb = () => {
+    if (navigator?.clipboard) {
+      navigator.clipboard.writeText(adbCmd);
+      setCopiedAdb(true);
+      showToast('Copied ADB bypass command to clipboard');
+      setTimeout(() => setCopiedAdb(false), 2500);
+    }
+  };
+
+  return (
+    <div className="nv-modal-backdrop" onClick={onClose} style={{ zIndex: 1200 }}>
+      <div
+        className="nv-modal"
+        onClick={(e) => e.stopPropagation()}
+        style={{ maxWidth: '440px', width: '92%', maxHeight: '85vh', overflowY: 'auto' }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '1.2rem' }}>🔓</span>
+            <div>
+              <div style={{ fontWeight: 700, color: '#fff', fontSize: '0.95rem' }}>
+                Fix "Restricted Setting" Block
+              </div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--nv-muted)' }}>
+                Android 13, 14 &amp; 15 Sideload Permission Unlock
+              </div>
+            </div>
+          </div>
+          <button
+            className="nv-btn nv-btn-ghost nv-btn-sm"
+            onClick={onClose}
+            style={{ fontSize: '0.8rem', padding: '0.2rem 0.5rem' }}
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Why this happens banner */}
+        <div
+          style={{
+            background: 'rgba(234, 179, 8, 0.08)',
+            border: '1px solid rgba(234, 179, 8, 0.25)',
+            borderRadius: 'var(--nv-radius-sm)',
+            padding: '0.65rem',
+            marginBottom: '0.85rem'
+          }}
+        >
+          <div style={{ fontWeight: 600, color: '#facc15', fontSize: '0.76rem', marginBottom: '0.2rem' }}>
+            Why does Android say "Restricted setting"?
+          </div>
+          <p style={{ fontSize: '0.72rem', color: 'var(--nv-text-secondary)', margin: 0, lineHeight: '1.4' }}>
+            In modern Android (API 33+), Google locks Accessibility for apps installed outside Google Play. The setting is grayed out until you manually allow restricted settings in App Info.
+          </p>
+        </div>
+
+        {/* 4 Illustrated Steps */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', marginBottom: '1rem' }}>
+          <div style={{ display: 'flex', gap: '0.6rem', background: 'var(--nv-bg-2)', padding: '0.6rem', borderRadius: 'var(--nv-radius-sm)', border: '1px solid var(--nv-border)' }}>
+            <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: 'var(--nv-primary)', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '0.75rem', flexShrink: 0 }}>
+              1
+            </div>
+            <div>
+              <div style={{ fontWeight: 600, color: '#fff', fontSize: '0.78rem' }}>Tap "Open App Info" Below</div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--nv-muted)' }}>
+                This directly opens NexVault's application details in Android Settings.
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '0.6rem', background: 'var(--nv-bg-2)', padding: '0.6rem', borderRadius: 'var(--nv-radius-sm)', border: '1px solid var(--nv-border)' }}>
+            <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: 'var(--nv-primary)', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '0.75rem', flexShrink: 0 }}>
+              2
+            </div>
+            <div>
+              <div style={{ fontWeight: 600, color: '#fff', fontSize: '0.78rem' }}>Tap the 3 Dots (⋮) Top-Right</div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--nv-muted)' }}>
+                In the upper-right corner of the App Info page, tap the overflow menu icon.
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '0.6rem', background: 'var(--nv-bg-2)', padding: '0.6rem', borderRadius: 'var(--nv-radius-sm)', border: '1px solid var(--nv-border)' }}>
+            <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: 'var(--nv-primary)', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '0.75rem', flexShrink: 0 }}>
+              3
+            </div>
+            <div>
+              <div style={{ fontWeight: 600, color: '#fff', fontSize: '0.78rem' }}>Select "Allow restricted settings"</div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--nv-muted)' }}>
+                Confirm with your fingerprint, face unlock, or device PIN.
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '0.6rem', background: 'var(--nv-bg-2)', padding: '0.6rem', borderRadius: 'var(--nv-radius-sm)', border: '1px solid var(--nv-border)' }}>
+            <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: 'var(--nv-primary)', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '0.75rem', flexShrink: 0 }}>
+              4
+            </div>
+            <div>
+              <div style={{ fontWeight: 600, color: '#fff', fontSize: '0.78rem' }}>Return Here &amp; Enable Overlay</div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--nv-muted)' }}>
+                Tap "Open Accessibility Settings" — the toggle will now be unlocked and ready to turn ON!
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 1-Tap Action Buttons */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem', marginBottom: '0.75rem' }}>
+          <button
+            className="nv-btn nv-btn-accent"
+            onClick={async () => {
+              await openAppDetailsSettings();
+              showToast('Look for (⋮) in top-right -> "Allow restricted settings"');
+            }}
+            style={{ fontWeight: 700 }}
+          >
+            🔓 1. Open App Info to Allow Restricted Settings
+          </button>
+          <button
+            className="nv-btn nv-btn-ghost"
+            onClick={async () => {
+              await openAccessibilitySettings();
+              showToast('Turn ON "NexVault Autofill Overlay"');
+            }}
+          >
+            ⚙️ 2. Open Accessibility Settings
+          </button>
+        </div>
+
+        {/* ADB Bypass for Power Users */}
+        <div style={{ background: 'black', padding: '0.5rem 0.65rem', borderRadius: 'var(--nv-radius-sm)', border: '1px solid var(--nv-border)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+            <span style={{ fontSize: '0.65rem', color: 'var(--nv-dim)', fontFamily: 'monospace' }}>DEVELOPER ADB COMMAND:</span>
+            <button
+              className="nv-btn nv-btn-ghost nv-btn-sm"
+              onClick={copyAdb}
+              style={{ fontSize: '0.65rem', padding: '0.15rem 0.4rem' }}
+            >
+              {copiedAdb ? '✓ Copied' : 'Copy'}
+            </button>
+          </div>
+          <code style={{ fontSize: '0.68rem', color: 'var(--nv-accent)', wordBreak: 'break-all', fontFamily: 'monospace' }}>
+            {adbCmd}
+          </code>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 type TabType = 'vault' | 'otp' | 'grid' | 'security' | 'settings' | 'quick-fill';
 type QuickFillView = 'vault' | 'generator' | 'settings';
 
@@ -893,17 +1062,34 @@ function App() {
   // Instant Copy Feedback
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
-  // Accessibility Autofill Overlay State
+  // Accessibility Autofill Overlay & Security Policy State
   const [a11yEnabled, setA11yEnabled] = useState(false);
+  const [showRestrictedGuide, setShowRestrictedGuide] = useState(false);
+  const [securityPolicy, setSecurityPolicy] = useState<DeviceSecurityPolicy>(getSecurityPolicy());
+  const [diagStatus, setDiagStatus] = useState<{
+    sdkInt: number;
+    hasRestrictedSettings: boolean;
+    packageName: string;
+    isAccessibilityEnabled: boolean;
+    isAutofillEnabled: boolean;
+  } | null>(null);
 
   useEffect(() => {
     isAccessibilityEnabled().then(setA11yEnabled).catch(() => {});
+    getAutofillDiagnosticStatus().then(setDiagStatus).catch(() => {});
     const onWindowFocus = () => {
       isAccessibilityEnabled().then(setA11yEnabled).catch(() => {});
+      getAutofillDiagnosticStatus().then(setDiagStatus).catch(() => {});
     };
     window.addEventListener('focus', onWindowFocus);
     return () => window.removeEventListener('focus', onWindowFocus);
   }, []);
+
+  function onUpdateSecurityPolicy(partial: Partial<DeviceSecurityPolicy>) {
+    const updated = saveSecurityPolicy(partial);
+    setSecurityPolicy(updated);
+    showToast(`Security policy updated: ${updated.profile.toUpperCase()}`);
+  }
 
   useEffect(() => {
     isAutofillEnabled().then((enabled) => {
@@ -2074,10 +2260,24 @@ function App() {
                         Quick Fill is powered by this unlocked mobile vault. It uses the same credentials as Vault and syncs through NexGrid.
                       </div>
                       <button className="nv-btn nv-btn-ghost" onClick={copyBootstrapToken}>Copy Account Token</button>
-                      <button className="nv-btn nv-btn-ghost" onClick={async () => {
-                        await openAutofillSettings();
-                        setQuickFillStatus('Choose NexVault as Autofill service');
-                      }}>Enable Browser Autofill</button>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', margin: '0.5rem 0' }}>
+                        <button className="nv-btn nv-btn-accent" onClick={async () => {
+                          await openAccessibilitySettings();
+                          setQuickFillStatus('Enable NexVault Overlay in Accessibility');
+                          showToast('Enable "NexVault Autofill Overlay" under Downloaded Apps');
+                        }}>
+                          🛡️ Enable Chrome &amp; Browser Overlay
+                        </button>
+                        <button className="nv-btn nv-btn-ghost" onClick={() => setShowRestrictedGuide(true)}>
+                          🔓 Fix "Restricted Setting" Error (Android 13/14+)
+                        </button>
+                        <button className="nv-btn nv-btn-ghost" onClick={async () => {
+                          await openAutofillSettings();
+                          setQuickFillStatus('Choose NexVault as Autofill service');
+                        }}>
+                          ⚙️ Open Standard Android Autofill
+                        </button>
+                      </div>
                       <button className="nv-btn nv-btn-danger" onClick={onLockVault}>Lock Mobile Vault</button>
                     </div>
                   )}
@@ -2809,11 +3009,141 @@ function App() {
                     </Card>
                   )}
 
+                  {/* Mobile Security Policy Freedom Card */}
+                  <Card style={{ marginBottom: '1rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                      <div style={{ fontWeight: 600, color: '#fff', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span>🛡️</span>
+                        <span>Device Security Policy</span>
+                      </div>
+                      <span className="nv-badge success" style={{ textTransform: 'uppercase' }}>
+                        {securityPolicy.profile}
+                      </span>
+                    </div>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--nv-muted)', margin: '0 0 0.75rem' }}>
+                      Configure policies that fit your mobile workflow. Relaxed policies avoid restrictive auto-locks, permit browser overlay autofill, and enable screen captures.
+                    </p>
+
+                    {/* Policy Preset Selector */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.4rem', marginBottom: '0.85rem' }}>
+                      <button
+                        className={`nv-btn nv-btn-sm ${securityPolicy.profile === 'permissive' ? 'nv-btn-accent' : 'nv-btn-ghost'}`}
+                        style={{ fontSize: '0.72rem', padding: '0.4rem 0.2rem', textAlign: 'center', flexDirection: 'column', gap: '2px' }}
+                        onClick={() => onUpdateSecurityPolicy({
+                          profile: 'permissive',
+                          allowBrowserAutofill: true,
+                          allowScreenshots: true,
+                          keepAutofillOnBackground: true,
+                          relaxedOfflineCheckin: true,
+                          offlineGraceDays: 90
+                        })}
+                      >
+                        <span style={{ fontWeight: 700 }}>Mobile Freedom</span>
+                        <span style={{ fontSize: '0.62rem', opacity: 0.8 }}>90d / Relaxed</span>
+                      </button>
+                      <button
+                        className={`nv-btn nv-btn-sm ${securityPolicy.profile === 'balanced' ? 'nv-btn-accent' : 'nv-btn-ghost'}`}
+                        style={{ fontSize: '0.72rem', padding: '0.4rem 0.2rem', textAlign: 'center', flexDirection: 'column', gap: '2px' }}
+                        onClick={() => onUpdateSecurityPolicy({
+                          profile: 'balanced',
+                          allowBrowserAutofill: true,
+                          allowScreenshots: true,
+                          keepAutofillOnBackground: true,
+                          relaxedOfflineCheckin: true,
+                          offlineGraceDays: 30
+                        })}
+                      >
+                        <span style={{ fontWeight: 700 }}>Balanced</span>
+                        <span style={{ fontSize: '0.62rem', opacity: 0.8 }}>30d (Standard)</span>
+                      </button>
+                      <button
+                        className={`nv-btn nv-btn-sm ${securityPolicy.profile === 'strict' ? 'nv-btn-accent' : 'nv-btn-ghost'}`}
+                        style={{ fontSize: '0.72rem', padding: '0.4rem 0.2rem', textAlign: 'center', flexDirection: 'column', gap: '2px' }}
+                        onClick={() => onUpdateSecurityPolicy({
+                          profile: 'strict',
+                          allowBrowserAutofill: true,
+                          allowScreenshots: false,
+                          keepAutofillOnBackground: false,
+                          relaxedOfflineCheckin: false,
+                          offlineGraceDays: 1
+                        })}
+                      >
+                        <span style={{ fontWeight: 700 }}>Strict Airgap</span>
+                        <span style={{ fontSize: '0.62rem', opacity: 0.8 }}>24h / Block Media</span>
+                      </button>
+                    </div>
+
+                    {/* Granular Policy Toggles */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', background: 'var(--nv-bg-2)', padding: '0.75rem', borderRadius: 'var(--nv-radius-sm)', border: '1px solid var(--nv-border)' }}>
+                      {/* Toggle 1: Browser Autofill & Overlay */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontSize: '0.76rem', fontWeight: 600, color: '#fff' }}>Browser Autofill &amp; Overlay</div>
+                          <div style={{ fontSize: '0.68rem', color: 'var(--nv-muted)' }}>Operate floating autofill on Chrome, Brave &amp; Firefox</div>
+                        </div>
+                        <button
+                          className={`nv-btn nv-btn-sm ${securityPolicy.allowBrowserAutofill ? 'nv-btn-accent' : 'nv-btn-ghost'}`}
+                          style={{ fontSize: '0.68rem', padding: '0.2rem 0.5rem' }}
+                          onClick={() => onUpdateSecurityPolicy({ allowBrowserAutofill: !securityPolicy.allowBrowserAutofill })}
+                        >
+                          {securityPolicy.allowBrowserAutofill ? 'Allowed' : 'Disabled'}
+                        </button>
+                      </div>
+
+                      {/* Toggle 2: Allow Screenshots & Screen Capture */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '0.45rem' }}>
+                        <div>
+                          <div style={{ fontSize: '0.76rem', fontWeight: 600, color: '#fff' }}>Allow Screenshots &amp; Screen Sharing</div>
+                          <div style={{ fontSize: '0.68rem', color: 'var(--nv-muted)' }}>Disable Android FLAG_SECURE window masking</div>
+                        </div>
+                        <button
+                          className={`nv-btn nv-btn-sm ${securityPolicy.allowScreenshots ? 'nv-btn-accent' : 'nv-btn-ghost'}`}
+                          style={{ fontSize: '0.68rem', padding: '0.2rem 0.5rem' }}
+                          onClick={() => onUpdateSecurityPolicy({ allowScreenshots: !securityPolicy.allowScreenshots })}
+                        >
+                          {securityPolicy.allowScreenshots ? 'Allowed' : 'Blocked'}
+                        </button>
+                      </div>
+
+                      {/* Toggle 3: Relaxed Offline Deadline */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '0.45rem' }}>
+                        <div>
+                          <div style={{ fontSize: '0.76rem', fontWeight: 600, color: '#fff' }}>Relaxed Offline Deadline ({securityPolicy.offlineGraceDays} Days)</div>
+                          <div style={{ fontSize: '0.68rem', color: 'var(--nv-muted)' }}>Prevent accidental 24-hour lockout when traveling</div>
+                        </div>
+                        <button
+                          className={`nv-btn nv-btn-sm ${securityPolicy.relaxedOfflineCheckin ? 'nv-btn-accent' : 'nv-btn-ghost'}`}
+                          style={{ fontSize: '0.68rem', padding: '0.2rem 0.5rem' }}
+                          onClick={() => onUpdateSecurityPolicy({ relaxedOfflineCheckin: !securityPolicy.relaxedOfflineCheckin })}
+                        >
+                          {securityPolicy.relaxedOfflineCheckin ? 'Active' : '24h Timer'}
+                        </button>
+                      </div>
+
+                      {/* Toggle 4: Keep Keystore Primed */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '0.45rem' }}>
+                        <div>
+                          <div style={{ fontSize: '0.76rem', fontWeight: 600, color: '#fff' }}>Keep Native Keystore Primed</div>
+                          <div style={{ fontSize: '0.68rem', color: 'var(--nv-muted)' }}>Retain hardware keystore cache for seamless autofill</div>
+                        </div>
+                        <button
+                          className={`nv-btn nv-btn-sm ${securityPolicy.keepAutofillOnBackground ? 'nv-btn-accent' : 'nv-btn-ghost'}`}
+                          style={{ fontSize: '0.68rem', padding: '0.2rem 0.5rem' }}
+                          onClick={() => onUpdateSecurityPolicy({ keepAutofillOnBackground: !securityPolicy.keepAutofillOnBackground })}
+                        >
+                          {securityPolicy.keepAutofillOnBackground ? 'Active' : 'Purge'}
+                        </button>
+                      </div>
+                    </div>
+                  </Card>
+
                   {/* Dead Man's Switch Card */}
                   <Card style={{ marginBottom: '1rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
                       <div style={{ fontWeight: 600, color: '#fff' }}>Dead Man's Switch &amp; Security Window</div>
-                      <span className="nv-badge success">24h Heartbeat</span>
+                      <span className="nv-badge success">
+                        {securityPolicy.relaxedOfflineCheckin ? `${securityPolicy.offlineGraceDays}d Grace` : '24h Heartbeat'}
+                      </span>
                     </div>
                     <p style={{ fontSize: '0.75rem', color: 'var(--nv-muted)', margin: '0 0 0.75rem' }}>
                       Periodic cryptographic check-in. If offline beyond this deadline without an authorized extension, keys zero out and vault locks.
@@ -2959,12 +3289,49 @@ function App() {
                       <div style={{ fontSize: '0.70rem', color: '#00ff9d', marginBottom: '0.6rem' }}>
                         🔒 <strong>Strict Field Filter:</strong> Only detects username, email, and password textboxes. Addresses, zip codes, and search bars are strictly excluded.
                       </div>
-                      <button className="nv-btn nv-btn-accent nv-btn-sm" onClick={async () => {
-                        await openAccessibilitySettings();
-                        showToast('Enable "NexVault Autofill Overlay" under Downloaded Apps');
-                      }}>
-                        ⚙️ {a11yEnabled ? 'Configure Accessibility Service' : 'Enable Overlay in Accessibility'}
-                      </button>
+                      {/* Android 13/14+ Restricted Settings Callout */}
+                      {!a11yEnabled && (
+                        <div style={{ background: 'rgba(234, 179, 8, 0.08)', border: '1px solid rgba(234, 179, 8, 0.3)', borderRadius: 'var(--nv-radius-sm)', padding: '0.65rem 0.75rem', margin: '0.65rem 0' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, color: '#facc15', fontSize: '0.74rem', marginBottom: '0.25rem' }}>
+                            <span>⚠️</span>
+                            <span>Android 13 / 14 "Restricted Setting" Fix:</span>
+                          </div>
+                          <p style={{ fontSize: '0.70rem', color: 'var(--nv-text-secondary)', margin: '0 0 0.5rem', lineHeight: '1.4' }}>
+                            If Android shows <em>"For your security, this setting is currently unavailable"</em> when trying to enable the overlay, Google restricts sideloaded APKs until unlocked in App Info.
+                          </p>
+                          <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                            <button
+                              className="nv-btn nv-btn-sm"
+                              style={{ background: '#f59e0b', color: '#000', fontWeight: 700, fontSize: '0.7rem', padding: '0.3rem 0.6rem' }}
+                              onClick={async () => {
+                                await openAppDetailsSettings();
+                                showToast('Tap (⋮) top-right -> "Allow restricted settings"');
+                              }}
+                            >
+                              🔓 1. Open App Info to Allow Restricted Settings
+                            </button>
+                            <button
+                              className="nv-btn nv-btn-ghost nv-btn-sm"
+                              style={{ fontSize: '0.7rem', padding: '0.3rem 0.6rem' }}
+                              onClick={() => setShowRestrictedGuide(true)}
+                            >
+                              📖 Step-by-Step Guide
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
+                        <button className="nv-btn nv-btn-accent nv-btn-sm" onClick={async () => {
+                          await openAccessibilitySettings();
+                          showToast('Enable "NexVault Autofill Overlay" under Downloaded Apps');
+                        }}>
+                          ⚙️ {a11yEnabled ? 'Configure Accessibility Service' : '2. Enable Overlay in Accessibility'}
+                        </button>
+                        <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={() => setShowRestrictedGuide(true)}>
+                          🔓 Fix Restricted Setting
+                        </button>
+                      </div>
                     </div>
                     
                     {/* Section 2: Standard Android Autofill Framework */}
@@ -3193,6 +3560,15 @@ function App() {
               refreshVault(false);
               refreshOTPs(false);
             }}
+          />
+        )}
+
+        {/* Android 13/14+ Restricted Settings Unlock Modal */}
+        {showRestrictedGuide && (
+          <RestrictedSettingsGuideModal
+            onClose={() => setShowRestrictedGuide(false)}
+            showToast={showToast}
+            diagStatus={diagStatus}
           />
         )}
 

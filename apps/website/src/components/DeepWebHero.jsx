@@ -210,7 +210,7 @@ export default function DeepWebHero() {
                     <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold shrink-0 ${
                       selectedPlatform === 'desktop' ? 'bg-black/20 text-black' : 'bg-dw-green/15 text-dw-green'
                     }`}>
-                      HOST
+                      DESKTOP PEER
                     </span>
                   )}
                 </a>
@@ -239,7 +239,7 @@ export default function DeepWebHero() {
                     <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold shrink-0 ${
                       selectedPlatform === 'mobile' ? 'bg-black/20 text-black' : 'bg-dw-cyan/15 text-dw-cyan'
                     }`}>
-                      DEVICE
+                      MOBILE PEER
                     </span>
                   )}
                 </a>
@@ -377,8 +377,53 @@ export default function DeepWebHero() {
                 {activeConsoleTab === 'mesh' && (
                   <div className="space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-2 text-dw-muted border-b border-dw-border/60 pb-2 text-[11px]">
-                      <span>PEER TOPOLOGY (ED25519 VERIFIED)</span>
-                      <span className="text-dw-green font-bold">3 NODES ONLINE</span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-dw-green animate-pulse"></span>
+                        <span>SERVERLESS TOPOLOGY (ZERO CENTRAL HOST)</span>
+                      </span>
+                      <span className="text-dw-green font-bold">3 PEERS ACTIVE</span>
+                    </div>
+
+                    {/* Interactive Animated SVG Mesh Topology */}
+                    <div className="relative w-full h-32 bg-black/40 rounded-xl border border-dw-border/70 overflow-hidden flex items-center justify-center p-1">
+                      <svg viewBox="0 0 380 120" className="w-full h-full select-none">
+                        {/* Triangular Interconnect P2P Lines */}
+                        <line x1="70" y1="85" x2="310" y2="85" stroke={isSyncing ? "#10b981" : "rgba(16, 185, 129, 0.4)"} strokeWidth={isSyncing ? "2.5" : "1.5"} strokeDasharray="4 4" className={isSyncing ? "animate-pulse" : ""} />
+                        <line x1="70" y1="85" x2="190" y2="28" stroke={isSyncing ? "#0ea5e9" : "rgba(14, 165, 233, 0.4)"} strokeWidth={isSyncing ? "2.5" : "1.5"} strokeDasharray="4 4" className={isSyncing ? "animate-pulse" : ""} />
+                        <line x1="310" y1="85" x2="190" y2="28" stroke={isSyncing ? "#10b981" : "rgba(16, 185, 129, 0.4)"} strokeWidth={isSyncing ? "2.5" : "1.5"} strokeDasharray="4 4" className={isSyncing ? "animate-pulse" : ""} />
+
+                        {/* Center Badge: Explicitly stating serverless architecture */}
+                        <rect x="120" y="52" width="140" height="20" rx="10" fill="#0b1322" stroke="rgba(0, 212, 255, 0.5)" strokeWidth="1" />
+                        <text x="190" y="65" textAnchor="middle" fill="#38bdf8" fontSize="8" fontFamily="monospace" fontWeight="bold">
+                          EQUAL P2P PEERS · NO HOST
+                        </text>
+
+                        {/* Node 1: Desktop Peer (Left) */}
+                        <g transform="translate(70, 85)" className="cursor-pointer" onClick={() => setSelectedPlatform('desktop')}>
+                          <circle r="22" fill="#0b1322" stroke={selectedPlatform === 'desktop' ? "#10b981" : "rgba(16, 185, 129, 0.5)"} strokeWidth={selectedPlatform === 'desktop' ? "2" : "1"} />
+                          <circle r="6" fill="#10b981" className="animate-ping" opacity="0.3" />
+                          <circle r="4" fill="#10b981" />
+                          <text y="-6" textAnchor="middle" fill="#ffffff" fontSize="8.5" fontWeight="bold" fontFamily="monospace">DESKTOP</text>
+                          <text y="13" textAnchor="middle" fill="#94a3b8" fontSize="7" fontFamily="monospace">Linux</text>
+                        </g>
+
+                        {/* Node 2: Mobile Peer (Right) */}
+                        <g transform="translate(310, 85)" className="cursor-pointer" onClick={() => setSelectedPlatform('mobile')}>
+                          <circle r="22" fill="#0b1322" stroke={selectedPlatform === 'mobile' ? "#0ea5e9" : "rgba(14, 165, 233, 0.5)"} strokeWidth={selectedPlatform === 'mobile' ? "2" : "1"} />
+                          <circle r="6" fill="#0ea5e9" className="animate-ping" opacity="0.3" />
+                          <circle r="4" fill="#0ea5e9" />
+                          <text y="-6" textAnchor="middle" fill="#ffffff" fontSize="8.5" fontWeight="bold" fontFamily="monospace">MOBILE</text>
+                          <text y="13" textAnchor="middle" fill="#94a3b8" fontSize="7" fontFamily="monospace">Android</text>
+                        </g>
+
+                        {/* Node 3: Extension Peer (Top) */}
+                        <g transform="translate(190, 28)">
+                          <circle r="18" fill="#0b1322" stroke="rgba(245, 158, 11, 0.5)" strokeWidth="1" />
+                          <circle r="3" fill="#f59e0b" />
+                          <text y="-4" textAnchor="middle" fill="#ffffff" fontSize="7.5" fontWeight="bold" fontFamily="monospace">BROWSER</text>
+                          <text y="10" textAnchor="middle" fill="#94a3b8" fontSize="6.5" fontFamily="monospace">IPC</text>
+                        </g>
+                      </svg>
                     </div>
 
                     <div className="space-y-2">
@@ -394,7 +439,7 @@ export default function DeepWebHero() {
                           <span className="w-2 h-2 rounded-full bg-dw-green shrink-0"></span>
                           <div className="min-w-0">
                             <span className="text-white font-bold block truncate">
-                              Node Alpha · Linux Desktop ({desktopSize})
+                              Node Alpha · Desktop Peer ({desktopSize})
                             </span>
                             <span className="text-[10px] text-dw-dim block truncate">
                               X25519: 9e4f..88b1 · AppImage Auto-Updater Ready
@@ -402,7 +447,7 @@ export default function DeepWebHero() {
                           </div>
                         </div>
                         <span className="text-[10px] text-dw-green px-2 py-0.5 rounded bg-dw-green/10 border border-dw-green/20 shrink-0">
-                          DESKTOP
+                          DESKTOP PEER
                         </span>
                       </div>
 
@@ -418,7 +463,7 @@ export default function DeepWebHero() {
                           <span className="w-2 h-2 rounded-full bg-dw-cyan shrink-0"></span>
                           <div className="min-w-0">
                             <span className="text-white font-bold block truncate">
-                              Node Beta · Android Mobile ({mobileSize})
+                              Node Beta · Mobile Peer ({mobileSize})
                             </span>
                             <span className="text-[10px] text-dw-dim block truncate">
                               X25519: 3a1c..e092 · Native Autofill &amp; APK Verifier
@@ -426,7 +471,7 @@ export default function DeepWebHero() {
                           </div>
                         </div>
                         <span className="text-[10px] text-dw-cyan px-2 py-0.5 rounded bg-dw-cyan/10 border border-dw-cyan/20 shrink-0">
-                          MOBILE
+                          MOBILE PEER
                         </span>
                       </div>
 
@@ -435,7 +480,7 @@ export default function DeepWebHero() {
                           <span className="w-2 h-2 rounded-full bg-dw-green shrink-0"></span>
                           <div className="min-w-0">
                             <span className="text-white font-bold block truncate">
-                              Extension Bridge (Shadow DOM)
+                              Extension Bridge Peer (Shadow DOM)
                             </span>
                             <span className="text-[10px] text-dw-dim block truncate">
                               IPC: 127.0.0.1:46124 · AES-256-GCM Loopback
