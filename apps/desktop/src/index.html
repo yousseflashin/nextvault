@@ -2895,15 +2895,17 @@
         }
         if (info && info.hasUpdate) {
           latestUpdateInfo = info;
+          const sizeStr = info.size ? ` · ${(info.size / 1048576).toFixed(1)} MB` : '';
+          const shaStr = info.sha256 ? ` · SHA-256: ${info.sha256.slice(0, 10)}…` : '';
           $('update-version').textContent = info.latestVersion;
-          $('update-desc').textContent = `${info.releaseName || 'v' + info.latestVersion} is available (Current: v${info.currentVersion}). Click below to upgrade in-place.`;
+          $('update-desc').textContent = `${info.releaseName || 'v' + info.latestVersion} is available (Current: v${info.currentVersion}${sizeStr}${shaStr}). Click below to verify & upgrade in-place.`;
           $('update-action-btn').style.display = 'inline-flex';
           $('update-action-btn').disabled = false;
           $('update-action-btn').textContent = 'Update & Restart';
           $('update-banner').style.display = 'flex';
 
           if ($('settings-update-desc')) {
-            $('settings-update-desc').textContent = `🚀 Update v${info.latestVersion} is ready to install! (Installed: v${info.currentVersion})`;
+            $('settings-update-desc').textContent = `🚀 Update v${info.latestVersion} is ready to install! (Installed: v${info.currentVersion}${sizeStr}${shaStr})`;
           }
           if ($('settings-update-btn')) {
             $('settings-update-btn').style.display = 'inline-flex';
@@ -3055,6 +3057,9 @@
           setTimeout(() => { $('existing-password')?.focus(); }, 100);
         }
         checkForUpdates(false);
+        if (window.nexVault?.onTriggerUpdateCheck) {
+          window.nexVault.onTriggerUpdateCheck(() => checkForUpdates(true));
+        }
         checkExtensionStatus();
         if (typeof desktopMeshVisualizer !== 'undefined') {
           desktopMeshVisualizer.init();

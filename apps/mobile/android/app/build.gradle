@@ -1,5 +1,33 @@
 apply plugin: 'com.android.application'
 
+// ---------------------------------------------------------------------------
+// Versioning: apps/mobile/package.json is the single source of truth (bumped by
+// scripts/release.mjs). versionCode MUST match androidVersionCode() in
+// scripts/lib/release-common.mjs.
+// ---------------------------------------------------------------------------
+def appPackageJson = new groovy.json.JsonSlurper().parse(rootProject.file('../package.json'))
+def appVersionName = appPackageJson.version as String
+def computeVersionCode = { String v ->
+    def m = (v =~ /^(\d+)\.(\d+)\.(\d+)$/)
+    if (!m.matches()) throw new GradleException("Invalid version in apps/mobile/package.json: ${v}")
+    return 100000 + (m.group(1) as int) * 1000000 + (m.group(2) as int) * 1000 + (m.group(3) as int)
+}
+
+// ---------------------------------------------------------------------------
+// Release signing: provided by CI via environment variables, or locally via
+// apps/mobile/android/keystore.properties (git-ignored). See RELEASING.md.
+// ---------------------------------------------------------------------------
+def keystoreProps = new Properties()
+def keystorePropsFile = rootProject.file('keystore.properties')
+if (keystorePropsFile.exists()) {
+    keystorePropsFile.withInputStream { keystoreProps.load(it) }
+}
+def signingValue = { String envName, String propName ->
+    System.getenv(envName) ?: keystoreProps.getProperty(propName)
+}
+def releaseStoreFile = signingValue('NEXVAULT_KEYSTORE_PATH', 'storeFile')
+def hasReleaseSigning = releaseStoreFile != null && file(releaseStoreFile).exists()
+
 android {
     namespace = "com.nexvault.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +35,8 @@ android {
         applicationId "com.nexvault.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 10130
-        versionName "0.1.30"
+        versionCode computeVersionCode(appVersionName)
+        versionName appVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,10 +44,23 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (hasReleaseSigning) {
+            release {
+                storeFile file(releaseStoreFile)
+                storePassword signingValue('NEXVAULT_KEYSTORE_PASSWORD', 'storePassword')
+                keyAlias signingValue('NEXVAULT_KEY_ALIAS', 'keyAlias')
+                keyPassword signingValue('NEXVAULT_KEY_PASSWORD', 'keyPassword') ?: signingValue('NEXVAULT_KEYSTORE_PASSWORD', 'storePassword')
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }

@@ -136,7 +136,7 @@ public class NexVaultAutofillService extends AutofillService {
         // Inspect HTML Info if available (Chrome and WebViews)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && node.getHtmlInfo() != null) {
             try {
-                AssistStructure.ViewNode.HtmlInfo htmlInfo = node.getHtmlInfo();
+                android.view.ViewStructure.HtmlInfo htmlInfo = node.getHtmlInfo();
                 String tag = htmlInfo.getTag();
                 if ("input".equalsIgnoreCase(tag)) {
                     List<Pair<String, String>> attrs = htmlInfo.getAttributes();
@@ -225,7 +225,6 @@ public class NexVaultAutofillService extends AutofillService {
         }
 
         return false;
-    }
     }
 
     private RemoteViews presentation(String service, String username) {

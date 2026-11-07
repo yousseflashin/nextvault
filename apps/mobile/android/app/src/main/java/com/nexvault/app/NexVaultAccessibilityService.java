@@ -141,13 +141,14 @@ public class NexVaultAccessibilityService extends AccessibilityService {
         // 4. Query credentials matching this domain/package
         List<JSONObject> matchingCreds = findCredentialsForDomain(targetDomain);
         if (!matchingCreds.isEmpty()) {
+            final String resolvedDomain = targetDomain;
             JSONObject topCred = matchingCreds.get(0);
-            String serviceName = topCred.optString("service", targetDomain);
+            String serviceName = topCred.optString("service", resolvedDomain);
             String username = topCred.optString("username", "");
             String password = topCred.optString("password", "");
 
             showOverlay(serviceName, username, (view) -> {
-                performAutofill(targetDomain, username, password, isPass);
+                performAutofill(resolvedDomain, username, password, isPass);
                 hideOverlay();
             });
         } else if (isPass) {

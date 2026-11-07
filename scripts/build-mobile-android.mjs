@@ -148,9 +148,23 @@ if (/version "(?:2[5-9]|[3-9]\d)/.test(verOut)) {
   }
 }
 
-const gradleResult = run(gradlewPath, ['-p', join(ROOT, 'apps', 'mobile', 'android'), 'assembleDebug'], { env });
+const keystorePropsPath = join(ROOT, 'apps', 'mobile', 'android', 'keystore.properties');
+const hasReleaseSigning = Boolean(
+  (process.env.NEXVAULT_KEYSTORE_PATH && existsSync(process.env.NEXVAULT_KEYSTORE_PATH)) ||
+  existsSync(keystorePropsPath)
+);
+const gradleTask = hasReleaseSigning ? 'assembleRelease' : 'assembleDebug';
+console.log(
+  hasReleaseSigning
+    ? '[Android] Release signing detected — building signed release APK (assembleRelease).'
+    : '[Android] No release keystore configured — building debug APK (assembleDebug) for local testing.'
+);
 
-const apkPath = join(ROOT, 'apps', 'mobile', 'android', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
+const gradleResult = run(gradlewPath, ['-p', join(ROOT, 'apps', 'mobile', 'android'), gradleTask], { env });
+
+const apkPath = hasReleaseSigning
+  ? join(ROOT, 'apps', 'mobile', 'android', 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk')
+  : join(ROOT, 'apps', 'mobile', 'android', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
 
 if (gradleResult !== 0) {
   if (existsSync(apkPath)) {
@@ -158,7 +172,7 @@ if (gradleResult !== 0) {
     console.warn(`  ${apkPath}`);
     console.warn('Proceeding with the existing APK for release packaging.\n');
   } else {
-    console.error(`\n[ERROR] Gradle assembleDebug failed with exit code ${gradleResult} and no pre-built APK exists.`);
+    console.error(`\n[ERROR] Gradle ${gradleTask} failed with exit code ${gradleResult} and no pre-built APK exists.`);
     process.exit(gradleResult);
   }
 } else {

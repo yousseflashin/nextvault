@@ -1,0 +1,195 @@
+name: Release
+
+# Triggered by `npm run release` (which pushes a vX.Y.Z tag).
+# Builds the Linux AppImage and a signed Android APK, measures real sizes and
+# SHA-256 checksums, publishes everything to GitHub Releases as one atomic
+# release, then redeploys the website so its download metadata is current.
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to (re)build and publish, e.g. v0.1.31'
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  TAG: ${{ github.event.inputs.tag || github.ref_name }}
+  NODE_VERSION: '22'
+
+jobs:
+  verify:
+    name: Verify version & tests
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Tag must match every versioned file
+        run: node scripts/release.mjs --verify "$TAG"
+      - id: version
+        run: echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+      - name: Install test dependencies
+        run: |
+          npm ci
+          npm ci --prefix packages/core
+          npm ci --prefix apps/relay
+      - name: Run tests
+        run: npm test
+
+  desktop:
+    name: Build Linux AppImage
+    needs: verify
+    # Native modules are compiled against this runner's glibc (2.35) → matches
+    # PLATFORM_REQUIREMENTS.desktop in scripts/lib/release-common.mjs.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Install dependencies
+        run: |
+          npm ci --prefix packages/core
+          npm ci --prefix apps/desktop
+          node scripts/sync-assets.mjs
+          node scripts/sync-core.mjs
+      - name: Build AppImage
+        run: npm --prefix apps/desktop run build
+        env:
+          # Publishing is done by the publish job, never by electron-builder.
+          GH_TOKEN: ''
+          GITHUB_TOKEN: ''
+      - name: Collect artifact
+        run: |
+          mkdir -p out
+          src=$(ls apps/desktop/dist/*.AppImage | head -n1)
+          test -n "$src" || { echo "::error::No AppImage produced"; exit 1; }
+          cp "$src" "out/NexVault-${{ needs.verify.outputs.version }}-x86_64.AppImage"
+          ls -la out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop
+          path: out/*
+          if-no-files-found: error
+          retention-days: 7
+
+  android:
+    name: Build signed Android APK
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+      - uses: android-actions/setup-android@v3
+      - name: Check signing secrets
+        env:
+          KS: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          if [ -z "$KS" ] || [ -z "$KS_PASS" ] || [ -z "$KEY_ALIAS" ]; then
+            echo "::error::Missing ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS secrets. See RELEASING.md."
+            exit 1
+          fi
+      - name: Build web app & sync Capacitor
+        run: |
+          npm ci --prefix apps/mobile
+          node scripts/sync-assets.mjs
+          npm --prefix apps/mobile run build
+          cd apps/mobile && npx cap sync android
+      - name: Assemble signed release APK
+        working-directory: apps/mobile/android
+        env:
+          NEXVAULT_KEYSTORE_PATH: ${{ runner.temp }}/release.keystore
+          NEXVAULT_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          NEXVAULT_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          NEXVAULT_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD || secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$NEXVAULT_KEYSTORE_PATH"
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleRelease
+          rm -f "$NEXVAULT_KEYSTORE_PATH"
+      - name: Verify signature & collect artifact
+        run: |
+          apk=apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+          test -f "$apk" || { echo "::error::Signed app-release.apk not found (is signing configured?)"; exit 1; }
+          apksigner=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n1)apksigner
+          "$apksigner" verify --print-certs "$apk"
+          mkdir -p out
+          cp "$apk" "out/NexVault-${{ needs.verify.outputs.version }}.apk"
+          ls -la out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: out/*
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish GitHub Release
+    needs: [verify, desktop, android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+      - name: Generate manifest & checksums
+        run: node scripts/generate-release-manifest.mjs --dir release --version "$TAG"
+      - name: Create or update release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd release
+          files=(*.AppImage *.apk release-info.json SHA256SUMS.txt)
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG exists — replacing assets."
+            gh release upload "$TAG" "${files[@]}" --clobber
+          else
+            # Create as draft first so clients never see a half-uploaded "latest" release.
+            gh release create "$TAG" "${files[@]}" \
+              --draft --verify-tag --generate-notes \
+              --title "NexVault $TAG"
+            gh release edit "$TAG" --draft=false --latest
+          fi
+      - name: Redeploy website
+        env:
+          HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+        run: |
+          if [ -n "$HOOK" ]; then
+            curl -fsS -X POST "$HOOK" >/dev/null && echo "Website redeploy triggered."
+          else
+            echo "::notice::VERCEL_DEPLOY_HOOK not set; the website will pick up $TAG on its next deploy (and resolves it from GitHub at runtime meanwhile)."
+          fi

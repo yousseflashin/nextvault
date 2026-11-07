@@ -12,6 +12,7 @@ import {
   syncAutofillCredentials,
   mergeNativeAutofillCredentials,
   openAutofillSettings,
+  isAutofillEnabled,
   openAccessibilitySettings,
   isAccessibilityEnabled,
   getSecurityWindowStatus,
@@ -875,8 +876,15 @@ function App() {
   // Sync & Updates
   const [isSyncing, setIsSyncing] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [updateProgress, setUpdateProgress] = useState<number | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
-  const [updateInfo, setUpdateInfo] = useState<{ hasUpdate: boolean; latestVersion: string; downloadUrl?: string } | null>(null);
+  const [updateInfo, setUpdateInfo] = useState<{
+    hasUpdate: boolean;
+    latestVersion: string;
+    downloadUrl?: string;
+    size?: number;
+    sha256?: string;
+  } | null>(null);
 
   // Bulk Import & QR Scanning State
   const [isScanningQr, setIsScanningQr] = useState(false);
@@ -895,6 +903,12 @@ function App() {
     };
     window.addEventListener('focus', onWindowFocus);
     return () => window.removeEventListener('focus', onWindowFocus);
+  }, []);
+
+  useEffect(() => {
+    isAutofillEnabled().then((enabled) => {
+      if (!enabled) setQuickFillStatus('Enable NexVault as the Android Autofill service');
+    }).catch(() => {});
   }, []);
 
   function markCopied(key: string) {
@@ -968,13 +982,17 @@ function App() {
   async function onApplyMobileUpdate() {
     if (isUpdating) return;
     setIsUpdating(true);
-    showToast('Downloading update and opening installer...');
+    setUpdateProgress(0);
+    showToast('Downloading & verifying SHA-256 update package...');
     try {
-      const res = await (window as any).nexVault.applyUpdate(updateInfo?.downloadUrl);
+      const res = await (window as any).nexVault.applyUpdate(
+        updateInfo?.downloadUrl,
+        (pct: number) => setUpdateProgress(pct)
+      );
       if (res && res.success) {
-        showToast('Package installer launched. Confirm to update in-place.');
+        showToast(res.message || 'Package installer launched. Confirm to update in-place.');
       } else if (res && res.needPermission) {
-        showToast(res.message || 'Enable unknown app installation for NextVault, then tap Install again.');
+        showToast(res.message || 'Enable unknown app installation for NexVault, then tap Install again.');
       } else {
         showToast(res?.error || res?.message || 'Update failed. You can use the browser download option.');
       }
@@ -982,6 +1000,7 @@ function App() {
       showToast('Error applying update: ' + e.message);
     } finally {
       setIsUpdating(false);
+      setUpdateProgress(null);
     }
   }
 
@@ -1807,8 +1826,13 @@ function App() {
             gap: '0.5rem'
           }}>
             <div>
-              <div style={{ fontWeight: 600, color: '#fff', fontSize: '0.82rem' }}>Update Available: v{updateInfo.latestVersion}</div>
-              <div style={{ fontSize: '0.72rem', color: 'var(--nv-muted)' }}>A newer Android APK is available.</div>
+              <div style={{ fontWeight: 600, color: '#fff', fontSize: '0.82rem' }}>
+                Update Available: v{updateInfo.latestVersion}
+                {updateInfo.size ? ` (${(updateInfo.size / 1048576).toFixed(1)} MB)` : ''}
+              </div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--nv-muted)' }}>
+                {updateInfo.sha256 ? `SHA-256 verified (${updateInfo.sha256.slice(0, 10)}…)` : 'A newer Android APK is available.'}
+              </div>
             </div>
             <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
               <button
@@ -1816,7 +1840,9 @@ function App() {
                 disabled={isUpdating}
                 onClick={onApplyMobileUpdate}
               >
-                {isUpdating ? 'Installing...' : 'Update & Install'}
+                {isUpdating
+                  ? (updateProgress !== null && updateProgress > 0 ? `Downloading ${updateProgress}%...` : 'Verifying...')
+                  : 'Update & Install'}
               </button>
               <button
                 className="nv-btn nv-btn-ghost nv-btn-sm"
@@ -3030,7 +3056,9 @@ function App() {
                             disabled={isUpdating}
                             onClick={onApplyMobileUpdate}
                           >
-                            {isUpdating ? 'Installing...' : `Install v${updateInfo.latestVersion}`}
+                            {isUpdating
+                              ? (updateProgress !== null && updateProgress > 0 ? `Downloading ${updateProgress}%...` : 'Verifying...')
+                              : `Install v${updateInfo.latestVersion}`}
                           </button>
                           <button
                             className="nv-btn nv-btn-ghost nv-btn-sm"

@@ -241,17 +241,23 @@ async function main() {
     console.log(`✓ Created GitHub Release: "${release.name}" (ID: ${release.id})`);
   }
 
-  // 3. Scan release/ directory for assets
+  // 3. Scan release/ directory for assets and ensure release-info.json + SHA256SUMS.txt are fresh
   const releaseDir = join(ROOT, 'release');
   if (!existsSync(releaseDir)) {
-    throw new Error('release/ directory not found! Run npm run release first.');
+    throw new Error('release/ directory not found! Run npm run publish:builds first.');
   }
 
+  spawnSync(
+    process.execPath,
+    [join(ROOT, 'scripts', 'generate-release-manifest.mjs'), '--dir', releaseDir, '--version', version, '--sync-website'],
+    { stdio: 'inherit' }
+  );
+
   const allFiles = readdirSync(releaseDir);
-  // Match version-specific AppImage or latest AppImage, plus mobile APK
   const filesToUpload = allFiles.filter(f => {
+    if (f === 'release-info.json' || f === 'SHA256SUMS.txt') return true;
     if (f.endsWith('.apk')) return true;
-    if (f.endsWith('.AppImage') && (f.includes(version) || allFiles.length === 2)) return true;
+    if (f.endsWith('.AppImage') && (f.includes(version) || allFiles.filter(x => x.endsWith('.AppImage')).length === 1)) return true;
     return false;
   });
 

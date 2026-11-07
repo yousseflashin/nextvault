@@ -2,12 +2,30 @@
 <html lang="en" class="scroll-smooth">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#05070a" />
     <link rel="icon" type="image/png" href="/icon.png" />
-    <title>NextVault — Local-First Encrypted Enclave & P2P Mesh</title>
-    <meta name="description" content="Decentralized, zero-knowledge password manager, OTP authenticator, and trusted-device network. Your credentials never touch an intermediary cloud." />
+    <title>NexVault — Local-First Encrypted Enclave &amp; P2P Mesh</title>
+    <meta
+      name="description"
+      content="Decentralized, zero-knowledge password manager, RFC 6238 TOTP authenticator, and peer-to-peer WebRTC device mesh for Linux Desktop (AppImage) and Android Mobile (APK). Zero cloud servers."
+    />
+    <meta name="keywords" content="NexVault, NextVault, local-first password manager, P2P WebRTC sync, SQLCipher, X25519, TOTP authenticator, Linux AppImage, Android APK, zero-knowledge vault" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="NexVault — Local-First Encrypted Enclave &amp; P2P Mesh" />
+    <meta
+      property="og:description"
+      content="Sovereign encrypted password manager &amp; TOTP authenticator. Direct X25519 peer-to-peer sync between Linux Desktop and Android Mobile with SHA-256 verified auto-updates."
+    />
+    <meta property="og:image" content="/icon.png" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="NexVault — Local-First Encrypted Enclave &amp; P2P Mesh" />
+    <meta
+      name="twitter:description"
+      content="Zero cloud servers. SQLCipher AES-256 enclave + X25519 WebRTC mesh for Linux Desktop &amp; Android Mobile."
+    />
   </head>
-  <body class="bg-[#05070a] text-[#f1f5f9] antialiased selection:bg-[#00e676] selection:text-black min-h-screen">
+  <body class="bg-[#05070a] text-[#f1f5f9] antialiased selection:bg-[#00e676] selection:text-black min-h-screen overflow-x-hidden">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

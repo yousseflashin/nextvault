@@ -67,12 +67,17 @@ const trustedPeers = new Set();
 
 const CURRENT_VERSION = (function() {
   try {
-    return app?.getVersion ? (app.getVersion() || '0.1.9') : '0.1.9';
+    const pkgVersion = require('../package.json')?.version;
+    return (app?.getVersion && app.getVersion()) || pkgVersion || '0.1.30';
   } catch {
-    return '0.1.9';
+    return '0.1.30';
   }
 })();
 const GITHUB_REPO = 'yousseflashin/nextvault';
+const LATEST_MANIFEST_URL = `https://github.com/${GITHUB_REPO}/releases/latest/download/release-info.json`;
+const GITHUB_API_LATEST_URL = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
+const ALLOWED_UPDATE_HOST_SUFFIXES = ['github.com', 'githubusercontent.com'];
+let lastVerifiedUpdate = null;
 
 // Persistent trusted devices management
 function getTrustedDevices() {
@@ -1680,106 +1685,189 @@ function normalizeVersion(version) {
   return match ? match[0].split('.').concat(['0', '0']).slice(0, 3).join('.') : '0.0.0';
 }
 
-function fetchGithubRelease() {
-  return new Promise((resolve) => {
-    const url = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
-    let storedToken = null;
-    try {
-      storedToken = nexVaultSecurity.store.get('security.githubToken');
-    } catch {}
-    const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN || storedToken;
-    const reqHeaders = {
-      'User-Agent': 'NexVault-Desktop/' + CURRENT_VERSION,
-      'Accept': 'application/vnd.github.v3+json'
-    };
-    if (token) {
-      reqHeaders['Authorization'] = `Bearer ${token}`;
-    }
+function isAllowedUpdateUrl(rawUrl) {
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.protocol !== 'https:') return false;
+    const host = parsed.hostname.toLowerCase();
+    return ALLOWED_UPDATE_HOST_SUFFIXES.some(
+      (suffix) => host === suffix || host.endsWith('.' + suffix)
+    );
+  } catch {
+    return false;
+  }
+}
 
-    const req = https.get(url, {
-      headers: reqHeaders,
-      timeout: 6000
-    }, (res) => {
-      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        https.get(res.headers.location, {
-          headers: reqHeaders,
-          timeout: 6000
-        }, (redirectRes) => {
-          let data = '';
-          redirectRes.on('data', chunk => { data += chunk; });
-          redirectRes.on('end', () => {
-            try {
-              if (redirectRes.statusCode === 200) {
-                resolve({ success: true, release: JSON.parse(data) });
-              } else {
-                resolve({ success: false, statusCode: redirectRes.statusCode, error: 'Status: ' + redirectRes.statusCode });
-              }
-            } catch (e) {
-              resolve({ success: false, error: e.message });
-            }
-          });
-        }).on('error', err => resolve({ success: false, error: err.message }));
-        return;
+function getGithubAuthToken() {
+  let storedToken = null;
+  try {
+    storedToken = nexVaultSecurity.store.get('security.githubToken');
+  } catch {}
+  return process.env.GITHUB_TOKEN || process.env.GH_TOKEN || storedToken || null;
+}
+
+function fetchJsonWithRedirects(startUrl, extraHeaders = {}, maxRedirects = 8) {
+  return new Promise((resolve) => {
+    function step(currentUrl, depth) {
+      if (depth > maxRedirects) {
+        return resolve({ success: false, error: 'Too many redirects' });
+      }
+      if (!isAllowedUpdateUrl(currentUrl)) {
+        return resolve({ success: false, error: `Blocked untrusted update URL: ${currentUrl}` });
+      }
+      const parsed = new URL(currentUrl);
+      const headers = {
+        'User-Agent': 'NexVault-Desktop/' + CURRENT_VERSION,
+        'Accept': 'application/json',
+        ...extraHeaders
+      };
+      const token = getGithubAuthToken();
+      if (token && parsed.hostname === 'api.github.com') {
+        headers['Authorization'] = `Bearer ${token}`;
       }
 
-      let data = '';
-      res.on('data', chunk => { data += chunk; });
-      res.on('end', () => {
-        try {
-          if (res.statusCode === 200) {
-            resolve({ success: true, release: JSON.parse(data) });
-          } else {
-            resolve({ success: false, statusCode: res.statusCode, error: 'Status: ' + res.statusCode });
-          }
-        } catch (e) {
-          resolve({ success: false, error: e.message });
+      const req = https.get(currentUrl, { headers, timeout: 10000 }, (res) => {
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          res.resume();
+          const nextUrl = new URL(res.headers.location, currentUrl).toString();
+          return step(nextUrl, depth + 1);
         }
+        let body = '';
+        res.on('data', (chunk) => { body += chunk; });
+        res.on('end', () => {
+          if (res.statusCode !== 200) {
+            return resolve({
+              success: false,
+              statusCode: res.statusCode,
+              error: `HTTP ${res.statusCode}`
+            });
+          }
+          try {
+            resolve({ success: true, data: JSON.parse(body) });
+          } catch (err) {
+            resolve({ success: false, error: 'Invalid JSON response: ' + err.message });
+          }
+        });
       });
-    });
-    req.on('error', (err) => resolve({ success: false, error: err.message }));
-    req.on('timeout', () => { req.destroy(); resolve({ success: false, error: 'Connection timed out' }); });
+      req.on('error', (err) => resolve({ success: false, error: err.message }));
+      req.on('timeout', () => {
+        req.destroy();
+        resolve({ success: false, error: 'Connection timed out' });
+      });
+    }
+    step(startUrl, 0);
   });
+}
+
+async function resolveLatestDesktopRelease() {
+  // 1. Primary source: signed release-info.json manifest attached to latest GitHub release
+  const manifestRes = await fetchJsonWithRedirects(LATEST_MANIFEST_URL);
+  if (manifestRes.success && manifestRes.data) {
+    const m = manifestRes.data;
+    const dt = m.desktop;
+    if (
+      m.version &&
+      dt?.url &&
+      isAllowedUpdateUrl(dt.url) &&
+      typeof dt.sha256 === 'string' &&
+      /^[a-f0-9]{64}$/i.test(dt.sha256)
+    ) {
+      return {
+        success: true,
+        source: 'manifest',
+        latestVersion: normalizeVersion(m.version),
+        latestTag: m.tag || `v${normalizeVersion(m.version)}`,
+        filename: dt.filename || `NexVault-${normalizeVersion(m.version)}-x86_64.AppImage`,
+        downloadUrl: dt.url,
+        size: Number(dt.size) || 0,
+        sha256: dt.sha256.toLowerCase(),
+        releaseUrl: m.releaseUrl || `https://github.com/${GITHUB_REPO}/releases/tag/v${normalizeVersion(m.version)}`,
+        releaseName: `NexVault v${normalizeVersion(m.version)}`,
+        notes: m.notes || '',
+        publishedAt: m.publishedAt || null
+      };
+    }
+  }
+
+  // 2. Fallback: GitHub Releases REST API
+  const apiRes = await fetchJsonWithRedirects(GITHUB_API_LATEST_URL, {
+    'Accept': 'application/vnd.github+json'
+  });
+  if (!apiRes.success || !apiRes.data) {
+    return {
+      success: false,
+      statusCode: apiRes.statusCode,
+      error: apiRes.error || 'Unable to reach GitHub Releases'
+    };
+  }
+
+  const release = apiRes.data;
+  const latestTag = release.tag_name || `v${CURRENT_VERSION}`;
+  const latestVersion = normalizeVersion(latestTag);
+  const assets = release.assets || [];
+  const appImageAsset = assets.find((a) => /\.AppImage$/i.test(a.name));
+  const digestHex = String(appImageAsset?.digest || '').replace(/^sha256:/i, '');
+
+  return {
+    success: true,
+    source: 'github-api',
+    latestVersion,
+    latestTag,
+    filename: appImageAsset?.name || `NexVault-${latestVersion}.AppImage`,
+    downloadUrl: appImageAsset?.browser_download_url || null,
+    size: Number(appImageAsset?.size) || 0,
+    sha256: /^[a-f0-9]{64}$/i.test(digestHex) ? digestHex.toLowerCase() : null,
+    releaseUrl: release.html_url || `https://github.com/${GITHUB_REPO}/releases`,
+    releaseName: release.name || latestTag,
+    notes: release.body || '',
+    publishedAt: release.published_at || null
+  };
 }
 
 ipcMain.handle('check-for-updates', async () => {
   try {
-    const result = await fetchGithubRelease();
-    if (!result.success || !result.release) {
-      const is404 = result.statusCode === 404;
+    const resolved = await resolveLatestDesktopRelease();
+    if (!resolved.success) {
+      const is404 = resolved.statusCode === 404;
       return {
         success: false,
-        statusCode: result.statusCode,
+        statusCode: resolved.statusCode,
         error: is404
           ? `GitHub returned 404 (Not Found). Note: If repository '${GITHUB_REPO}' is private, make it public or configure a token.`
-          : (result.error || `HTTP error ${result.statusCode || 'unknown'}`),
+          : (resolved.error || `HTTP error ${resolved.statusCode || 'unknown'}`),
         currentVersion: CURRENT_VERSION,
         latestVersion: normalizeVersion(CURRENT_VERSION),
         hasUpdate: false,
         message: is404
           ? `Repository is private (HTTP 404). Make '${GITHUB_REPO}' public on GitHub or configure a token.`
-          : (result.error || 'Unable to check for updates.')
+          : (resolved.error || 'Unable to check for updates.')
       };
     }
-    const release = result.release;
-    const latestTag = release.tag_name || `v${CURRENT_VERSION}`;
-    const assets = release.assets || [];
-    const appImageAsset = assets.find(a => /\.AppImage$/i.test(a.name));
-    const latestVersion = normalizeVersion(latestTag);
-    const hasUpdate = compareVersions(latestVersion, CURRENT_VERSION) > 0 && Boolean(appImageAsset?.browser_download_url);
+
+    const hasUpdate =
+      compareVersions(resolved.latestVersion, CURRENT_VERSION) > 0 &&
+      Boolean(resolved.downloadUrl) &&
+      isAllowedUpdateUrl(resolved.downloadUrl);
+
+    lastVerifiedUpdate = hasUpdate ? resolved : null;
 
     return {
       success: true,
+      source: resolved.source,
       currentVersion: CURRENT_VERSION,
-      latestVersion,
+      latestVersion: resolved.latestVersion,
       hasUpdate,
-      downloadUrl: appImageAsset?.browser_download_url || null,
-      releaseUrl: release.html_url || `https://github.com/${GITHUB_REPO}/releases`,
-      releaseName: release.name || latestTag,
-      notes: release.body || '',
-      publishedAt: release.published_at,
+      filename: resolved.filename,
+      downloadUrl: resolved.downloadUrl,
+      size: resolved.size,
+      sha256: resolved.sha256,
+      releaseUrl: resolved.releaseUrl,
+      releaseName: resolved.releaseName,
+      notes: resolved.notes,
+      publishedAt: resolved.publishedAt,
       message: hasUpdate
-        ? `Update available: v${latestVersion} (installed: v${normalizeVersion(CURRENT_VERSION)})`
-        : `NextVault is up to date (v${CURRENT_VERSION})`
+        ? `Update available: v${resolved.latestVersion} (installed: v${normalizeVersion(CURRENT_VERSION)})`
+        : `NexVault is up to date (v${CURRENT_VERSION})`
     };
   } catch (err) {
     return {
@@ -1792,38 +1880,47 @@ ipcMain.handle('check-for-updates', async () => {
   }
 });
 
-function downloadFileWithRedirects(targetUrl, destinationPath, onProgress, maxRedirects = 10) {
+function downloadAndVerifyAppImage(targetUrl, destinationPath, expectedSize, onProgress, maxRedirects = 10) {
   return new Promise((resolve, reject) => {
     function fetchUrl(currentUrl, depth) {
       if (depth > maxRedirects) {
         return reject(new Error('Too many HTTP redirects'));
       }
+      if (!isAllowedUpdateUrl(currentUrl)) {
+        return reject(new Error(`Blocked download from untrusted host: ${currentUrl}`));
+      }
       const parsed = new URL(currentUrl);
-      const httpModule = parsed.protocol === 'http:' ? require('http') : https;
       const headers = {
         'User-Agent': 'NexVault-Desktop/' + CURRENT_VERSION,
         'Accept': 'application/octet-stream'
       };
-      let token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
-      try {
-        if (!token) token = nexVaultSecurity.store.get('security.githubToken');
-      } catch {}
-      if (token && parsed.hostname.includes('github.com')) {
+      const token = getGithubAuthToken();
+      if (token && parsed.hostname === 'api.github.com') {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const req = httpModule.get(currentUrl, { headers }, (res) => {
+      const req = https.get(currentUrl, { headers, timeout: 30000 }, (res) => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-          return fetchUrl(res.headers.location, depth + 1);
+          res.resume();
+          const nextUrl = new URL(res.headers.location, currentUrl).toString();
+          return fetchUrl(nextUrl, depth + 1);
         }
         if (res.statusCode !== 200) {
+          res.resume();
           return reject(new Error(`Download failed: HTTP ${res.statusCode}`));
         }
-        const totalBytes = parseInt(res.headers['content-length'] || '0', 10);
+        const totalBytes = parseInt(res.headers['content-length'] || '0', 10) || expectedSize || 0;
         let downloadedBytes = 0;
-        const fileStream = fs.createWriteStream(destinationPath);
+        const hash = crypto.createHash('sha256');
+        const fileStream = fs.createWriteStream(destinationPath, { mode: 0o600 });
+
         res.on('data', (chunk) => {
           downloadedBytes += chunk.length;
+          if (expectedSize > 0 && downloadedBytes > expectedSize) {
+            req.destroy(new Error('Downloaded file exceeds expected release size'));
+            return;
+          }
+          hash.update(chunk);
           if (onProgress && totalBytes > 0) {
             onProgress({
               percent: Math.min(100, Math.round((downloadedBytes / totalBytes) * 100)),
@@ -1832,110 +1929,143 @@ function downloadFileWithRedirects(targetUrl, destinationPath, onProgress, maxRe
             });
           }
         });
+
         res.pipe(fileStream);
         fileStream.on('finish', () => {
-          fileStream.close(() => resolve({ path: destinationPath, size: downloadedBytes }));
+          fileStream.close(() => {
+            resolve({
+              path: destinationPath,
+              size: downloadedBytes,
+              sha256: hash.digest('hex')
+            });
+          });
         });
         fileStream.on('error', (err) => {
           fs.unlink(destinationPath, () => {});
           reject(err);
         });
       });
-      req.on('error', reject);
+      req.on('error', (err) => {
+        fs.unlink(destinationPath, () => {});
+        reject(err);
+      });
+      req.on('timeout', () => {
+        req.destroy();
+        fs.unlink(destinationPath, () => {});
+        reject(new Error('Download timed out'));
+      });
     }
     fetchUrl(targetUrl, 0);
   });
 }
 
-ipcMain.handle('apply-update', async (event, downloadUrl) => {
+ipcMain.handle('apply-update', async () => {
+  const os = require('os');
+  const { spawn } = require('child_process');
+  const tempDownloadPath = path.join(os.tmpdir(), `nexvault-update-${Date.now()}.AppImage`);
+
   try {
-    if (!downloadUrl) {
-      const releaseInfo = await fetchGithubRelease();
-      if (!releaseInfo.success || !releaseInfo.release) {
-        throw new Error('Unable to retrieve latest release information');
+    let targetRelease = lastVerifiedUpdate;
+    if (!targetRelease || !targetRelease.downloadUrl) {
+      const resolved = await resolveLatestDesktopRelease();
+      if (!resolved.success || !resolved.downloadUrl) {
+        throw new Error(resolved.error || 'Unable to retrieve latest release information');
       }
-      const assets = releaseInfo.release.assets || [];
-      const appImageAsset = assets.find(a => /\.AppImage$/i.test(a.name));
-      if (!appImageAsset) {
-        throw new Error('No AppImage asset found in latest release');
-      }
-      downloadUrl = appImageAsset.browser_download_url;
+      targetRelease = resolved;
     }
 
-    const os = require('os');
-    const { spawn } = require('child_process');
+    if (!isAllowedUpdateUrl(targetRelease.downloadUrl)) {
+      throw new Error('Refusing update from untrusted URL');
+    }
+    if (!targetRelease.sha256 || !/^[a-f0-9]{64}$/i.test(targetRelease.sha256)) {
+      throw new Error('Release is missing a SHA-256 checksum; refusing unverified automatic update. Please download manually from GitHub Releases.');
+    }
 
-    const currentAppImage = process.env.APPIMAGE;
-    const tempDownloadPath = path.join(os.tmpdir(), `nexvault-update-${Date.now()}.AppImage`);
-
-    console.log(`[Desktop Auto-Update] Downloading ${downloadUrl} to ${tempDownloadPath}...`);
-    await downloadFileWithRedirects(downloadUrl, tempDownloadPath, (progress) => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('update-download-progress', progress);
+    console.log(`[Desktop Auto-Update] Downloading ${targetRelease.downloadUrl} to ${tempDownloadPath}...`);
+    const downloaded = await downloadAndVerifyAppImage(
+      targetRelease.downloadUrl,
+      tempDownloadPath,
+      targetRelease.size,
+      (progress) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('update-download-progress', progress);
+        }
       }
-    });
+    );
+
+    if (targetRelease.size > 0 && downloaded.size !== targetRelease.size) {
+      throw new Error(`Size mismatch: expected ${targetRelease.size} bytes, got ${downloaded.size} bytes`);
+    }
+    if (downloaded.sha256.toLowerCase() !== targetRelease.sha256.toLowerCase()) {
+      throw new Error(`SHA-256 checksum mismatch! Expected ${targetRelease.sha256}, got ${downloaded.sha256}`);
+    }
+
+    // Verify ELF header magic (\x7fELF) before making executable
+    const headerBuf = Buffer.alloc(4);
+    const fd = fs.openSync(tempDownloadPath, 'r');
+    try {
+      fs.readSync(fd, headerBuf, 0, 4, 0);
+    } finally {
+      fs.closeSync(fd);
+    }
+    if (headerBuf[0] !== 0x7f || headerBuf[1] !== 0x45 || headerBuf[2] !== 0x4c || headerBuf[3] !== 0x46) {
+      throw new Error('Downloaded file is not a valid Linux ELF/AppImage binary');
+    }
 
     fs.chmodSync(tempDownloadPath, 0o755);
 
+    const currentAppImage = process.env.APPIMAGE;
     if (currentAppImage && fs.existsSync(currentAppImage)) {
-      console.log(`[Desktop Auto-Update] In-place replacing AppImage at: ${currentAppImage}`);
-      const updaterScriptPath = path.join(os.tmpdir(), `nexvault-restart-${Date.now()}.sh`);
-      
-      let targetFileName = path.basename(currentAppImage);
-      try {
-        const urlObj = new URL(downloadUrl);
-        const parsedName = path.basename(urlObj.pathname);
-        if (parsedName && parsedName.endsWith('.AppImage')) {
-          targetFileName = parsedName;
-        }
-      } catch {}
+      console.log(`[Desktop Auto-Update] Verified SHA-256 (${downloaded.sha256.slice(0, 12)}…). Replacing AppImage at: ${currentAppImage}`);
 
-      const targetAppImagePath = path.join(path.dirname(currentAppImage), targetFileName);
+      // Replace in-place at the exact currentAppImage path if it has no version number,
+      // or update the versioned filename in the same directory.
+      let targetAppImagePath = currentAppImage;
+      if (/NexVault-\d+\.\d+\.\d+.*\.AppImage$/i.test(path.basename(currentAppImage)) && targetRelease.filename) {
+        targetAppImagePath = path.join(path.dirname(currentAppImage), path.basename(targetRelease.filename));
+      }
 
-      const scriptContent = `#!/bin/bash
-OLD_PID=${process.pid}
-OLD_FILE="${currentAppImage}"
-TARGET_FILE="${targetAppImagePath}"
-TMP_FILE="${tempDownloadPath}"
+      const replaceScript = [
+        'while kill -0 "$NV_OLD_PID" 2>/dev/null; do sleep 0.1; done',
+        'if [ "$NV_OLD_FILE" != "$NV_TARGET_FILE" ] && [ -f "$NV_OLD_FILE" ]; then rm -f -- "$NV_OLD_FILE"; fi',
+        'mv -f -- "$NV_TMP_FILE" "$NV_TARGET_FILE"',
+        'chmod +x -- "$NV_TARGET_FILE"',
+        'nohup "$NV_TARGET_FILE" >/dev/null 2>&1 &'
+      ].join('\n');
 
-while kill -0 "$OLD_PID" 2>/dev/null; do
-  sleep 0.1
-done
-
-# If replacing with a new version filename, remove the old file first so no duplicates exist
-if [ "$OLD_FILE" != "$TARGET_FILE" ] && [ -f "$OLD_FILE" ]; then
-  rm -f "$OLD_FILE"
-fi
-
-mv -f "$TMP_FILE" "$TARGET_FILE"
-chmod +x "$TARGET_FILE"
-
-nohup "$TARGET_FILE" >/dev/null 2>&1 &
-exit 0
-`;
-      fs.writeFileSync(updaterScriptPath, scriptContent, { mode: 0o755 });
-
-      const child = spawn('/bin/bash', [updaterScriptPath], {
+      const child = spawn('/bin/bash', ['-c', replaceScript], {
         detached: true,
-        stdio: 'ignore'
+        stdio: 'ignore',
+        env: {
+          ...process.env,
+          NV_OLD_PID: String(process.pid),
+          NV_OLD_FILE: currentAppImage,
+          NV_TARGET_FILE: targetAppImagePath,
+          NV_TMP_FILE: tempDownloadPath
+        }
       });
       child.unref();
 
+      app.isQuitting = true;
       app.quit();
       setTimeout(() => process.exit(0), 500);
-      return { success: true, message: 'Restarting with updated version...' };
+      return { success: true, message: 'Verified SHA-256. Restarting with updated version...' };
     } else {
-      console.log(`[Desktop Auto-Update] Running outside packaged AppImage. Spawning: ${tempDownloadPath}`);
+      console.log(`[Desktop Auto-Update] Verified SHA-256. Running outside packaged AppImage; spawning: ${tempDownloadPath}`);
       const child = spawn(tempDownloadPath, [], {
         detached: true,
         stdio: 'ignore'
       });
       child.unref();
+      app.isQuitting = true;
       app.quit();
       setTimeout(() => process.exit(0), 500);
-      return { success: true, message: 'Launching updated AppImage...' };
+      return { success: true, message: 'Verified SHA-256. Launching updated AppImage...' };
     }
   } catch (err) {
+    try {
+      if (fs.existsSync(tempDownloadPath)) fs.unlinkSync(tempDownloadPath);
+    } catch {}
     console.error('[Desktop Auto-Update] Failed to apply update:', err);
     return { success: false, error: err.message };
   }
@@ -2016,10 +2146,11 @@ function setupTray() {
       {
         label: 'Check for Updates...',
         click: () => {
-          if (mainWindow) {
+          if (mainWindow && !mainWindow.isDestroyed()) {
             if (mainWindow.isMinimized()) mainWindow.restore();
             mainWindow.show();
             mainWindow.focus();
+            mainWindow.webContents.send('trigger-update-check');
           }
         }
       },

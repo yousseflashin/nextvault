@@ -3,126 +3,189 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Download NexVault | Local-First Password & Trusted Device Network</title>
-  <meta name="description" content="Download NexVault for desktop (Linux AppImage) and Android directly from GitHub Releases. Local-first password manager, OTP authenticator, and trusted device network.">
-  <link rel="stylesheet" href="style.css">
+  <meta name="theme-color" content="#05070a">
+  <link rel="icon" type="image/png" href="/icon.png">
+  <title>Download NexVault | Verified Release Artifacts &amp; SHA-256 Manifest</title>
+  <meta name="description" content="Download NexVault for Linux Desktop (x86_64 AppImage) and Android Mobile (APK) with SHA-256 cryptographic checksum verification.">
+  <style>
+    :root {
+      --bg: #05070a;
+      --surface: #0e131e;
+      --surface2: #131b2a;
+      --border: #1a2336;
+      --green: #00e676;
+      --cyan: #00d4ff;
+      --text: #f1f5f9;
+      --muted: #8b9bb4;
+      --dim: #64748b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      line-height: 1.5;
+    }
+    .mono { font-family: ui-monospace, 'JetBrains Mono', 'Fira Code', monospace; }
+    header, main, footer { width: 100%; max-width: 1080px; margin: 0 auto; padding: 1.5rem; }
+    header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); }
+    a { color: inherit; text-decoration: none; }
+    .brand { display: flex; align-items: center; gap: 0.6rem; font-weight: 800; font-size: 1.15rem; }
+    .brand span { color: var(--green); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-top: 2rem; }
+    .card {
+      background: linear-gradient(180deg, rgba(14,19,30,0.95), rgba(9,13,20,0.98));
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 1.75rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 1.25rem;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.72rem;
+      padding: 0.25rem 0.65rem;
+      border-radius: 999px;
+      border: 1px solid rgba(0, 230, 118, 0.3);
+      background: rgba(0, 230, 118, 0.1);
+      color: var(--green);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .meta {
+      background: rgba(0,0,0,0.55);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 0.85rem;
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+    .meta div { display: flex; justify-content: space-between; gap: 0.5rem; padding: 0.2rem 0; }
+    .meta strong { color: var(--text); word-break: break-all; }
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.9rem 1.2rem;
+      border-radius: 0.75rem;
+      font-weight: 700;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: linear-gradient(90deg, var(--green), var(--cyan));
+      color: #000;
+    }
+    .btn-secondary {
+      background: var(--surface2);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+  </style>
 </head>
-<body class="antialiased min-h-screen flex flex-col font-sans">
-
-  <header class="w-full max-w-6xl mx-auto px-6 py-8 flex justify-between items-center text-white">
-    <a href="index.html" class="text-2xl font-bold tracking-tight">NexVault</a>
-    <nav class="hidden md:flex gap-6 text-sm font-medium text-gray-300">
-      <a href="index.html#features" class="hover:text-white transition">Features</a>
-      <a href="index.html#architecture" class="hover:text-white transition">Architecture</a>
-      <a href="downloads.html" class="text-white">Download</a>
+<body>
+  <header>
+    <a href="/" class="brand">
+      <img src="/icon.png" alt="NexVault" width="26" height="26" style="border-radius:6px">
+      <div>Nex<span>Vault</span></div>
+    </a>
+    <nav class="mono" style="font-size:0.8rem;color:var(--muted);display:flex;gap:1.25rem">
+      <a href="/#features">Capabilities</a>
+      <a href="/#architecture">Protocol</a>
+      <a href="/#downloads" style="color:var(--green)">Interactive Hub ↗</a>
     </nav>
   </header>
 
-  <main class="flex-grow w-full max-w-4xl mx-auto px-6 py-16">
-    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-mono uppercase tracking-widest text-blue-400 bg-blue-950/40 border border-blue-800/40 mb-4">
-      <span>Official Distribution · GitHub Releases</span>
-    </div>
-    <h1 class="text-4xl md:text-5xl font-extrabold tracking-tight text-white mb-4">Download NextVault</h1>
-    <p class="text-lg text-gray-400 mb-12">Decentralized P2P mesh vault. Free, local-first, and zero-cloud. Distributed via GitHub Releases.</p>
+  <main style="flex:1;padding-top:3rem;padding-bottom:3rem">
+    <div class="badge mono" id="release-badge">Official Distribution · v0.1.30</div>
+    <h1 style="font-size:2.25rem;font-weight:800;margin-top:0.75rem">Download NexVault</h1>
+    <p style="color:var(--muted);margin-top:0.5rem;max-width:640px">
+      Decentralized P2P mesh vault. Every release artifact is built and signed with measured byte sizes and SHA-256 digests in <a href="/release-info.json" class="mono" style="color:var(--cyan)">/release-info.json</a>.
+    </p>
 
-    <div id="artifacts" class="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-      <div class="p-6 bg-gray-900 rounded-xl border border-gray-800 flex flex-col justify-between">
+    <div class="grid">
+      <div class="card">
         <div>
-          <div class="w-10 h-10 rounded-lg bg-brand-blue/20 flex items-center justify-center text-brand-blue mb-4">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+          <div class="mono" style="font-size:0.75rem;color:var(--green);margin-bottom:0.4rem">DESKTOP MESH NODE · LINUX X86_64</div>
+          <h2 style="font-size:1.4rem;margin-bottom:0.4rem">Desktop Node (AppImage)</h2>
+          <p style="font-size:0.88rem;color:var(--muted);margin-bottom:1rem">
+            Full SQLCipher AES-256 vault, RFC 6238 TOTP authenticator, X25519 WebRTC mesh sync, and localhost browser extension bridge.
+          </p>
+          <div class="meta mono">
+            <div><span>Filename:</span><strong id="dt-name">NexVault-0.1.30.AppImage</strong></div>
+            <div><span>Measured Size:</span><strong id="dt-size" style="color:var(--green)">126.0 MB (132,103,946 bytes)</strong></div>
+            <div><span>SHA-256:</span><strong id="dt-sha">70406f15aa69c707…eb8e2b3d</strong></div>
           </div>
-          <h2 class="text-xl font-bold text-white mb-1">Desktop Mesh Node</h2>
-          <p class="text-sm text-gray-500 mb-4">Linux · AppImage · x86_64</p>
-          <p class="text-gray-400 text-sm mb-6">Autonomous Linux mesh node: encrypted password manager, OTP authenticator, peer-to-peer sync, and browser extension bridge.</p>
         </div>
-        <div>
-          <a id="desktop-link" href="https://github.com/yousseflashin/nextvault/releases/download/v0.1.30/NexVault-0.1.30.AppImage" target="_blank" rel="noopener noreferrer" class="px-6 py-3 rounded-lg bg-brand-blue hover:bg-brand-hover text-white font-medium transition flex items-center justify-center gap-2">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-            <span>Download Desktop Node (124.5 MB)</span>
-          </a>
-          <span class="text-xs text-gray-500 block text-center mt-2">Requires glibc 2.31+</span>
-        </div>
+        <a id="desktop-link" href="https://github.com/yousseflashin/nextvault/releases/download/v0.1.30/NexVault-0.1.30.AppImage" class="btn mono">
+          <span id="desktop-btn-label">Download Desktop AppImage (126.0 MB)</span>
+        </a>
       </div>
 
-      <div class="p-6 bg-gray-900 rounded-xl border border-gray-800 flex flex-col justify-between">
+      <div class="card">
         <div>
-          <div class="w-10 h-10 rounded-lg bg-brand-blue/20 flex items-center justify-center text-brand-blue mb-4">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+          <div class="mono" style="font-size:0.75rem;color:var(--cyan);margin-bottom:0.4rem">MOBILE MESH NODE · ANDROID APK</div>
+          <h2 style="font-size:1.4rem;margin-bottom:0.4rem">Mobile Node (Android)</h2>
+          <p style="font-size:0.88rem;color:var(--muted);margin-bottom:1rem">
+            Autonomous Android mesh node with native AutofillService, QR pairing, X25519 WebRTC sync, and verified APK auto-updates.
+          </p>
+          <div class="meta mono">
+            <div><span>Filename:</span><strong id="mb-name">NexVault-mobile-app-debug.apk</strong></div>
+            <div><span>Measured Size:</span><strong id="mb-size" style="color:var(--cyan)">13.6 MB (14,246,864 bytes)</strong></div>
+            <div><span>SHA-256:</span><strong id="mb-sha">7d4cc4d9777425ea…fffe08ca</strong></div>
           </div>
-          <h2 class="text-xl font-bold text-white mb-1">Mobile Mesh Node</h2>
-          <p class="text-sm text-gray-500 mb-4">Android · APK · debug build</p>
-          <p class="text-gray-400 text-sm mb-6">Autonomous mobile mesh node: carry your encrypted keys anywhere. Directly syncs across your device mesh without central servers or desktop dependencies.</p>
         </div>
-        <div>
-          <a id="mobile-link" href="https://github.com/yousseflashin/nextvault/releases/download/v0.1.30/NexVault-mobile-app-debug.apk" target="_blank" rel="noopener noreferrer" class="px-6 py-3 rounded-lg bg-gray-800 hover:bg-gray-700 text-white border border-gray-700 font-medium transition flex items-center justify-center gap-2">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-            <span>Download Mobile Node APK (4.0 MB)</span>
-          </a>
-          <span class="text-xs text-gray-500 block text-center mt-2">Android 8.0+</span>
-        </div>
+        <a id="mobile-link" href="https://github.com/yousseflashin/nextvault/releases/download/v0.1.30/NexVault-mobile-app-debug.apk" class="btn btn-secondary mono">
+          <span id="mobile-btn-label">Download Android APK (13.6 MB)</span>
+        </a>
       </div>
-
     </div>
-
-    <section class="mt-12 p-6 bg-gray-900/50 rounded-xl border border-gray-800 flex flex-col sm:flex-row items-center justify-between gap-4">
-      <div>
-        <h2 class="text-base font-bold text-white mb-1">GitHub Releases Hub</h2>
-        <p class="text-gray-400 text-xs">View all published builds, commit tags, and release notes.</p>
-      </div>
-      <a href="https://github.com/yousseflashin/nextvault/releases" target="_blank" rel="noopener noreferrer" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white text-sm rounded-lg border border-gray-700 transition shrink-0">
-        Browse All Releases ↗
-      </a>
-    </section>
   </main>
 
-  <footer class="w-full max-w-6xl mx-auto px-6 py-8 text-center text-sm text-gray-600">
-    NexVault — local-first. Nothing in between.
+  <footer class="mono" style="border-top:1px solid var(--border);font-size:0.75rem;color:var(--muted);display:flex;justify-content:space-between;flex-wrap:wrap;gap:1rem">
+    <span>NexVault — Zero cloud servers.</span>
+    <a href="https://github.com/yousseflashin/nextvault/releases" style="color:var(--green)">GitHub Releases ↗</a>
   </footer>
 
   <script>
-    fetch('/release-info.json?t=' + Date.now())
-      .then(r => r.json())
-      .then(data => {
-        if (!data) return;
-        if (data.desktop?.url) {
-          const el = document.getElementById('desktop-link');
-          if (el) {
-            el.href = data.desktop.url;
-            const span = el.querySelector('span');
-            if (span) span.textContent = 'Download Desktop (' + (data.desktop.size || '125.4 MB') + ')';
-          }
+    fetch('/release-info.json', { cache: 'no-cache' })
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(info) {
+        if (!info || !info.version) return;
+        var fmt = function(b, fallback) {
+          return typeof b === 'number' ? (b / 1048576).toFixed(1) + ' MB (' + b.toLocaleString('en-US') + ' bytes)' : (fallback || '');
+        };
+        var fmtShort = function(asset) {
+          if (asset.sizeFormatted) return asset.sizeFormatted;
+          if (typeof asset.size === 'number') return (asset.size / 1048576).toFixed(1) + ' MB';
+          return asset.size || '';
+        };
+        document.getElementById('release-badge').textContent = 'Official Distribution · ' + (info.tag || ('v' + info.version));
+        if (info.desktop) {
+          var ds = fmtShort(info.desktop);
+          document.getElementById('dt-name').textContent = info.desktop.filename;
+          document.getElementById('dt-size').textContent = fmt(info.desktop.size, ds);
+          if (info.desktop.sha256) document.getElementById('dt-sha').textContent = info.desktop.sha256;
+          document.getElementById('desktop-link').href = info.desktop.url;
+          document.getElementById('desktop-btn-label').textContent = 'Download Desktop AppImage (' + ds + ')';
         }
-        if (data.mobile?.url) {
-          const el = document.getElementById('mobile-link');
-          if (el) {
-            el.href = data.mobile.url;
-            const span = el.querySelector('span');
-            if (span) span.textContent = 'Download Android APK (' + (data.mobile.size || '4.0 MB') + ')';
-          }
+        if (info.mobile) {
+          var ms = fmtShort(info.mobile);
+          document.getElementById('mb-name').textContent = info.mobile.filename;
+          document.getElementById('mb-size').textContent = fmt(info.mobile.size, ms);
+          if (info.mobile.sha256) document.getElementById('mb-sha').textContent = info.mobile.sha256;
+          document.getElementById('mobile-link').href = info.mobile.url;
+          document.getElementById('mobile-btn-label').textContent = 'Download Android APK (' + ms + ')';
         }
       })
-      .catch(() => {
-        // Fallback to GitHub API if available
-        fetch('https://api.github.com/repos/yousseflashin/nextvault/releases/latest')
-          .then(r => r.json())
-          .then(data => {
-            if (!data || !Array.isArray(data.assets)) return;
-            const desktop = data.assets.find(a => a.name.endsWith('.AppImage'));
-            const mobile = data.assets.find(a => a.name.endsWith('.apk'));
-            if (desktop) {
-              const el = document.getElementById('desktop-link');
-              el.href = desktop.browser_download_url;
-              el.querySelector('span').textContent = 'Download Desktop (' + (desktop.size / 1048576).toFixed(1) + ' MB)';
-            }
-            if (mobile) {
-              const el = document.getElementById('mobile-link');
-              el.href = mobile.browser_download_url;
-              el.querySelector('span').textContent = 'Download Android APK (' + (mobile.size / 1048576).toFixed(1) + ' MB)';
-            }
-          })
-          .catch(() => {});
-      });
+      .catch(function() {});
   </script>
 </body>
 </html>

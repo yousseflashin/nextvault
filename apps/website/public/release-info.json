@@ -1,15 +1,30 @@
 {
+  "schemaVersion": 2,
   "version": "0.1.30",
   "tag": "v0.1.30",
+  "publishedAt": "2026-11-07T12:45:47.713Z",
+  "releaseUrl": "https://github.com/yousseflashin/nextvault/releases/tag/v0.1.30",
   "desktop": {
+    "platform": "linux-x86_64",
+    "arch": "x86_64",
+    "format": "AppImage",
     "filename": "NexVault-0.1.30.AppImage",
-    "size": "124.5 MB",
-    "url": "https://github.com/yousseflashin/nextvault/releases/download/v0.1.30/NexVault-0.1.30.AppImage"
+    "url": "https://github.com/yousseflashin/nextvault/releases/download/v0.1.30/NexVault-0.1.30.AppImage",
+    "size": 132103946,
+    "sizeFormatted": "126.0 MB",
+    "sha256": "70406f15aa69c707859d84b0f7836615846fa14a134aaa22e0d28a63eb8e2b3d",
+    "requirements": "Linux x86_64 · glibc 2.35+ (Ubuntu 22.04+, Debian 12+, Fedora 36+)"
   },
   "mobile": {
+    "platform": "android",
+    "arch": "universal",
+    "format": "APK",
     "filename": "NexVault-mobile-app-debug.apk",
-    "size": "4.0 MB",
-    "url": "https://github.com/yousseflashin/nextvault/releases/download/v0.1.30/NexVault-mobile-app-debug.apk"
-  },
-  "publishedAt": "2026-11-07T10:49:15.540Z"
+    "url": "https://github.com/yousseflashin/nextvault/releases/download/v0.1.30/NexVault-mobile-app-debug.apk",
+    "size": 14246864,
+    "sizeFormatted": "13.6 MB",
+    "sha256": "7d4cc4d9777425ea72d4945956dc15186eacc2b32324931e5b21ce21fffe08ca",
+    "versionCode": 101030,
+    "requirements": "Android 7.0+ (API 24+ · ARM64 / x86_64)"
+  }
 }

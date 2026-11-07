@@ -7,6 +7,14 @@
 import nacl from 'tweetnacl';
 import naclUtil from 'tweetnacl-util';
 import { registerPlugin } from '@capacitor/core';
+import {
+  BUILD_VERSION as CURRENT_VERSION,
+  GITHUB_REPO,
+  compareVersions,
+  checkForUpdates as checkMobileUpdatesManifest,
+  applyUpdate as applyMobileUpdateManifest
+} from './updater';
+export { CURRENT_VERSION, GITHUB_REPO };
 
 const AutofillBridge = registerPlugin<{
   syncCredentials(options: { credentialsJson: string }): Promise<void>;
@@ -63,9 +71,6 @@ export interface MobileVaultState {
   otps: StoredOTP[];
   deletedRecords?: { service: string; type: 'password' | 'otp'; deletedAt: number }[];
 }
-
-export const CURRENT_VERSION = '0.1.30';
-export const GITHUB_REPO = 'yousseflashin/nextvault';
 
 export function parseOtpAuthUri(uri: string): { service: string; account: string; secret: string; algorithm?: string; digits?: number; period?: number } | null {
   if (!uri || typeof uri !== 'string') return null;
@@ -298,18 +303,6 @@ export function removeTrustedPeer(peerId: string, state: MobileVaultState) {
     return p && p.deviceId !== peerId;
   });
   saveVault(state);
-}
-
-function compareVersions(v1: string, v2: string): number {
-  const p1 = (v1 || '').replace(/^v/, '').split('.').map(Number);
-  const p2 = (v2 || '').replace(/^v/, '').split('.').map(Number);
-  for (let i = 0; i < 3; i++) {
-    const a = p1[i] || 0;
-    const b = p2[i] || 0;
-    if (a > b) return 1;
-    if (a < b) return -1;
-  }
-  return 0;
 }
 
 export interface PeerExtensionRequest {
@@ -767,6 +760,15 @@ export async function mergeNativeAutofillCredentials() {
 
 export async function openAutofillSettings() {
   return AutofillBridge.openSettings();
+}
+
+export async function isAutofillEnabled(): Promise<boolean> {
+  try {
+    const result = await AutofillBridge.isEnabled();
+    return !!result?.enabled;
+  } catch {
+    return false;
+  }
 }
 
 export async function openAccessibilitySettings() {
@@ -2277,53 +2279,7 @@ export function initMobileVault() {
     },
 
     async checkForUpdates() {
-      try {
-        const token = (typeof localStorage !== 'undefined' && localStorage.getItem('nexvault_github_token')) || (import.meta as any).env?.VITE_GITHUB_TOKEN || '';
-        const headers: Record<string, string> = { 'Accept': 'application/vnd.github.v3+json' };
-        if (token) {
-          headers['Authorization'] = `Bearer ${token}`;
-        }
-        const resp = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`, {
-          headers
-        });
-        if (resp.status === 404) {
-          return {
-            success: false,
-            statusCode: 404,
-            currentVersion: CURRENT_VERSION,
-            latestVersion: CURRENT_VERSION,
-            hasUpdate: false,
-            message: `GitHub returned 404 (Not Found). If repository '${GITHUB_REPO}' is private, please make it public on GitHub.`
-          };
-        }
-        if (!resp.ok) {
-          throw new Error(`HTTP ${resp.status}`);
-        }
-        const data = await resp.json();
-        const latestTag = data.tag_name || CURRENT_VERSION;
-        const hasUpdate = compareVersions(latestTag, CURRENT_VERSION) > 0;
-        const assets = data.assets || [];
-        const apkAsset = assets.find((a: any) => /\.apk$/i.test(a.name));
-        const downloadUrl = apkAsset ? apkAsset.browser_download_url : `https://github.com/${GITHUB_REPO}/releases/download/${latestTag}/NexVault-mobile-app-debug.apk`;
-        return {
-          success: true,
-          currentVersion: CURRENT_VERSION,
-          latestVersion: latestTag,
-          hasUpdate,
-          downloadUrl,
-          releaseUrl: data.html_url || `https://github.com/${GITHUB_REPO}/releases`,
-          releaseName: data.name || latestTag,
-          notes: data.body || '',
-          publishedAt: data.published_at
-        };
-      } catch (err: any) {
-        return {
-          success: false,
-          error: err.message,
-          currentVersion: CURRENT_VERSION,
-          hasUpdate: false
-        };
-      }
+      return checkMobileUpdatesManifest();
     },
 
     async getTrustedDevices() {
@@ -2332,31 +2288,8 @@ export function initMobileVault() {
       return { success: true, devices: state.trustedPeers || [] };
     },
 
-    async applyUpdate(downloadUrl?: string) {
-      try {
-        if (!downloadUrl) {
-          const info = await (window as any).nexVault.checkForUpdates();
-          downloadUrl = info.downloadUrl;
-        }
-        if (!downloadUrl) throw new Error('No update URL found');
-
-        const cap = (window as any).Capacitor;
-        if (cap && typeof cap.isNativePlatform === 'function' && cap.isNativePlatform()) {
-          const plugins = cap.Plugins;
-          if (plugins && plugins.AppUpdater && typeof plugins.AppUpdater.installApk === 'function') {
-            const res = await plugins.AppUpdater.installApk({ url: downloadUrl });
-            if (res && res.needPermission) {
-              return { success: false, needPermission: true, message: res.message || 'Permission required: Enable "Allow from this source" in Android Settings, then tap Install.' };
-            }
-            return { success: true, message: res?.message || 'Package installer launched' };
-          }
-        }
-
-        window.open(downloadUrl, '_system');
-        return { success: true, message: 'Opening download link in browser...' };
-      } catch (err: any) {
-        return { success: false, error: err.message };
-      }
+    async applyUpdate(_downloadUrl?: string, onProgress?: (percent: number) => void) {
+      return applyMobileUpdateManifest(onProgress);
     },
 
     async removeTrustedDevice(deviceId: string) {
