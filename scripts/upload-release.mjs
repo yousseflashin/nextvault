@@ -313,9 +313,8 @@ async function main() {
       },
       publishedAt: new Date().toISOString()
     };
-    writeFileSync(join(ROOT, 'apps/website/src/release-info.json'), JSON.stringify(releaseMeta, null, 2) + '\n');
     writeFileSync(join(ROOT, 'apps/website/public/release-info.json'), JSON.stringify(releaseMeta, null, 2) + '\n');
-    console.log('  ✓ Updated apps/website release-info.json');
+    console.log('  ✓ Updated apps/website/public/release-info.json');
   } catch {}
 
   console.log('\n====================================================');

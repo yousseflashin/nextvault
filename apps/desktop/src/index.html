@@ -525,7 +525,7 @@
       <div class="sidebar-header">
         <img src="assets/icon.png" alt="NextVault" style="width: 24px; height: 24px; border-radius: 5px; object-fit: contain;">
         <div class="brand-title">Next<span>Vault</span></div>
-        <span class="nv-badge" id="sidebar-version-badge" style="font-size: 0.65rem; margin-left: auto;">v0.1.30</span>
+        <span class="nv-badge" id="sidebar-version-badge" style="font-size: 0.65rem; margin-left: auto;">checking...</span>
       </div>
 
       <nav class="sidebar-nav">
@@ -1129,7 +1129,7 @@
           <div class="nv-card" style="margin-bottom: 1.25rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
               <div style="font-weight: 600; color: #fff;">Application Updates</div>
-              <span class="nv-badge" id="settings-version-badge">Current: v0.1.9</span>
+              <span class="nv-badge" id="settings-version-badge">Current: checking...</span>
             </div>
             <p style="font-size: 0.8rem; color: var(--nv-muted); margin-bottom: 1rem;" id="settings-update-desc">
               Check official GitHub releases for signed updates with seamless in-place upgrade.
@@ -2881,6 +2881,8 @@
 
     async function checkForUpdates(manual = false) {
       if (manual) setStatus('Checking GitHub for updates...');
+      latestUpdateInfo = null;
+      if ($('update-banner')) $('update-banner').style.display = 'none';
       try {
         const info = await window.nexVault.checkForUpdates();
         if (info && info.currentVersion) {
@@ -2917,14 +2919,18 @@
           if ($('settings-update-btn')) {
             $('settings-update-btn').style.display = 'none';
           }
+          if ($('update-action-btn')) $('update-action-btn').style.display = 'none';
+          if ($('update-banner')) $('update-banner').style.display = 'none';
         } else if (info && !info.success) {
           if (manual) setStatus('Update check notice: ' + (info.message || info.error || 'Check failed'));
           if ($('settings-update-desc')) {
             $('settings-update-desc').textContent = info.message || 'Unable to check for updates right now.';
           }
+          if ($('settings-update-btn')) $('settings-update-btn').style.display = 'none';
         }
       } catch (err) {
         if (manual) setStatus('Update check notice: ' + err.message);
+        if ($('settings-update-btn')) $('settings-update-btn').style.display = 'none';
       }
     }
 

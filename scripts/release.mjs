@@ -242,9 +242,8 @@ const releaseMeta = {
   publishedAt: new Date().toISOString()
 };
 
-writeFileSync(join(ROOT, 'apps/website/src/release-info.json'), JSON.stringify(releaseMeta, null, 2) + '\n');
 writeFileSync(join(ROOT, 'apps/website/public/release-info.json'), JSON.stringify(releaseMeta, null, 2) + '\n');
-log('  ✓ Updated apps/website/src/release-info.json and public/release-info.json');
+log('  ✓ Updated apps/website/public/release-info.json');
 
 updateFileContent('apps/website/public/downloads.html', (content) => {
   return content

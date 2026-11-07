@@ -1664,8 +1664,8 @@ ipcMain.handle('get-integrity-status', async () => {
 });
 
 function compareVersions(v1, v2) {
-  const p1 = (v1 || '').replace(/^v/, '').split('.').map(Number);
-  const p2 = (v2 || '').replace(/^v/, '').split('.').map(Number);
+  const p1 = normalizeVersion(v1).split('.').map(Number);
+  const p2 = normalizeVersion(v2).split('.').map(Number);
   for (let i = 0; i < 3; i++) {
     const a = p1[i] || 0;
     const b = p2[i] || 0;
@@ -1673,6 +1673,11 @@ function compareVersions(v1, v2) {
     if (a < b) return -1;
   }
   return 0;
+}
+
+function normalizeVersion(version) {
+  const match = String(version || '').match(/\d+(?:\.\d+){0,2}/);
+  return match ? match[0].split('.').concat(['0', '0']).slice(0, 3).join('.') : '0.0.0';
 }
 
 function fetchGithubRelease() {
@@ -1748,7 +1753,7 @@ ipcMain.handle('check-for-updates', async () => {
           ? `GitHub returned 404 (Not Found). Note: If repository '${GITHUB_REPO}' is private, make it public or configure a token.`
           : (result.error || `HTTP error ${result.statusCode || 'unknown'}`),
         currentVersion: CURRENT_VERSION,
-        latestVersion: CURRENT_VERSION,
+        latestVersion: normalizeVersion(CURRENT_VERSION),
         hasUpdate: false,
         message: is404
           ? `Repository is private (HTTP 404). Make '${GITHUB_REPO}' public on GitHub or configure a token.`
@@ -1756,25 +1761,24 @@ ipcMain.handle('check-for-updates', async () => {
       };
     }
     const release = result.release;
-    const latestTag = release.tag_name || CURRENT_VERSION;
-    const hasUpdate = compareVersions(latestTag, CURRENT_VERSION) > 0;
+    const latestTag = release.tag_name || `v${CURRENT_VERSION}`;
     const assets = release.assets || [];
     const appImageAsset = assets.find(a => /\.AppImage$/i.test(a.name));
-    const cleanTag = latestTag.replace(/^v/, '');
-    const downloadUrl = appImageAsset ? appImageAsset.browser_download_url : `https://github.com/${GITHUB_REPO}/releases/download/${latestTag}/NexVault-${cleanTag}.AppImage`;
+    const latestVersion = normalizeVersion(latestTag);
+    const hasUpdate = compareVersions(latestVersion, CURRENT_VERSION) > 0 && Boolean(appImageAsset?.browser_download_url);
 
     return {
       success: true,
       currentVersion: CURRENT_VERSION,
-      latestVersion: latestTag,
+      latestVersion,
       hasUpdate,
-      downloadUrl,
+      downloadUrl: appImageAsset?.browser_download_url || null,
       releaseUrl: release.html_url || `https://github.com/${GITHUB_REPO}/releases`,
       releaseName: release.name || latestTag,
       notes: release.body || '',
       publishedAt: release.published_at,
       message: hasUpdate
-        ? `Update available: ${latestTag} (installed: v${CURRENT_VERSION})`
+        ? `Update available: v${latestVersion} (installed: v${normalizeVersion(CURRENT_VERSION)})`
         : `NextVault is up to date (v${CURRENT_VERSION})`
     };
   } catch (err) {

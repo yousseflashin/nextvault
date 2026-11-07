@@ -2,17 +2,16 @@
  * apps/website/src/useReleaseInfo.js
  * 
  * Dynamic release metadata hook.
- * Fetches latest release info from /release-info.json with cache-busting,
- * ensuring visitors always see the freshest downloadable versions and tag names.
+ * Fetches the single published release manifest and falls back to GitHub only
+ * when the manifest is unavailable.
  */
 
 import { useState, useEffect } from 'react';
-import staticReleaseInfo from './release-info.json';
 
 const GITHUB_REPO = 'yousseflashin/nextvault';
 
 export function useReleaseInfo() {
-  const [info, setInfo] = useState(staticReleaseInfo);
+  const [info, setInfo] = useState({});
 
   useEffect(() => {
     let isMounted = true;
@@ -29,8 +28,8 @@ export function useReleaseInfo() {
         });
         if (res.ok) {
           const data = await res.json();
-          if (data && data.version && isMounted) {
-            setInfo((prev) => ({ ...prev, ...data }));
+          if (isValidReleaseInfo(data) && isMounted) {
+            setInfo(data);
             return;
           }
         }
@@ -52,26 +51,25 @@ export function useReleaseInfo() {
             const dt = assets.find((a) => a.name.endsWith('.AppImage'));
             const mb = assets.find((a) => a.name.endsWith('.apk'));
 
-            setInfo((prev) => ({
-              ...prev,
+            setInfo({
               version: ver,
               tag: tag,
               desktop: {
                 filename: dt?.name || `NexVault-${ver}.AppImage`,
-                size: dt ? `${(dt.size / 1048576).toFixed(1)} MB` : prev.desktop?.size || '125.4 MB',
-                url: dt?.browser_download_url || `https://github.com/${GITHUB_REPO}/releases/download/${tag}/NexVault-${ver}.AppImage`
+                size: dt ? `${(dt.size / 1048576).toFixed(1)} MB` : null,
+                url: dt?.browser_download_url || `https://github.com/${GITHUB_REPO}/releases`
               },
               mobile: {
                 filename: mb?.name || 'NexVault-mobile-app-debug.apk',
-                size: mb ? `${(mb.size / 1048576).toFixed(1)} MB` : prev.mobile?.size || '4.0 MB',
-                url: mb?.browser_download_url || `https://github.com/${GITHUB_REPO}/releases/download/${tag}/NexVault-mobile-app-debug.apk`
+                size: mb ? `${(mb.size / 1048576).toFixed(1)} MB` : null,
+                url: mb?.browser_download_url || `https://github.com/${GITHUB_REPO}/releases`
               },
-              publishedAt: ghData.published_at || prev.publishedAt
-            }));
+              publishedAt: ghData.published_at || null
+            });
           }
         }
       } catch (err) {
-        // Silent catch: staticReleaseInfo is already in place
+        // The UI remains usable with the release links disabled.
       }
     }
 
@@ -83,5 +81,16 @@ export function useReleaseInfo() {
   }, []);
 
   return info;
+}
+
+function isValidReleaseInfo(info) {
+  return Boolean(
+    info &&
+    typeof info.version === 'string' &&
+    /^\d+\.\d+\.\d+$/.test(info.version) &&
+    typeof info.tag === 'string' &&
+    info.desktop?.filename &&
+    info.desktop?.url
+  );
 }
 

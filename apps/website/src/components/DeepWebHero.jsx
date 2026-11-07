@@ -25,14 +25,14 @@ export default function DeepWebHero() {
   const [tamperTriggered, setTamperTriggered] = useState(false);
 
   // Direct download URLs from release-info.json
-  const currentVersion = releaseInfo.version || '0.1.1';
-  const currentTag = releaseInfo.tag || `v${currentVersion}`;
-  const desktopUrl = releaseInfo.desktop?.url || `https://github.com/yousseflashin/nextvault/releases/download/${currentTag}/NexVault-${currentVersion}.AppImage`;
-  const desktopSize = releaseInfo.desktop?.size || '124.5 MB';
-  const mobileUrl = releaseInfo.mobile?.url || `https://github.com/yousseflashin/nextvault/releases/download/${currentTag}/NexVault-mobile-app-debug.apk`;
-  const mobileSize = releaseInfo.mobile?.size || '4.0 MB';
-
-  const installCommand = `chmod +x NexVault-${currentVersion}.AppImage && ./NexVault-${currentVersion}.AppImage`;
+  const currentVersion = releaseInfo.version || 'unavailable';
+  const currentTag = releaseInfo.tag || 'Releases';
+  const desktopUrl = releaseInfo.desktop?.url || 'https://github.com/yousseflashin/nextvault/releases';
+  const desktopSize = releaseInfo.desktop?.size || '';
+  const mobileUrl = releaseInfo.mobile?.url || 'https://github.com/yousseflashin/nextvault/releases';
+  const mobileSize = releaseInfo.mobile?.size || '';
+  const desktopFilename = releaseInfo.desktop?.filename || 'NexVault.AppImage';
+  const installCommand = `chmod +x ${desktopFilename} && ./${desktopFilename}`;
 
   // Copy helper with feedback
   const handleCopy = (text, label) => {

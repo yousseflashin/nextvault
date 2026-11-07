@@ -8,14 +8,14 @@ export default function DownloadsSection() {
   const releaseInfo = useReleaseInfo();
   const [copiedKey, setCopiedKey] = useState(null);
 
-  const releaseTag = releaseInfo.tag || `v${releaseInfo.version || '0.1.9'}`;
-  const desktopUrl = releaseInfo.desktop?.url || `https://github.com/${GITHUB_REPO}/releases/download/${releaseTag}/${releaseInfo.desktop?.filename || `NexVault-${releaseInfo.version}.AppImage`}`;
-  const desktopSize = `(${releaseInfo.desktop?.size || '125.4 MB'})`;
-
-  const mobileUrl = releaseInfo.mobile?.url || `https://github.com/${GITHUB_REPO}/releases/download/${releaseTag}/${releaseInfo.mobile?.filename || 'NexVault-mobile-app-debug.apk'}`;
-  const mobileSize = `(${releaseInfo.mobile?.size || '4.0 MB'})`;
-
-  const verifyCmd = `sha256sum ${releaseInfo.desktop?.filename || `NexVault-${releaseInfo.version}.AppImage`}`;
+  const releaseTag = releaseInfo.tag || 'Release metadata unavailable';
+  const desktopUrl = releaseInfo.desktop?.url || GITHUB_RELEASES_PAGE;
+  const desktopSize = releaseInfo.desktop?.size ? `(${releaseInfo.desktop.size})` : '';
+  const desktopFilename = releaseInfo.desktop?.filename || 'NexVault.AppImage';
+  const mobileUrl = releaseInfo.mobile?.url || GITHUB_RELEASES_PAGE;
+  const mobileSize = releaseInfo.mobile?.size ? `(${releaseInfo.mobile.size})` : '';
+  const verifyCmd = `sha256sum ${desktopFilename}`;
+  const installCommand = `chmod +x ${desktopFilename} && ./${desktopFilename}`;
 
   const handleCopy = (text, key) => {
     if (navigator?.clipboard) {
@@ -71,7 +71,7 @@ export default function DownloadsSection() {
               <div className="p-2.5 rounded bg-black/60 border border-dw-border font-mono text-[11px] flex items-center justify-between gap-2">
                 <span className="text-dw-dim truncate">Run: <strong className="text-dw-text">chmod +x *.AppImage && ./*.AppImage</strong></span>
                 <button
-                  onClick={() => handleCopy(`chmod +x NexVault-${CURRENT_VERSION}.AppImage && ./NexVault-${CURRENT_VERSION}.AppImage`, 'desktop-cmd')}
+                  onClick={() => handleCopy(installCommand, 'desktop-cmd')}
                   className="text-dw-muted hover:text-dw-green text-[10px] shrink-0"
                 >
                   {copiedKey === 'desktop-cmd' ? '✓ Copied' : 'Copy'}
