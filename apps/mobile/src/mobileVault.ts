@@ -25,6 +25,7 @@ const AutofillBridge = registerPlugin<{
   openAccessibilitySettings(): Promise<void>;
   isAccessibilityEnabled(): Promise<{ enabled: boolean }>;
   openAppDetailsSettings(): Promise<void>;
+  openChrome(): Promise<void>;
   getDiagnosticStatus(): Promise<{
     sdkInt: number;
     hasRestrictedSettings: boolean;
@@ -882,6 +883,12 @@ export async function getAutofillDiagnosticStatus(): Promise<{
 export async function setSecureWindow(enable: boolean): Promise<void> {
   try {
     await AutofillBridge.setSecureWindow({ enable });
+  } catch {}
+}
+
+export async function openChrome(): Promise<void> {
+  try {
+    await AutofillBridge.openChrome();
   } catch {}
 }
 

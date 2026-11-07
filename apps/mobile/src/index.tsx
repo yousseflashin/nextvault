@@ -16,6 +16,7 @@ import {
   openAccessibilitySettings,
   isAccessibilityEnabled,
   openAppDetailsSettings,
+  openChrome,
   getAutofillDiagnosticStatus,
   setSecureWindow,
   getSecurityPolicy,
@@ -1064,6 +1065,7 @@ function App() {
 
   // Accessibility Autofill Overlay & Security Policy State
   const [a11yEnabled, setA11yEnabled] = useState(false);
+  const [sysAutofillEnabled, setSysAutofillEnabled] = useState(false);
   const [showRestrictedGuide, setShowRestrictedGuide] = useState(false);
   const [securityPolicy, setSecurityPolicy] = useState<DeviceSecurityPolicy>(getSecurityPolicy());
   const [diagStatus, setDiagStatus] = useState<{
@@ -1075,9 +1077,11 @@ function App() {
   } | null>(null);
 
   useEffect(() => {
+    isAutofillEnabled().then(setSysAutofillEnabled).catch(() => {});
     isAccessibilityEnabled().then(setA11yEnabled).catch(() => {});
     getAutofillDiagnosticStatus().then(setDiagStatus).catch(() => {});
     const onWindowFocus = () => {
+      isAutofillEnabled().then(setSysAutofillEnabled).catch(() => {});
       isAccessibilityEnabled().then(setA11yEnabled).catch(() => {});
       getAutofillDiagnosticStatus().then(setDiagStatus).catch(() => {});
     };
@@ -3265,97 +3269,110 @@ function App() {
               {/* PAGE 5: SETTINGS */}
               {activeTab === 'settings' && (
                 <div>
-                  {/* Browser & System Autofill Card with Chrome Guide */}
+                  {/* The 1Password Autofill Engine Card */}
                   <Card style={{ marginBottom: '1rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-                      <div style={{ fontWeight: 600, color: '#fff' }}>Android &amp; Google Chrome Autofill</div>
-                      <span className="nv-badge success">Active</span>
+                      <div style={{ fontWeight: 600, color: '#fff', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span>⚡</span>
+                        <span>Mobile Autofill (The 1Password Method)</span>
+                      </div>
+                      <span className={`nv-badge ${sysAutofillEnabled ? 'success' : 'warning'}`}>
+                        {sysAutofillEnabled ? 'Framework Active' : 'Setup Required'}
+                      </span>
                     </div>
                     <p style={{ fontSize: '0.75rem', color: 'var(--nv-muted)', margin: '0 0 0.75rem' }}>
-                      NextVault provides dual-engine autofill: a resilient floating overlay for Google Chrome, Brave, Firefox &amp; Edge, plus standard Android system autofill.
+                      Uses the official Android Autofill Framework with inline keyboard suggestions (Gboard, Samsung Keyboard, SwiftKey). No accessibility service or restricted setting errors required!
                     </p>
 
-                    {/* Section 1: Accessibility Overlay (Bitdefender/Bitwarden-style floating pill) */}
+                    {/* Step 1: Android System Autofill Service */}
                     <div style={{ background: 'var(--nv-bg-2)', padding: '0.75rem', borderRadius: 'var(--nv-radius-sm)', border: '1px solid var(--nv-border)', marginBottom: '0.75rem' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-                        <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#fff' }}>🛡️ Chrome &amp; Browser Overlay Service:</div>
-                        <span className={`nv-badge ${a11yEnabled ? 'success' : 'warning'}`}>
-                          {a11yEnabled ? 'Active' : 'Setup Required'}
+                        <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#fff' }}>1. System Autofill Provider:</div>
+                        <span className={`nv-badge ${sysAutofillEnabled ? 'success' : 'warning'}`}>
+                          {sysAutofillEnabled ? '✓ Enabled' : 'Not Set'}
                         </span>
                       </div>
                       <p style={{ fontSize: '0.72rem', color: 'var(--nv-text-secondary)', margin: '0 0 0.5rem', lineHeight: '1.45' }}>
-                        Operates on top of Google Chrome and all mobile browsers. When focusing a login textbox, a floating glassmorphic NexVault pill appears to fill credentials in one tap.
+                        Powers inline autofill chips directly above your keyboard and in app dropdowns across all native Android applications.
                       </p>
-                      <div style={{ fontSize: '0.70rem', color: '#00ff9d', marginBottom: '0.6rem' }}>
-                        🔒 <strong>Strict Field Filter:</strong> Only detects username, email, and password textboxes. Addresses, zip codes, and search bars are strictly excluded.
-                      </div>
-                      {/* Android 13/14+ Restricted Settings Callout */}
-                      {!a11yEnabled && (
-                        <div style={{ background: 'rgba(234, 179, 8, 0.08)', border: '1px solid rgba(234, 179, 8, 0.3)', borderRadius: 'var(--nv-radius-sm)', padding: '0.65rem 0.75rem', margin: '0.65rem 0' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, color: '#facc15', fontSize: '0.74rem', marginBottom: '0.25rem' }}>
-                            <span>⚠️</span>
-                            <span>Android 13 / 14 "Restricted Setting" Fix:</span>
-                          </div>
-                          <p style={{ fontSize: '0.70rem', color: 'var(--nv-text-secondary)', margin: '0 0 0.5rem', lineHeight: '1.4' }}>
-                            If Android shows <em>"For your security, this setting is currently unavailable"</em> when trying to enable the overlay, Google restricts sideloaded APKs until unlocked in App Info.
-                          </p>
-                          <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
-                            <button
-                              className="nv-btn nv-btn-sm"
-                              style={{ background: '#f59e0b', color: '#000', fontWeight: 700, fontSize: '0.7rem', padding: '0.3rem 0.6rem' }}
-                              onClick={async () => {
-                                await openAppDetailsSettings();
-                                showToast('Tap (⋮) top-right -> "Allow restricted settings"');
-                              }}
-                            >
-                              🔓 1. Open App Info to Allow Restricted Settings
-                            </button>
-                            <button
-                              className="nv-btn nv-btn-ghost nv-btn-sm"
-                              style={{ fontSize: '0.7rem', padding: '0.3rem 0.6rem' }}
-                              onClick={() => setShowRestrictedGuide(true)}
-                            >
-                              📖 Step-by-Step Guide
-                            </button>
-                          </div>
-                        </div>
-                      )}
-
-                      <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
-                        <button className="nv-btn nv-btn-accent nv-btn-sm" onClick={async () => {
-                          await openAccessibilitySettings();
-                          showToast('Enable "NexVault Autofill Overlay" under Downloaded Apps');
-                        }}>
-                          ⚙️ {a11yEnabled ? 'Configure Accessibility Service' : '2. Enable Overlay in Accessibility'}
-                        </button>
-                        <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={() => setShowRestrictedGuide(true)}>
-                          🔓 Fix Restricted Setting
-                        </button>
-                      </div>
-                    </div>
-                    
-                    {/* Section 2: Standard Android Autofill Framework */}
-                    <div style={{ background: 'var(--nv-bg-2)', padding: '0.75rem', borderRadius: 'var(--nv-radius-sm)', border: '1px solid var(--nv-border)', marginBottom: '0.75rem' }}>
-                      <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#fff', marginBottom: '0.35rem' }}>📱 Standard Android Autofill Framework:</div>
-                      <ol style={{ fontSize: '0.72rem', color: 'var(--nv-text-secondary)', margin: '0 0 0.5rem', paddingLeft: '1.2rem', lineHeight: '1.5' }}>
-                        <li>Tap <strong>"Open Autofill Settings"</strong> below and set NexVault as default autofill service.</li>
-                        <li>Tap <strong>"Sync Vault to Native Keystore"</strong> below to prime stored logins into Android KeyStore.</li>
-                      </ol>
                       <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                        <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={openAutofillSettings}>
-                          ⚙️ Open Android Autofill Settings
+                        <button className="nv-btn nv-btn-accent nv-btn-sm" onClick={openAutofillSettings}>
+                          ⚙️ Set NexVault as Autofill Service
                         </button>
                         <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={async () => {
                           const st = (window as any).nexVault?.loadVault?.();
                           if (st) {
                             await syncAutofillCredentials(st.passwords);
-                            showToast('Synced vault credentials to Android native keystore!');
+                            showToast('Synced vault credentials to Android hardware keystore!');
                           }
                         }}>
-                          🔄 Sync Vault to Native Keystore
+                          🔄 Sync Keystore
                         </button>
                       </div>
                     </div>
+
+                    {/* Step 2: Google Chrome Integration (1Password Handshake) */}
+                    <div style={{ background: 'var(--nv-bg-2)', padding: '0.75rem', borderRadius: 'var(--nv-radius-sm)', border: '1px solid var(--nv-border)', marginBottom: '0.75rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                        <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#fff' }}>2. Google Chrome 3rd-Party Handshake:</div>
+                        <span className="nv-badge" style={{ background: 'var(--nv-accent)', color: '#fff' }}>1Password Method</span>
+                      </div>
+                      <p style={{ fontSize: '0.72rem', color: 'var(--nv-text-secondary)', margin: '0 0 0.5rem', lineHeight: '1.45' }}>
+                        Like 1Password, Google Chrome requires enabling third-party password managers in its internal settings:
+                      </p>
+                      <ol style={{ fontSize: '0.72rem', color: 'var(--nv-text-secondary)', margin: '0 0 0.65rem', paddingLeft: '1.2rem', lineHeight: '1.5' }}>
+                        <li>Tap <strong>"Open Google Chrome"</strong> below.</li>
+                        <li>In Chrome, tap the <strong>three dots (⋮)</strong> top-right &gt; <strong>Settings</strong>.</li>
+                        <li>Tap <strong>"Autofill services"</strong> and select <strong>"Autofill using another service"</strong>.</li>
+                        <li>Tap <strong>"Restart Chrome"</strong> to apply.</li>
+                      </ol>
+                      <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                        <button className="nv-btn nv-btn-sm" style={{ background: '#3b82f6', color: '#fff', fontWeight: 600 }} onClick={openChrome}>
+                          🚀 Open Google Chrome
+                        </button>
+                        <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={() => {
+                          if (navigator?.clipboard) {
+                            navigator.clipboard.writeText('chrome://flags#enable-autofill-virtual-view-structure');
+                            showToast('Copied Chrome Flag URL to clipboard! Paste in Chrome address bar.');
+                          }
+                        }}>
+                          📋 Copy Chrome Flag URL
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Step 3: Other Browsers Notice */}
+                    <div style={{ background: 'rgba(16, 185, 129, 0.05)', padding: '0.65rem', borderRadius: 'var(--nv-radius-sm)', border: '1px solid rgba(16, 185, 129, 0.2)', marginBottom: '0.75rem' }}>
+                      <div style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--nv-primary)', marginBottom: '0.2rem' }}>
+                        🌐 Other Browsers &amp; Native Apps:
+                      </div>
+                      <p style={{ fontSize: '0.70rem', color: 'var(--nv-text-secondary)', margin: 0, lineHeight: '1.4' }}>
+                        <strong>Firefox, Brave, Microsoft Edge, Opera, Samsung Internet</strong>, and all native apps support NexVault out of the box with zero extra setup!
+                      </p>
+                    </div>
+
+                    {/* Step 4: Optional Floating Pill Overlay */}
+                    <details style={{ fontSize: '0.74rem', color: 'var(--nv-muted)' }}>
+                      <summary style={{ cursor: 'pointer', fontWeight: 600, color: '#fff', padding: '0.3rem 0' }}>
+                        Optional: Floating Screen Overlay (Legacy WebViews)
+                      </summary>
+                      <div style={{ marginTop: '0.5rem', padding: '0.65rem', background: 'var(--nv-bg-2)', borderRadius: 'var(--nv-radius-sm)', border: '1px solid var(--nv-border)' }}>
+                        <p style={{ fontSize: '0.70rem', color: 'var(--nv-text-secondary)', margin: '0 0 0.5rem', lineHeight: '1.4' }}>
+                          If an obscure app or webview does not support Android Autofill, you can optionally enable the floating pill overlay.
+                        </p>
+                        <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                          <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={async () => {
+                            await openAccessibilitySettings();
+                            showToast('Enable "NexVault Autofill Overlay" under Downloaded Apps');
+                          }}>
+                            ⚙️ {a11yEnabled ? 'Configure Overlay' : 'Enable Overlay in Accessibility'}
+                          </button>
+                          <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={() => setShowRestrictedGuide(true)}>
+                            🔓 Fix Restricted Setting
+                          </button>
+                        </div>
+                      </div>
+                    </details>
                   </Card>
 
                   {/* Inactivity Auto-Lock Setting Card */}

@@ -71,38 +71,35 @@ public class NexVaultAutofillService extends AutofillService {
             JSONArray credentials = new JSONArray(NativeCredentialStore.read(this));
             FillResponse.Builder response = new FillResponse.Builder();
             boolean matched = false;
+            int matchedCount = 0;
+
             for (int i = 0; i < credentials.length(); i++) {
                 JSONObject credential = credentials.getJSONObject(i);
                 String service = credential.optString("service");
                 if (!matches(domain, service)) continue;
 
-                Dataset.Builder dataset = new Dataset.Builder(presentation(service, credential.optString("username")));
-                for (Field field : fields) {
-                    String value = field.password ? credential.optString("password") : credential.optString("username");
-                    if (!value.isEmpty()) dataset.setValue(field.id, AutofillValue.forText(value));
-                }
+                Dataset.Builder dataset = createDataset(service, credential.optString("username"), credential.optString("password"), fields, request, matchedCount);
                 response.addDataset(dataset.build());
                 matched = true;
+                matchedCount++;
             }
 
-            if (!matched && isBrowserPackage(domain) && credentials.length() == 1) {
-                JSONObject credential = credentials.getJSONObject(0);
-                Dataset.Builder dataset = new Dataset.Builder(
-                    presentation(credential.optString("service", "Saved login"), credential.optString("username")));
-                for (Field field : fields) {
-                    String value = field.password ? credential.optString("password") : credential.optString("username");
-                    if (!value.isEmpty()) dataset.setValue(field.id, AutofillValue.forText(value));
+            // 1Password Fallback Method:
+            // If domain did not match any stored entry directly, or in browsers where URL isn't surfaced,
+            // provide up to 5 saved credentials so the user can easily select their account in one tap.
+            if (!matched && credentials.length() > 0) {
+                int limit = Math.min(credentials.length(), 5);
+                for (int i = 0; i < limit; i++) {
+                    JSONObject credential = credentials.getJSONObject(i);
+                    String service = credential.optString("service", "Saved Login");
+                    Dataset.Builder dataset = createDataset(service, credential.optString("username"), credential.optString("password"), fields, request, i);
+                    response.addDataset(dataset.build());
+                    matched = true;
                 }
-                response.addDataset(dataset.build());
-                matched = true;
             }
 
             if (passwordFocused) {
-                Dataset.Builder generator = new Dataset.Builder(presentation("NEXVAULT", "Generate strong password"));
-                String generated = generatePassword();
-                for (Field field : fields) {
-                    if (field.password) generator.setValue(field.id, AutofillValue.forText(generated));
-                }
+                Dataset.Builder generator = createGeneratorDataset(fields, request);
                 response.addDataset(generator.build());
                 matched = true;
 
@@ -120,15 +117,81 @@ public class NexVaultAutofillService extends AutofillService {
         }
     }
 
+    private Dataset.Builder createDataset(String service, String username, String password, List<Field> fields, FillRequest request, int index) {
+        RemoteViews rv = presentation(service, username);
+        Dataset.Builder dataset = new Dataset.Builder(rv);
+
+        for (Field field : fields) {
+            String value = field.password ? password : username;
+            if (!value.isEmpty()) {
+                dataset.setValue(field.id, AutofillValue.forText(value));
+            }
+        }
+
+        // Attach modern keyboard inline suggestion chip (Gboard, Samsung Keyboard, SwiftKey)
+        attachInlinePresentation(dataset, service, username, request, index);
+
+        return dataset;
+    }
+
+    private Dataset.Builder createGeneratorDataset(List<Field> fields, FillRequest request) {
+        RemoteViews rv = presentation("NEXVAULT", "⚡ Generate strong password");
+        Dataset.Builder dataset = new Dataset.Builder(rv);
+        String generated = generatePassword();
+
+        for (Field field : fields) {
+            if (field.password) {
+                dataset.setValue(field.id, AutofillValue.forText(generated));
+            }
+        }
+
+        attachInlinePresentation(dataset, "⚡ Generate Password", "NexVault", request, 99);
+        return dataset;
+    }
+
+    private void attachInlinePresentation(Dataset.Builder dataset, String title, String subtitle, FillRequest request, int index) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && request != null) {
+            try {
+                android.view.inputmethod.InlineSuggestionsRequest inlineRequest = request.getInlineSuggestionsRequest();
+                if (inlineRequest != null) {
+                    List<android.view.inputmethod.InlinePresentationSpec> specs = inlineRequest.getInlinePresentationSpecs();
+                    if (specs != null && !specs.isEmpty()) {
+                        android.view.inputmethod.InlinePresentationSpec spec = specs.get(Math.min(index, specs.size() - 1));
+                        android.net.Uri uri = android.net.Uri.parse("content://com.nexvault.app.autofill/" + System.currentTimeMillis() + "/" + index);
+                        android.app.slice.Slice.Builder sliceBuilder = new android.app.slice.Slice.Builder(uri, new android.app.slice.SliceSpec("inline", 1));
+
+                        String displayTitle = (subtitle != null && !subtitle.isEmpty()) ? subtitle : title;
+                        String displaySub = (subtitle != null && !subtitle.isEmpty()) ? title : "NexVault";
+
+                        sliceBuilder.addText(displayTitle, "title", java.util.Collections.singletonList("title"));
+                        if (displaySub != null && !displaySub.isEmpty()) {
+                            sliceBuilder.addText(displaySub, "subtitle", java.util.Collections.singletonList("subtitle"));
+                        }
+
+                        android.service.autofill.InlinePresentation inlinePresentation =
+                            new android.service.autofill.InlinePresentation(sliceBuilder.build(), spec, false);
+                        dataset.setInlinePresentation(inlinePresentation);
+                    }
+                }
+            } catch (Throwable ignored) {
+                // Inline chip not supported by active keyboard; standard RemoteViews dropdown remains active
+            }
+        }
+    }
+
     private String collectFields(AssistStructure.ViewNode node, List<Field> fields) {
         String domain = normalize(node.getWebDomain());
 
-        // Check for URL address bar in Chrome/Chromium and other browsers
+        // Check for URL address bar in Chrome/Chromium, Firefox, Brave, Edge, and other browsers
         String idEntry = node.getIdEntry();
         if (domain.isEmpty() && idEntry != null) {
             String lowerId = idEntry.toLowerCase(Locale.ROOT);
-            if (lowerId.contains("url_bar") || lowerId.contains("location_bar") || lowerId.contains("search_box")) {
+            if (lowerId.contains("url_bar") || lowerId.contains("location_bar") 
+                || lowerId.contains("search_box") || lowerId.contains("omnibox") 
+                || lowerId.contains("address_bar") || lowerId.contains("toolbar")
+                || lowerId.contains("mozac_browser_toolbar_url_view")) {
                 CharSequence text = node.getText();
+                if (text == null || text.length() == 0) text = node.getContentDescription();
                 if (text != null && text.length() > 0) {
                     String urlCandidate = normalize(text.toString());
                     if (!urlCandidate.isEmpty() && urlCandidate.contains(".")) {
@@ -272,6 +335,18 @@ public class NexVaultAutofillService extends AutofillService {
                 || normDomain.contains(stemService)
                 || normService.contains(stemDomain)) {
                 return true;
+            }
+        }
+
+        // 3. Package segment matching for native Android applications (e.g. "com.spotify.music" -> "spotify")
+        if (normDomain.contains(".")) {
+            String[] segments = normDomain.split("\\.");
+            for (String segment : segments) {
+                if (segment.length() > 2
+                    && !segment.equals("com") && !segment.equals("android") && !segment.equals("app") && !segment.equals("org") && !segment.equals("google")
+                    && (segment.equalsIgnoreCase(stemService) || segment.contains(stemService) || stemService.contains(segment))) {
+                    return true;
+                }
             }
         }
 

@@ -155,6 +155,19 @@ public class AutofillBridgePlugin extends Plugin {
     }
 
     @PluginMethod
+    public void openChrome(PluginCall call) {
+        try {
+            Intent intent = getContext().getPackageManager().getLaunchIntentForPackage("com.android.chrome");
+            if (intent == null) {
+                intent = new Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://google.com"));
+            }
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(intent);
+        } catch (Exception ignored) {}
+        call.resolve();
+    }
+
+    @PluginMethod
     public void setSecureWindow(PluginCall call) {
         boolean enable = call.getBoolean("enable", true);
         if (getActivity() != null) {
