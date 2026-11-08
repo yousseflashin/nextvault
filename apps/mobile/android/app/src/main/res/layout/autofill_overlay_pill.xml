@@ -9,13 +9,16 @@
     android:clickable="true"
     android:focusable="true">
 
-    <TextView
+    <ImageView
         android:id="@+id/overlay_icon"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="🛡️"
-        android:textSize="16sp"
-        android:layout_marginEnd="8dp" />
+        android:layout_width="28dp"
+        android:layout_height="28dp"
+        android:background="@drawable/autofill_icon_badge"
+        android:padding="5dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/ic_nexvault_generator"
+        android:contentDescription="NexVault"
+        android:layout_marginEnd="10dp" />
 
     <LinearLayout
         android:id="@+id/overlay_text_container"
@@ -38,7 +41,7 @@
             android:id="@+id/overlay_subtitle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Autofill credentials"
+            android:text="Generate Strong Password"
             android:textColor="#94A3B8"
             android:textSize="11sp"
             android:maxLines="1"

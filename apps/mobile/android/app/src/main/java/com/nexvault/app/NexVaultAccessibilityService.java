@@ -11,10 +11,12 @@ import android.os.Handler;
 import android.os.Looper;
 import android.view.Gravity;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
+import android.widget.ImageView;
 import android.widget.TextView;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -227,6 +229,9 @@ public class NexVaultAccessibilityService extends AccessibilityService {
         if (matchingCreds.isEmpty() && isBrowser && extractBrowserDomain().isEmpty()) {
             matchingCreds = findSingleBrowserCredential();
         }
+        Rect nodeBounds = new Rect();
+        node.getBoundsInScreen(nodeBounds);
+
         if (!matchingCreds.isEmpty()) {
             final String resolvedDomain = targetDomain;
             JSONObject topCred = matchingCreds.get(0);
@@ -234,14 +239,14 @@ public class NexVaultAccessibilityService extends AccessibilityService {
             String username = topCred.optString("username", "");
             String password = topCred.optString("password", "");
 
-            showOverlay(serviceName, username, (view) -> {
+            showOverlay(serviceName, username, false, nodeBounds, (view) -> {
                 performAutofill(resolvedDomain, username, password, isPass);
                 hideOverlay();
             });
         } else if (isPass) {
-            // Option to generate strong password
-            showOverlay(targetDomain, "Generate Strong Password", (view) -> {
-                String generated = generateStrongPassword(20);
+            // Option to generate strong password anchored relative to this password field
+            showOverlay(targetDomain, "⚡ Generate Strong Password", true, nodeBounds, (view) -> {
+                String generated = generateStrongPassword(24);
                 fillNodeText(node, generated);
                 hideOverlay();
             });
@@ -523,37 +528,99 @@ public class NexVaultAccessibilityService extends AccessibilityService {
         node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments);
     }
 
-    private void showOverlay(String title, String subtitle, View.OnClickListener onAutofillClick) {
+    private void showOverlay(String title, String subtitle, boolean isGenerator, Rect nodeBounds, View.OnClickListener onAutofillClick) {
         mainHandler.post(() -> {
             try {
                 if (overlayView == null) {
                     LayoutInflater inflater = LayoutInflater.from(this);
                     overlayView = inflater.inflate(R.layout.autofill_overlay_pill, null);
+                    setupDraggableOverlay();
                 }
 
+                ImageView iconIv = overlayView.findViewById(R.id.overlay_icon);
                 TextView titleTv = overlayView.findViewById(R.id.overlay_title);
                 TextView subtitleTv = overlayView.findViewById(R.id.overlay_subtitle);
                 View closeBtn = overlayView.findViewById(R.id.overlay_close);
 
-                titleTv.setText("NEXVAULT  •  " + title);
-                subtitleTv.setText(subtitle);
+                if (isGenerator) {
+                    if (iconIv != null) iconIv.setImageResource(R.drawable.ic_nexvault_generator);
+                    titleTv.setText("Generate Strong Password");
+                    subtitleTv.setText(subtitle.isEmpty() ? "⚡ 24-char cryptographic password" : subtitle);
+                } else {
+                    if (iconIv != null) iconIv.setImageResource(R.drawable.ic_nexvault_key);
+                    titleTv.setText("NEXVAULT  •  " + title);
+                    subtitleTv.setText(subtitle.isEmpty() ? "Autofill credentials" : subtitle);
+                }
 
                 overlayView.setOnClickListener(onAutofillClick);
                 closeBtn.setOnClickListener((v) -> hideOverlay());
 
-                if (!isOverlayShowing) {
-                    WindowManager.LayoutParams params = new WindowManager.LayoutParams(
+                // Calculate relative position based on the focused input field bounds
+                android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
+                int screenWidth = dm.widthPixels;
+                int screenHeight = dm.heightPixels;
+
+                overlayView.measure(
+                    View.MeasureSpec.makeMeasureSpec(screenWidth, View.MeasureSpec.AT_MOST),
+                    View.MeasureSpec.makeMeasureSpec(screenHeight, View.MeasureSpec.AT_MOST)
+                );
+                int pillWidth = overlayView.getMeasuredWidth();
+                int pillHeight = overlayView.getMeasuredHeight();
+                if (pillWidth <= 0) pillWidth = dpToPx(240);
+                if (pillHeight <= 0) pillHeight = dpToPx(48);
+
+                int margin = dpToPx(8);
+                int targetX;
+                int targetY;
+
+                if (nodeBounds != null && nodeBounds.width() > 0 && nodeBounds.height() > 0) {
+                    // Position vertically: prefer directly ABOVE the field so soft keyboard does not cover it
+                    if (nodeBounds.top >= pillHeight + margin + dpToPx(36)) {
+                        targetY = nodeBounds.top - pillHeight - margin;
+                    } else {
+                        // Near the top of the screen: position directly BELOW the field
+                        targetY = nodeBounds.bottom + margin;
+                    }
+
+                    // Position horizontally: align with the start of the field
+                    targetX = nodeBounds.left;
+                } else {
+                    targetX = (screenWidth - pillWidth) / 2;
+                    targetY = screenHeight / 3;
+                }
+
+                // Clamp to safe screen margins
+                int minX = dpToPx(12);
+                int maxX = Math.max(minX, screenWidth - pillWidth - dpToPx(12));
+                if (targetX < minX) targetX = minX;
+                if (targetX > maxX) targetX = maxX;
+
+                int minY = dpToPx(36); // below status bar
+                int maxY = Math.max(minY, screenHeight - pillHeight - dpToPx(96)); // above nav bar
+                if (targetY < minY) targetY = minY;
+                if (targetY > maxY) targetY = maxY;
+
+                WindowManager.LayoutParams params;
+                if (!isOverlayShowing || overlayView.getParent() == null) {
+                    params = new WindowManager.LayoutParams(
                         WindowManager.LayoutParams.WRAP_CONTENT,
                         WindowManager.LayoutParams.WRAP_CONTENT,
                         WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
                         WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                         PixelFormat.TRANSLUCENT
                     );
-                    params.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-                    params.y = dpToPx(72); // Floating neatly above typical navigation / keyboard bar
+                    params.gravity = Gravity.TOP | Gravity.START;
+                    params.x = targetX;
+                    params.y = targetY;
 
                     windowManager.addView(overlayView, params);
                     isOverlayShowing = true;
+                } else {
+                    params = (WindowManager.LayoutParams) overlayView.getLayoutParams();
+                    params.gravity = Gravity.TOP | Gravity.START;
+                    params.x = targetX;
+                    params.y = targetY;
+                    windowManager.updateViewLayout(overlayView, params);
                 }
 
                 // Schedule auto dismiss in 12 seconds
@@ -564,6 +631,51 @@ public class NexVaultAccessibilityService extends AccessibilityService {
                 mainHandler.postDelayed(autoDismissRunnable, 12000);
 
             } catch (Exception ignored) {}
+        });
+    }
+
+    private void setupDraggableOverlay() {
+        if (overlayView == null) return;
+        overlayView.setOnTouchListener(new View.OnTouchListener() {
+            private int initialX;
+            private int initialY;
+            private float initialTouchX;
+            private float initialTouchY;
+            private boolean isDragging = false;
+
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                if (overlayView == null || overlayView.getLayoutParams() == null) return false;
+                WindowManager.LayoutParams lp = (WindowManager.LayoutParams) overlayView.getLayoutParams();
+
+                switch (event.getAction()) {
+                    case MotionEvent.ACTION_DOWN:
+                        initialX = lp.x;
+                        initialY = lp.y;
+                        initialTouchX = event.getRawX();
+                        initialTouchY = event.getRawY();
+                        isDragging = false;
+                        return false;
+                    case MotionEvent.ACTION_MOVE:
+                        float dx = event.getRawX() - initialTouchX;
+                        float dy = event.getRawY() - initialTouchY;
+                        if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+                            isDragging = true;
+                        }
+                        if (isDragging) {
+                            lp.x = initialX + (int) dx;
+                            lp.y = initialY + (int) dy;
+                            try {
+                                windowManager.updateViewLayout(overlayView, lp);
+                            } catch (Exception ignored) {}
+                            return true;
+                        }
+                        return false;
+                    case MotionEvent.ACTION_UP:
+                        return isDragging;
+                }
+                return false;
+            }
         });
     }
 
