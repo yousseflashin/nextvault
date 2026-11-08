@@ -20,11 +20,54 @@ import android.util.Pair;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 public class NexVaultAutofillService extends AutofillService {
     private static final String PREFS = "nexvault_autofill";
+
+    private static final Set<String> EXCLUDED_PACKAGES = new HashSet<>(Arrays.asList(
+        // Messaging & Chat applications (must NEVER trigger autofill or save on chat boxes)
+        "com.whatsapp",
+        "com.whatsapp.w4b",
+        "org.telegram.messenger",
+        "org.telegram.messenger.web",
+        "org.thoughtcrime.securesms", // Signal
+        "com.facebook.orca",          // Facebook Messenger
+        "com.facebook.mlite",
+        "com.google.android.apps.messaging", // SMS
+        "com.samsung.android.messaging",
+        "com.discord",
+        "com.slack",
+        "com.viber.voip",
+        "com.skype.raider",
+        "com.google.android.talk",
+        "com.snapchat.android",
+        // System tools, utilities, launchers
+        "com.google.android.googlequicksearchbox",
+        "com.google.android.dialer",
+        "com.android.dialer",
+        "com.samsung.android.dialer",
+        "com.android.calculator2",
+        "com.google.android.calculator",
+        "com.google.android.keep",
+        "com.google.android.calendar",
+        "com.google.android.apps.maps",
+        "com.google.android.youtube",
+        "com.android.systemui",
+        "com.android.settings"
+    ));
+
+    private boolean isExcludedPackage(String pkg) {
+        if (pkg == null || pkg.isEmpty()) return false;
+        String lower = pkg.toLowerCase(Locale.ROOT);
+        if (EXCLUDED_PACKAGES.contains(lower)) return true;
+        if (lower.contains("launcher") || lower.contains("inputmethod") || lower.contains("keyboard")) return true;
+        return false;
+    }
 
     @Override
     public void onFillRequest(FillRequest request, CancellationSignal cancellationSignal, FillCallback callback) {
@@ -36,6 +79,15 @@ public class NexVaultAutofillService extends AutofillService {
             }
 
             AssistStructure structure = contexts.get(contexts.size() - 1).getStructure();
+            ComponentName activity = structure.getActivityComponent();
+            String activityPackage = activity != null ? activity.getPackageName() : "";
+
+            // Strict protection: completely silence autofill in chat, messaging, and system utility apps
+            if (isExcludedPackage(activityPackage)) {
+                callback.onSuccess(null);
+                return;
+            }
+
             List<Field> fields = new ArrayList<>();
             String domain = "";
 
@@ -50,8 +102,17 @@ public class NexVaultAutofillService extends AutofillService {
                 }
             }
 
-            // Post-process fields: if a form has a password field and an editable field before it
-            // without an explicit username classification, treat the prior field as username.
+            // Check if there is an actual password field
+            boolean hasActualPassword = false;
+            for (Field f : fields) {
+                if (f.password) {
+                    hasActualPassword = true;
+                    break;
+                }
+            }
+
+            // Post-process fields: ONLY if an actual password field is present on the screen,
+            // an editable field immediately preceding the password can be treated as username.
             boolean hasUsername = false;
             for (Field f : fields) {
                 if (f.username) {
@@ -59,23 +120,24 @@ public class NexVaultAutofillService extends AutofillService {
                     break;
                 }
             }
-            if (!hasUsername) {
+            if (!hasUsername && hasActualPassword) {
                 for (int i = 0; i < fields.size(); i++) {
                     if (fields.get(i).password && i > 0) {
                         fields.get(i - 1).username = true;
+                        hasUsername = true;
                         break;
                     }
                 }
             }
             fields.removeIf(field -> !field.password && !field.username);
 
-            // Fallback for native apps: use the hosting activity package name as service identifier
-            if (domain.isEmpty()) {
-                ComponentName activity = structure.getActivityComponent();
-                if (activity != null) domain = activity.getPackageName();
+            // Fallback for native apps: use hosting activity package name
+            if (domain.isEmpty() && activity != null) {
+                domain = activity.getPackageName();
             }
 
-            if (fields.isEmpty()) {
+            // If no password or username fields are found, do not trigger autofill
+            if (fields.isEmpty() || (!hasActualPassword && !hasUsername)) {
                 callback.onSuccess(null);
                 return;
             }
@@ -83,6 +145,7 @@ public class NexVaultAutofillService extends AutofillService {
             JSONArray credentials = new JSONArray(NativeCredentialStore.read(this));
             FillResponse.Builder response = new FillResponse.Builder();
             boolean matched = false;
+            boolean hasDatasets = false;
 
             // 1. Direct domain match
             for (int i = 0; i < credentials.length(); i++) {
@@ -93,54 +156,48 @@ public class NexVaultAutofillService extends AutofillService {
                 Dataset.Builder dataset = createDataset(service, credential.optString("username"), credential.optString("password"), fields);
                 response.addDataset(dataset.build());
                 matched = true;
+                hasDatasets = true;
             }
 
             // 2. 1Password Fallback Method:
-            // If domain did not match any stored entry directly, or inside browsers where domain is not exposed,
-            // provide up to 10 saved credentials so the user can easily select their account in one tap.
-            if ((!matched || isBrowserPackage(domain)) && credentials.length() > 0) {
+            // Only offer fallback credentials inside browsers when a credential field is present,
+            // or in native apps that are not excluded.
+            if (!matched && (hasActualPassword || hasUsername) && credentials.length() > 0 && !isExcludedPackage(domain)) {
                 int limit = Math.min(credentials.length(), 10);
                 for (int i = 0; i < limit; i++) {
                     JSONObject credential = credentials.getJSONObject(i);
                     String service = credential.optString("service", "Saved Login");
                     Dataset.Builder dataset = createDataset(service, credential.optString("username"), credential.optString("password"), fields);
                     response.addDataset(dataset.build());
-                    matched = true;
+                    hasDatasets = true;
                 }
             }
 
-            // 3. Always provide "⚡ Generate strong password" dataset whenever password field is present
-            Dataset.Builder generator = createGeneratorDataset(fields);
-            response.addDataset(generator.build());
+            // 3. ONLY provide "⚡ Generate strong password" dataset if an actual password field exists!
+            if (hasActualPassword) {
+                Dataset.Builder generator = createGeneratorDataset(fields);
+                response.addDataset(generator.build());
+                hasDatasets = true;
+            }
 
-            // 4. Always configure SaveInfo so Android prompts to save credentials upon form submit
-            List<AutofillId> allIds = new ArrayList<>();
+            // 4. ONLY configure SaveInfo if an actual password field exists on the screen!
+            // This completely eliminates false-positive save popups on search bars, notes, and messages.
             List<AutofillId> passwordIds = new ArrayList<>();
             List<AutofillId> usernameIds = new ArrayList<>();
 
             for (Field field : fields) {
-                allIds.add(field.id);
                 if (field.password) passwordIds.add(field.id);
                 if (field.username) usernameIds.add(field.id);
             }
 
-            if (!allIds.isEmpty()) {
+            if (hasActualPassword && !passwordIds.isEmpty()) {
                 int saveType = SaveInfo.SAVE_DATA_TYPE_PASSWORD;
                 if (!usernameIds.isEmpty()) {
                     saveType |= SaveInfo.SAVE_DATA_TYPE_USERNAME;
                 }
 
-                AutofillId[] requiredIds;
-                AutofillId[] optionalIds = null;
-
-                if (!passwordIds.isEmpty()) {
-                    requiredIds = passwordIds.toArray(new AutofillId[0]);
-                    if (!usernameIds.isEmpty()) {
-                        optionalIds = usernameIds.toArray(new AutofillId[0]);
-                    }
-                } else {
-                    requiredIds = allIds.toArray(new AutofillId[0]);
-                }
+                AutofillId[] requiredIds = passwordIds.toArray(new AutofillId[0]);
+                AutofillId[] optionalIds = !usernameIds.isEmpty() ? usernameIds.toArray(new AutofillId[0]) : null;
 
                 SaveInfo.Builder saveInfoBuilder = new SaveInfo.Builder(saveType, requiredIds);
                 if (optionalIds != null && optionalIds.length > 0) {
@@ -152,14 +209,18 @@ public class NexVaultAutofillService extends AutofillService {
                 response.setSaveInfo(saveInfoBuilder.build());
             }
 
-            callback.onSuccess(response.build());
+            if (hasDatasets) {
+                callback.onSuccess(response.build());
+            } else {
+                callback.onSuccess(null);
+            }
         } catch (Exception error) {
             callback.onFailure("NexVault autofill is unavailable");
         }
     }
 
     private Dataset.Builder createDataset(String service, String username, String password, List<Field> fields) {
-        RemoteViews rv = presentation(service, username);
+        RemoteViews rv = presentation(service, username, false);
         Dataset.Builder dataset = new Dataset.Builder(rv);
 
         for (Field field : fields) {
@@ -175,7 +236,7 @@ public class NexVaultAutofillService extends AutofillService {
     }
 
     private Dataset.Builder createGeneratorDataset(List<Field> fields) {
-        RemoteViews rv = presentation("NEXVAULT", "⚡ Generate strong password");
+        RemoteViews rv = presentation("NexVault", "Generate Strong Password", true);
         Dataset.Builder dataset = new Dataset.Builder(rv);
         String generated = generatePassword();
 
@@ -216,6 +277,29 @@ public class NexVaultAutofillService extends AutofillService {
             }
         }
 
+        int inputType = node.getInputType();
+
+        // 1. Skip multi-line inputs (chat messages in WhatsApp, comments, bio, notes)
+        if ((inputType & 0x00020000) != 0 || (inputType & 0x00040000) != 0) {
+            for (int i = 0; i < node.getChildCount(); i++) {
+                String childDomain = collectFields(node.getChildAt(i), fields);
+                if (domain.isEmpty() && !childDomain.isEmpty()) domain = childDomain;
+            }
+            return domain;
+        }
+
+        // 2. Skip HTML textarea elements
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && node.getHtmlInfo() != null) {
+            String tag = node.getHtmlInfo().getTag();
+            if ("textarea".equalsIgnoreCase(tag)) {
+                for (int i = 0; i < node.getChildCount(); i++) {
+                    String childDomain = collectFields(node.getChildAt(i), fields);
+                    if (domain.isEmpty() && !childDomain.isEmpty()) domain = childDomain;
+                }
+                return domain;
+            }
+        }
+
         String[] hints = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ? node.getAutofillHints() : null;
         String hintText = hints == null ? "" : String.join(" ", hints).toLowerCase(Locale.ROOT);
 
@@ -229,7 +313,7 @@ public class NexVaultAutofillService extends AutofillService {
         boolean password = false;
         boolean username = false;
 
-        // 1. Inspect HTML Info if available (Chrome and WebViews)
+        // 3. Inspect HTML Info if available (Chrome and WebViews)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && node.getHtmlInfo() != null) {
             try {
                 android.view.ViewStructure.HtmlInfo htmlInfo = node.getHtmlInfo();
@@ -257,8 +341,7 @@ public class NexVaultAutofillService extends AutofillService {
             } catch (Exception ignored) {}
         }
 
-        // 2. Inspect Android InputType
-        int inputType = node.getInputType();
+        // 4. Inspect Android InputType
         int variation = inputType & 0x00000ff0;
         if (variation == 0x80 || variation == 0x90 || variation == 0xe0 || variation == 0x10 || (inputType & 0x00000081) != 0) {
             password = true;
@@ -267,22 +350,19 @@ public class NexVaultAutofillService extends AutofillService {
             username = true;
         }
 
-        // 3. Inspect AutofillHints
+        // 5. Inspect AutofillHints
         if (hintText.contains("password")) password = true;
         if (hintText.contains("username") || hintText.contains("email") || hintText.contains("login") || hintText.contains("user")) username = true;
 
-        // 4. Inspect field name probe
+        // 6. Inspect field name probe
         if (fieldName.matches(".*\\b(pass|password|passwd|pwd|secret)\\b.*")) password = true;
-        if (fieldName.matches(".*\\b(user|username|email|login|account|identifier|userid)\\b.*")) username = true;
+        if (fieldName.matches(".*\\b(user|username|email|login|account|identifier|userid|user id)\\b.*")) username = true;
 
         if (password) username = false;
 
-        if (!blacklisted && node.getAutofillId() != null) {
-            boolean isEditableText = (inputType & 0x0000000f) == 1
-                || (node.getClassName() != null && node.getClassName().contains("EditText"));
-            if (password || username || isEditableText) {
-                fields.add(new Field(node.getAutofillId(), password, username, node.isFocused()));
-            }
+        // Add ONLY verified credential fields
+        if (!blacklisted && node.getAutofillId() != null && (password || username)) {
+            fields.add(new Field(node.getAutofillId(), password, username, node.isFocused()));
         }
 
         for (int i = 0; i < node.getChildCount(); i++) {
@@ -311,17 +391,45 @@ public class NexVaultAutofillService extends AutofillService {
             + "search|query|filter|find|keyword|"
             + "first_name|firstname|fname|last_name|lastname|lname|middle_name|full_name|fullname|cardholder|bday|birthday|gender|sex|tax|vat|company|"
             + "card|cvv|cvc|exp|coupon|promo|discount|voucher|"
-            + "comment|message|note|notes|bio|description|feedback|review|subject|qty|quantity|amount|price"
+            + "comment|message|chat|note|notes|bio|description|feedback|review|subject|qty|quantity|amount|price"
             + ")\\b.*";
 
         return combined.matches(blacklistPattern);
     }
 
-    private RemoteViews presentation(String service, String username) {
+    private RemoteViews presentation(String service, String username, boolean isGenerator) {
         RemoteViews views = new RemoteViews(getPackageName(), com.nexvault.app.R.layout.autofill_dataset);
-        views.setTextViewText(com.nexvault.app.R.id.autofill_title, "NEXVAULT  •  " + (service.isEmpty() ? "Saved login" : service));
-        views.setTextViewText(com.nexvault.app.R.id.autofill_subtitle, username.isEmpty() ? "Autofill credentials" : username);
+        if (isGenerator) {
+            views.setImageViewResource(com.nexvault.app.R.id.autofill_icon, com.nexvault.app.R.drawable.ic_nexvault_generator);
+            views.setTextViewText(com.nexvault.app.R.id.autofill_title, "Generate Strong Password");
+            views.setTextViewText(com.nexvault.app.R.id.autofill_subtitle, "24-character cryptographic password");
+            views.setTextViewText(com.nexvault.app.R.id.autofill_badge, "⚡ GENERATE");
+        } else {
+            views.setImageViewResource(com.nexvault.app.R.id.autofill_icon, com.nexvault.app.R.drawable.ic_nexvault_key);
+            String title = service.isEmpty() ? "Saved Login" : formatServiceName(service);
+            views.setTextViewText(com.nexvault.app.R.id.autofill_title, title);
+            views.setTextViewText(com.nexvault.app.R.id.autofill_subtitle, username.isEmpty() ? "Autofill credentials" : username);
+            views.setTextViewText(com.nexvault.app.R.id.autofill_badge, "NEXVAULT");
+        }
         return views;
+    }
+
+    private String formatServiceName(String raw) {
+        if (raw == null || raw.isEmpty()) return "Saved Login";
+        String clean = normalize(raw);
+        int lastDot = clean.lastIndexOf('.');
+        if (lastDot > 0) {
+            String name = clean.substring(0, lastDot);
+            int prevDot = name.lastIndexOf('.');
+            if (prevDot >= 0) name = name.substring(prevDot + 1);
+            if (name.length() > 0) {
+                return Character.toUpperCase(name.charAt(0)) + name.substring(1) + " (" + clean + ")";
+            }
+        }
+        if (clean.length() > 0) {
+            return Character.toUpperCase(clean.charAt(0)) + clean.substring(1);
+        }
+        return "Saved Login";
     }
 
     private boolean matches(String domain, String service) {
@@ -399,6 +507,15 @@ public class NexVaultAutofillService extends AutofillService {
             List<FillContext> contexts = request.getFillContexts();
             if (contexts != null && !contexts.isEmpty()) {
                 AssistStructure structure = contexts.get(contexts.size() - 1).getStructure();
+                ComponentName activity = structure.getActivityComponent();
+                String activityPackage = activity != null ? activity.getPackageName() : "";
+
+                // Never prompt to save in excluded messaging or utility apps
+                if (isExcludedPackage(activityPackage)) {
+                    callback.onSuccess();
+                    return;
+                }
+
                 int windowCount = structure.getWindowNodeCount();
                 for (int w = 0; w < windowCount; w++) {
                     AssistStructure.WindowNode window = structure.getWindowNodeAt(w);
@@ -406,13 +523,13 @@ public class NexVaultAutofillService extends AutofillService {
                         collectSavedValues(window.getRootViewNode(), values);
                     }
                 }
-                if (values.domain.isEmpty()) {
-                    ComponentName activity = structure.getActivityComponent();
-                    if (activity != null) values.domain = activity.getPackageName();
+                if (values.domain.isEmpty() && activity != null) {
+                    values.domain = activity.getPackageName();
                 }
             }
 
-            if (!values.domain.isEmpty() && !values.password.isEmpty()) {
+            // Save ONLY if an actual password was entered and domain is not excluded
+            if (!values.domain.isEmpty() && !values.password.isEmpty() && !isExcludedPackage(values.domain)) {
                 JSONArray credentials = new JSONArray(NativeCredentialStore.read(this));
                 JSONObject entry = null;
                 for (int i = 0; i < credentials.length(); i++) {
@@ -458,6 +575,13 @@ public class NexVaultAutofillService extends AutofillService {
             }
         }
 
+        int inputType = node.getInputType();
+        // Skip multi-line inputs
+        if ((inputType & 0x00020000) != 0 || (inputType & 0x00040000) != 0) {
+            for (int i = 0; i < node.getChildCount(); i++) collectSavedValues(node.getChildAt(i), values);
+            return;
+        }
+
         String textVal = "";
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && node.getAutofillValue() != null && node.getAutofillValue().isText()) {
             CharSequence cs = node.getAutofillValue().getTextValue();
@@ -471,7 +595,6 @@ public class NexVaultAutofillService extends AutofillService {
             boolean isPassword = false;
             boolean isUsername = false;
 
-            int inputType = node.getInputType();
             int variation = inputType & 0x00000ff0;
             if (variation == 0x80 || variation == 0x90 || variation == 0xe0 || variation == 0x10 || (inputType & 0x00000081) != 0) {
                 isPassword = true;

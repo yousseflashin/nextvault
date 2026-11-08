@@ -62,6 +62,44 @@ public class NexVaultAccessibilityService extends AccessibilityService {
         "com.vivaldi.browser"
     ));
 
+    private static final Set<String> EXCLUDED_PACKAGES = new HashSet<>(Arrays.asList(
+        "com.whatsapp",
+        "com.whatsapp.w4b",
+        "org.telegram.messenger",
+        "org.telegram.messenger.web",
+        "org.thoughtcrime.securesms",
+        "com.facebook.orca",
+        "com.facebook.mlite",
+        "com.google.android.apps.messaging",
+        "com.samsung.android.messaging",
+        "com.discord",
+        "com.slack",
+        "com.viber.voip",
+        "com.skype.raider",
+        "com.google.android.talk",
+        "com.snapchat.android",
+        "com.google.android.googlequicksearchbox",
+        "com.google.android.dialer",
+        "com.android.dialer",
+        "com.samsung.android.dialer",
+        "com.android.calculator2",
+        "com.google.android.calculator",
+        "com.google.android.keep",
+        "com.google.android.calendar",
+        "com.google.android.apps.maps",
+        "com.google.android.youtube",
+        "com.android.systemui",
+        "com.android.settings"
+    ));
+
+    private boolean isExcludedPackage(String pkg) {
+        if (pkg == null || pkg.isEmpty()) return false;
+        String lower = pkg.toLowerCase(Locale.ROOT);
+        if (EXCLUDED_PACKAGES.contains(lower)) return true;
+        if (lower.contains("launcher") || lower.contains("inputmethod") || lower.contains("keyboard")) return true;
+        return false;
+    }
+
     private static final String BLACKLIST_REGEX = ".*\\b("
         + "address|addr|street|city|state|zip|zipcode|postal|postcode|country|province|region|county|"
         + "apt|suite|unit|floor|building|po_box|pobox|door|delivery|shipping|billing|destination|location|"
@@ -139,6 +177,18 @@ public class NexVaultAccessibilityService extends AccessibilityService {
 
     private void handleFocusedNode(AccessibilityNodeInfo node, String packageName) {
         if (node == null || !node.isEditable()) {
+            return;
+        }
+
+        // 0. Completely silence overlay in excluded messaging and utility apps
+        if (isExcludedPackage(packageName)) {
+            hideOverlay();
+            return;
+        }
+
+        // Skip multi-line inputs (chat messages, comments, notes)
+        if (node.isMultiLine() || (node.getInputType() & 0x00020000) != 0 || (node.getInputType() & 0x00040000) != 0) {
+            hideOverlay();
             return;
         }
 

@@ -29,17 +29,17 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="NEXVAULT"
-            android:textColor="#00ff9d"
-            android:textSize="12sp"
+            android:textColor="#F8FAFC"
+            android:textSize="13sp"
             android:textStyle="bold"
-            android:letterSpacing="0.05" />
+            android:letterSpacing="0.02" />
 
         <TextView
             android:id="@+id/overlay_subtitle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Autofill credentials"
-            android:textColor="#e0e8f5"
+            android:textColor="#94A3B8"
             android:textSize="11sp"
             android:maxLines="1"
             android:ellipsize="end" />
