@@ -626,6 +626,19 @@
             </div>
           </div>
 
+          <!-- Category Filter Pills -->
+          <div style="display: flex; gap: 0.4rem; margin-bottom: 0.75rem; flex-wrap: wrap;">
+            <button class="nv-badge active" id="desk-cat-all" style="cursor: pointer; padding: 6px 14px; font-weight: 600;" onclick="setDesktopCategory('all')">
+              All Items (<span id="count-all-desk">0</span>)
+            </button>
+            <button class="nv-badge" id="desk-cat-logins" style="cursor: pointer; padding: 6px 14px; font-weight: 600;" onclick="setDesktopCategory('logins')">
+              Logins (<span id="count-logins-desk">0</span>)
+            </button>
+            <button class="nv-badge" id="desk-cat-2fa" style="cursor: pointer; padding: 6px 14px; font-weight: 600;" onclick="setDesktopCategory('2fa')">
+              2FA Authenticators (<span id="count-2fa-desk">0</span>)
+            </button>
+          </div>
+
           <!-- Sorting, Filtering & Grouping Toolbar -->
           <div class="nv-filter-bar">
             <div style="display: flex; align-items: center; gap: 0.35rem;">
@@ -1571,10 +1584,35 @@
       } catch (e) { setStatus('Error: ' + e.message); }
     }
 
+    let desktopActiveCategory = 'all';
+    function setDesktopCategory(cat) {
+      desktopActiveCategory = cat;
+      ['all', 'logins', '2fa'].forEach(c => {
+        const el = $('desk-cat-' + c);
+        if (el) {
+          if (c === cat) el.classList.add('active');
+          else el.classList.remove('active');
+        }
+      });
+      if (cat === '2fa') {
+        navigateTo('otp');
+      } else {
+        navigateTo('vault');
+        filterVaultEntries();
+      }
+    }
+
     async function listPasswords() {
       try {
         const r = await window.nexVault.listPasswords();
         cachedVaultEntries = r.entries || [];
+        if ($('count-all-desk')) $('count-all-desk').textContent = cachedVaultEntries.length;
+        if ($('count-logins-desk')) $('count-logins-desk').textContent = cachedVaultEntries.length;
+        try {
+          const otpRes = await window.nexVault.listOTPs?.();
+          if ($('count-2fa-desk')) $('count-2fa-desk').textContent = otpRes?.entries?.length || otpRes?.otps?.length || 0;
+          if ($('count-all-desk')) $('count-all-desk').textContent = cachedVaultEntries.length + (otpRes?.entries?.length || otpRes?.otps?.length || 0);
+        } catch {}
         filterVaultEntries();
       } catch (e) { setStatus('Error: ' + e.message); }
     }

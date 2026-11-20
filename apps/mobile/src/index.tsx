@@ -966,6 +966,8 @@ function App() {
   const [vaultSearch, setVaultSearch] = useState('');
   const [vaultSort, setVaultSort] = useState<'date-desc' | 'date-asc' | 'name-asc' | 'name-desc' | 'user-asc'>('date-desc');
   const [vaultFilter, setVaultFilter] = useState<'all' | 'has-user' | 'no-user'>('all');
+  const [vaultCategory, setVaultCategory] = useState<'all' | 'logins' | '2fa'>('all');
+  const [settingsSubTab, setSettingsSubTab] = useState<'preferences' | 'security'>('preferences');
   const [vaultGroup, setVaultGroup] = useState<'none' | 'site' | 'account' | 'letter'>('none');
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [quickFillView, setQuickFillView] = useState<QuickFillView>('vault');
@@ -1878,7 +1880,30 @@ function App() {
   }
 
   const filteredVaultItems = useMemo(() => {
-    let items = vaultItems.filter(v => {
+    let source: { service: string; username?: string; createdAt: string; isOtp?: boolean; secret?: string }[] = [];
+
+    if (vaultCategory === '2fa') {
+      source = otpItems.map(o => ({
+        service: o.service,
+        username: '2FA Authenticator',
+        createdAt: o.createdAt,
+        isOtp: true,
+        secret: o.secret
+      }));
+    } else if (vaultCategory === 'logins') {
+      source = vaultItems.map(v => ({ ...v, isOtp: false }));
+    } else {
+      // 'all': logins first, plus standalone OTPs
+      const loginServices = new Set(vaultItems.map(v => v.service.toLowerCase().trim()));
+      source = [
+        ...vaultItems.map(v => ({ ...v, isOtp: false })),
+        ...otpItems
+          .filter(o => !loginServices.has(o.service.toLowerCase().trim()))
+          .map(o => ({ service: o.service, username: '2FA Authenticator', createdAt: o.createdAt, isOtp: true, secret: o.secret }))
+      ];
+    }
+
+    let items = source.filter(v => {
       if (vaultSearch) {
         const q = vaultSearch.toLowerCase();
         const match = v.service.toLowerCase().includes(q) || (v.username && v.username.toLowerCase().includes(q));
@@ -1898,7 +1923,7 @@ function App() {
     });
 
     return items;
-  }, [vaultItems, vaultSearch, vaultFilter, vaultSort]);
+  }, [vaultItems, otpItems, vaultCategory, vaultSearch, vaultFilter, vaultSort]);
 
   const groupedVaultItems = useMemo(() => {
     if (vaultGroup === 'none') return null;
@@ -2338,8 +2363,60 @@ function App() {
                     )}
                   </div>
 
-                  {/* Sorting, Filtering & Grouping Toolbar */}
-                  <div className="nv-filter-bar" style={{ marginTop: '0.5rem', marginBottom: '0.75rem' }}>
+                  {/* Category Pills: All, Logins, 2FA Authenticator */}
+                  <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.5rem', marginBottom: '0.6rem', overflowX: 'auto', paddingBottom: '2px' }}>
+                    <button
+                      type="button"
+                      className="nv-badge"
+                      style={{
+                        cursor: 'pointer',
+                        padding: '6px 14px',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        background: vaultCategory === 'all' ? 'var(--nv-primary-light)' : 'var(--nv-surface)',
+                        borderColor: vaultCategory === 'all' ? 'var(--nv-primary)' : 'var(--nv-border)',
+                        color: vaultCategory === 'all' ? '#fff' : 'var(--nv-text-secondary)'
+                      }}
+                      onClick={() => setVaultCategory('all')}
+                    >
+                      All ({vaultItems.length + otpItems.length})
+                    </button>
+                    <button
+                      type="button"
+                      className="nv-badge"
+                      style={{
+                        cursor: 'pointer',
+                        padding: '6px 14px',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        background: vaultCategory === 'logins' ? 'var(--nv-primary-light)' : 'var(--nv-surface)',
+                        borderColor: vaultCategory === 'logins' ? 'var(--nv-primary)' : 'var(--nv-border)',
+                        color: vaultCategory === 'logins' ? '#fff' : 'var(--nv-text-secondary)'
+                      }}
+                      onClick={() => setVaultCategory('logins')}
+                    >
+                      Logins ({vaultItems.length})
+                    </button>
+                    <button
+                      type="button"
+                      className="nv-badge"
+                      style={{
+                        cursor: 'pointer',
+                        padding: '6px 14px',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        background: vaultCategory === '2fa' ? 'var(--nv-primary-light)' : 'var(--nv-surface)',
+                        borderColor: vaultCategory === '2fa' ? 'var(--nv-primary)' : 'var(--nv-border)',
+                        color: vaultCategory === '2fa' ? '#fff' : 'var(--nv-text-secondary)'
+                      }}
+                      onClick={() => setVaultCategory('2fa')}
+                    >
+                      2FA Codes ({otpItems.length})
+                    </button>
+                  </div>
+
+                  {/* Sorting & Filter Options */}
+                  <div className="nv-filter-bar" style={{ marginBottom: '0.75rem' }}>
                     <select
                       className="nv-select nv-select-sm"
                       value={vaultSort}
@@ -2359,21 +2436,9 @@ function App() {
                       onChange={e => setVaultFilter(e.target.value as any)}
                       title="Filter credentials"
                     >
-                      <option value="all">All</option>
-                      <option value="has-user">With User</option>
-                      <option value="no-user">Without User</option>
-                    </select>
-
-                    <select
-                      className="nv-select nv-select-sm"
-                      value={vaultGroup}
-                      onChange={e => setVaultGroup(e.target.value as any)}
-                      title="Group credentials"
-                    >
-                      <option value="none">No Grouping</option>
-                      <option value="site">By Site</option>
-                      <option value="account">By Account</option>
-                      <option value="letter">By Letter</option>
+                      <option value="all">All Items</option>
+                      <option value="has-user">With Username</option>
+                      <option value="no-user">Password Only</option>
                     </select>
 
                     <span className="nv-badge" style={{ marginLeft: 'auto', fontSize: '0.65rem' }}>
@@ -2921,6 +2986,37 @@ function App() {
               {/* PAGE 4: SECURITY CENTER */}
               {activeTab === 'security' && (
                 <div>
+                  {/* Sub-tab switcher */}
+                  <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '1rem' }}>
+                    <button
+                      type="button"
+                      className="nv-btn nv-btn-sm"
+                      style={{
+                        flex: 1,
+                        background: 'var(--nv-surface)',
+                        color: '#fff',
+                        fontWeight: 600,
+                        border: '1px solid var(--nv-border)'
+                      }}
+                      onClick={() => setActiveTab('settings')}
+                    >
+                      ⚙️ Preferences &amp; Autofill
+                    </button>
+                    <button
+                      type="button"
+                      className="nv-btn nv-btn-sm"
+                      style={{
+                        flex: 1,
+                        background: 'var(--nv-primary)',
+                        color: '#07090e',
+                        fontWeight: 600,
+                        border: '1px solid var(--nv-primary)'
+                      }}
+                      onClick={() => setActiveTab('security')}
+                    >
+                      🛡️ Security Safeguards
+                    </button>
+                  </div>
                   {/* Incoming Extension Grant from Peer Alert Card */}
                   {incomingExtensionGrant && (
                     <Card style={{ marginBottom: '1rem', borderColor: 'var(--nv-primary)', background: 'rgba(16, 185, 129, 0.12)', boxShadow: '0 0 16px rgba(16, 185, 129, 0.25)' }}>
@@ -3269,6 +3365,37 @@ function App() {
               {/* PAGE 5: SETTINGS */}
               {activeTab === 'settings' && (
                 <div>
+                  {/* Sub-tab switcher */}
+                  <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '1rem' }}>
+                    <button
+                      type="button"
+                      className="nv-btn nv-btn-sm"
+                      style={{
+                        flex: 1,
+                        background: 'var(--nv-primary)',
+                        color: '#07090e',
+                        fontWeight: 600,
+                        border: '1px solid var(--nv-primary)'
+                      }}
+                      onClick={() => setActiveTab('settings')}
+                    >
+                      ⚙️ Preferences &amp; Autofill
+                    </button>
+                    <button
+                      type="button"
+                      className="nv-btn nv-btn-sm"
+                      style={{
+                        flex: 1,
+                        background: 'var(--nv-surface)',
+                        color: '#fff',
+                        fontWeight: 600,
+                        border: '1px solid var(--nv-border)'
+                      }}
+                      onClick={() => setActiveTab('security')}
+                    >
+                      🛡️ Security Safeguards
+                    </button>
+                  </div>
                   {/* The 1Password Autofill Engine Card */}
                   <Card style={{ marginBottom: '1rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
@@ -3514,53 +3641,35 @@ function App() {
         {unlocked && (
           <nav className="nv-bottom-nav">
             <button
-              className={`nv-nav-button ${activeTab === 'vault' ? 'active' : ''}`}
+              className={`nv-nav-button ${activeTab === 'vault' || activeTab === 'otp' ? 'active' : ''}`}
               onClick={() => setActiveTab('vault')}
             >
               <span className="nav-icon">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21 2-2 2m-1.5 1.5L16 7l-1.5-1.5M16 7l-4 4m0 0a5.5 5.5 0 1 1-7.78 7.78 5.5 5.5 0 0 1 7.78-7.78Z"/></svg>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21 2-2 2m-1.5 1.5L16 7l-1.5-1.5M16 7l-4 4m0 0a5.5 5.5 0 1 1-7.78 7.78 5.5 5.5 0 0 1 7.78-7.78Z"/></svg>
               </span>
               <span>Vault</span>
-            </button>
-            <button
-              className={`nv-nav-button ${activeTab === 'otp' ? 'active' : ''}`}
-              onClick={() => setActiveTab('otp')}
-            >
-              <span className="nav-icon">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-              </span>
-              <span>OTP</span>
             </button>
             <button
               className={`nv-nav-button ${activeTab === 'grid' ? 'active' : ''}`}
               onClick={() => setActiveTab('grid')}
             >
               <span className="nav-icon">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="6" height="6" x="9" y="2" rx="1"/><rect width="6" height="6" x="2" y="16" rx="1"/><rect width="6" height="6" x="16" y="16" rx="1"/><path d="M12 8v4m0 0H5v4m7-4h7v4"/></svg>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="6" height="6" x="9" y="2" rx="1"/><rect width="6" height="6" x="2" y="16" rx="1"/><rect width="6" height="6" x="16" y="16" rx="1"/><path d="M12 8v4m0 0H5v4m7-4h7v4"/></svg>
               </span>
-              <span>NexGrid</span>
+              <span>Mesh Sync</span>
             </button>
             <button
-              className={`nv-nav-button ${activeTab === 'security' ? 'active' : ''}`}
-              onClick={() => setActiveTab('security')}
+              className={`nv-nav-button ${activeTab === 'settings' || activeTab === 'security' ? 'active' : ''}`}
+              onClick={() => setActiveTab('settings')}
               style={{ position: 'relative' }}
             >
               <span className="nav-icon">
-                <Shield size={18} />
+                <Shield size={20} />
               </span>
-              <span>Security</span>
+              <span>Security &amp; Settings</span>
               {incomingExtensionRequest && (
-                <span style={{ position: 'absolute', top: 6, right: '25%', width: 7, height: 7, borderRadius: '50%', background: 'var(--nv-primary)', boxShadow: '0 0 6px var(--nv-primary)' }} />
+                <span style={{ position: 'absolute', top: 6, right: '30%', width: 7, height: 7, borderRadius: '50%', background: 'var(--nv-primary)', boxShadow: '0 0 6px var(--nv-primary)' }} />
               )}
-            </button>
-            <button
-              className={`nv-nav-button ${activeTab === 'settings' ? 'active' : ''}`}
-              onClick={() => setActiveTab('settings')}
-            >
-              <span className="nav-icon">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
-              </span>
-              <span>Settings</span>
             </button>
           </nav>
         )}

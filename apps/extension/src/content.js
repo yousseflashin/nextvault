@@ -38,43 +38,42 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      background: rgba(4, 8, 16, 0.85);
-      border: 1px solid rgba(0, 255, 157, 0.5);
-      border-radius: 5px;
-      box-shadow: 0 0 10px rgba(0, 255, 157, 0.3);
-      transition: left 0.22s cubic-bezier(0.16, 1, 0.3, 1), top 0.22s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s, box-shadow 0.2s, background 0.2s;
+      background: #0B0F19;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 6px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+      transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
       z-index: 2147483646;
       user-select: none;
       outline: none;
     }
 
     .nv-badge-btn:hover {
-      transform: scale(1.1);
-      border-color: #00ff9d;
-      box-shadow: 0 0 14px rgba(0, 255, 157, 0.6);
-      background: rgba(0, 255, 157, 0.15);
+      transform: scale(1.08);
+      border-color: #00E599;
+      box-shadow: 0 0 12px rgba(0, 229, 153, 0.35);
+      background: #111726;
     }
 
     .nv-badge-btn svg {
       width: 14px;
       height: 14px;
-      filter: drop-shadow(0 0 3px #00ff9d);
     }
 
     .nv-dropdown {
       position: absolute;
-      width: 290px;
-      background: rgba(4, 8, 16, 0.94);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border: 1px solid rgba(0, 255, 157, 0.45);
-      border-radius: 10px;
-      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.75), 0 0 20px rgba(0, 255, 157, 0.18);
-      color: #e0e8f5;
+      width: 280px;
+      background: #0B0F19;
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 12px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.75), 0 0 1px rgba(255, 255, 255, 0.2);
+      color: #f1f5f9;
       font-size: 12px;
       overflow: hidden;
       z-index: 2147483647;
-      animation: nv-fade-in 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+      animation: nv-fade-in 0.16s cubic-bezier(0.16, 1, 0.3, 1);
       display: flex;
       flex-direction: column;
     }
@@ -313,6 +312,11 @@
       el.getAttribute('aria-description'),
       labels
     ].filter(Boolean).join(' ').toLowerCase();
+
+    // Reject explicit search inputs, queries, and filters
+    if (probe.includes('search') || probe.includes('query') || probe.includes('filter') || probe.includes('find_in_page') || probe.includes('omnibox')) {
+      return true;
+    }
 
     // Check against blacklisted keywords using word boundary or token boundary
     for (const keyword of NON_CREDENTIAL_KEYWORDS) {

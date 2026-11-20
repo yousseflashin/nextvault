@@ -4,31 +4,71 @@
     android:height="108dp"
     android:viewportHeight="108"
     android:viewportWidth="108">
+
+    <!-- Outer Ambient Glow / Facet Shadow -->
     <path
         android:fillType="evenOdd"
-        android:pathData="M32,64C32,64 38.39,52.99 44.13,50.95C51.37,48.37 70.14,49.57 70.14,49.57L108.26,87.69L108,109.01L75.97,107.97L32,64Z"
-        android:strokeColor="#00000000"
-        android:strokeWidth="1">
+        android:pathData="M54,23 L79,33 C79,57 66,75 54,85 C42,75 29,57 29,33 Z">
         <aapt:attr name="android:fillColor">
             <gradient
-                android:endX="78.5885"
-                android:endY="90.9159"
-                android:startX="48.7653"
-                android:startY="61.0927"
+                android:startX="54"
+                android:startY="23"
+                android:endX="54"
+                android:endY="85"
                 android:type="linear">
-                <item
-                    android:color="#44000000"
-                    android:offset="0.0" />
-                <item
-                    android:color="#00000000"
-                    android:offset="1.0" />
+                <item android:color="#3300E599" android:offset="0.0" />
+                <item android:color="#1A00C8FF" android:offset="1.0" />
             </gradient>
         </aapt:attr>
     </path>
+
+    <!-- Outer Shield Border -->
     <path
-        android:fillColor="#FFFFFF"
-        android:fillType="nonZero"
-        android:pathData="M66.94,46.02L66.94,46.02C72.44,50.07 76,56.61 76,64L32,64C32,56.61 35.56,50.11 40.98,46.06L36.18,41.19C35.45,40.45 35.45,39.3 36.18,38.56C36.91,37.81 38.05,37.81 38.78,38.56L44.25,44.05C47.18,42.57 50.48,41.71 54,41.71C57.48,41.71 60.78,42.57 63.68,44.05L69.11,38.56C69.84,37.81 70.98,37.81 71.71,38.56C72.44,39.3 72.44,40.45 71.71,41.19L66.94,46.02ZM62.94,56.92C64.08,56.92 65,56.01 65,54.88C65,53.76 64.08,52.85 62.94,52.85C61.8,52.85 60.88,53.76 60.88,54.88C60.88,56.01 61.8,56.92 62.94,56.92ZM45.06,56.92C46.2,56.92 47.13,56.01 47.13,54.88C47.13,53.76 46.2,52.85 45.06,52.85C43.92,52.85 43,53.76 43,54.88C43,56.01 43.92,56.92 45.06,56.92Z"
-        android:strokeColor="#00000000"
-        android:strokeWidth="1" />
+        android:pathData="M54,24 L78,34 C78,56 65,74 54,84 C43,74 30,56 30,34 Z"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:startX="30"
+                android:startY="24"
+                android:endX="78"
+                android:endY="84"
+                android:type="linear">
+                <item android:color="#00E599" android:offset="0.0" />
+                <item android:color="#00C8FF" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Inner Shield Body -->
+    <path
+        android:fillColor="#141B2D"
+        android:pathData="M54,28 L74,36.5 C74,54 63,69 54,78 C45,69 34,54 34,36.5 Z" />
+
+    <!-- Shield Geometric Facet Left -->
+    <path
+        android:fillColor="#1A243B"
+        android:pathData="M54,28 L34,36.5 C34,54 45,69 54,78 Z" />
+
+    <!-- Central Keyhole & Vault Lock Core -->
+    <!-- Lock Shackle Top -->
+    <path
+        android:pathData="M48,48 C48,44.7 50.7,42 54,42 C57.3,42 60,44.7 60,48 L60,51 L48,51 Z"
+        android:strokeColor="#00E599"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+
+    <!-- Lock Body -->
+    <path
+        android:fillColor="#0A0E1A"
+        android:strokeColor="#00C8FF"
+        android:strokeWidth="1.5"
+        android:pathData="M46,51 L62,51 C63.1,51 64,51.9 64,53 L64,63 C64,64.1 63.1,65 62,65 L46,65 C44.9,65 44,64.1 44,63 L44,53 C44,51.9 44.9,51 46,51 Z" />
+
+    <!-- Keyhole Center Pin -->
+    <path
+        android:fillColor="#00E599"
+        android:pathData="M54,55 C55.1,55 56,55.9 56,57 C56,57.7 55.6,58.3 55,58.7 L55,61.5 L53,61.5 L53,58.7 C52.4,58.3 52,57.7 52,57 C52,55.9 52.9,55 54,55 Z" />
 </vector>

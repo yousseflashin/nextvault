@@ -40,8 +40,11 @@ export interface StoredCredential {
   service: string;
   credential: string;
   username?: string;
+  otpSecret?: string;
   createdAt: string;
   updatedAt?: number;
+  logicalCounter?: number;
+  peerId?: string;
 }
 
 export interface StoredOTP {
@@ -50,6 +53,30 @@ export interface StoredOTP {
   createdAt: string;
   updatedAt?: number;
   code?: string;
+  logicalCounter?: number;
+  peerId?: string;
+}
+
+export function compareLogicalClocks(
+  a: { counter?: number; logicalCounter?: number; peerId?: string; updatedAt?: number },
+  b: { counter?: number; logicalCounter?: number; peerId?: string; updatedAt?: number }
+): number {
+  const ca = Number(a?.counter ?? a?.logicalCounter) || 0;
+  const cb = Number(b?.counter ?? b?.logicalCounter) || 0;
+  if (ca > cb) return 1;
+  if (ca < cb) return -1;
+  if (ca > 0 && cb > 0) {
+    const pa = String(a?.peerId || '');
+    const pb = String(b?.peerId || '');
+    if (pa > pb) return 1;
+    if (pa < pb) return -1;
+    return 0;
+  }
+  const ua = Number(a?.updatedAt) || 0;
+  const ub = Number(b?.updatedAt) || 0;
+  if (ua > ub) return 1;
+  if (ua < ub) return -1;
+  return 0;
 }
 
 export function normalizeDomain(service: string): string {
@@ -79,7 +106,7 @@ export interface MobileVaultState {
   trustedPeers: (string | TrustedPeerInfo)[];
   passwords: StoredCredential[];
   otps: StoredOTP[];
-  deletedRecords?: { service: string; type: 'password' | 'otp'; deletedAt: number }[];
+  deletedRecords?: { service: string; type: 'password' | 'otp'; deletedAt: number; logicalCounter?: number; peerId?: string }[];
 }
 
 export function parseOtpAuthUri(uri: string): { service: string; account: string; secret: string; algorithm?: string; digits?: number; period?: number } | null {
@@ -1318,18 +1345,19 @@ function applyVaultSync(vaultData: any, callbacks?: GridCallbacks, fromPeerId?: 
   let importedPasswords = 0;
   let importedOTPs = 0;
 
-  // 1. Process any incoming tombstones / deletions with timestamp
+  // 1. Process any incoming tombstones / deletions with Lamport logical clock
   if (Array.isArray(vaultData.deleted)) {
     for (const d of vaultData.deleted) {
       if (!d || !d.service) continue;
       const target = normalizeDomain(d.service);
       const remoteDeletedAt = Number(d.deletedAt) || Number(d.deleted_at) || Date.now();
+      const remoteClock = { counter: Number(d.logicalCounter) || 0, peerId: d.peerId || fromPeerId || '', updatedAt: remoteDeletedAt };
 
       if (d.type === 'otp') {
         const localIdx = state.otps.findIndex(o => normalizeDomain(o.service) === target);
         if (localIdx >= 0) {
-          const localUpdatedAt = Number(state.otps[localIdx].updatedAt) || (state.otps[localIdx].createdAt ? new Date(state.otps[localIdx].createdAt).getTime() : 0);
-          if (remoteDeletedAt >= localUpdatedAt) {
+          const localClock = { counter: Number(state.otps[localIdx].logicalCounter) || 0, peerId: state.otps[localIdx].peerId || '', updatedAt: Number(state.otps[localIdx].updatedAt) || 0 };
+          if (compareLogicalClocks(remoteClock, localClock) >= 0) {
             state.otps.splice(localIdx, 1);
             stateChanged = true;
           }
@@ -1337,8 +1365,8 @@ function applyVaultSync(vaultData: any, callbacks?: GridCallbacks, fromPeerId?: 
       } else {
         const localIdx = state.passwords.findIndex(p => normalizeDomain(p.service) === target);
         if (localIdx >= 0) {
-          const localUpdatedAt = Number(state.passwords[localIdx].updatedAt) || (state.passwords[localIdx].createdAt ? new Date(state.passwords[localIdx].createdAt).getTime() : 0);
-          if (remoteDeletedAt >= localUpdatedAt) {
+          const localClock = { counter: Number(state.passwords[localIdx].logicalCounter) || 0, peerId: state.passwords[localIdx].peerId || '', updatedAt: Number(state.passwords[localIdx].updatedAt) || 0 };
+          if (compareLogicalClocks(remoteClock, localClock) >= 0) {
             state.passwords.splice(localIdx, 1);
             stateChanged = true;
           }
@@ -1347,41 +1375,52 @@ function applyVaultSync(vaultData: any, callbacks?: GridCallbacks, fromPeerId?: 
 
       const existingTombIdx = state.deletedRecords.findIndex(r => normalizeDomain(r.service) === target && r.type === d.type);
       if (existingTombIdx >= 0) {
-        if (remoteDeletedAt > state.deletedRecords[existingTombIdx].deletedAt) {
+        const existingTomb = state.deletedRecords[existingTombIdx];
+        if (compareLogicalClocks(remoteClock, { counter: existingTomb.logicalCounter, peerId: existingTomb.peerId, updatedAt: existingTomb.deletedAt }) > 0) {
           state.deletedRecords[existingTombIdx].deletedAt = remoteDeletedAt;
+          state.deletedRecords[existingTombIdx].logicalCounter = remoteClock.counter;
+          state.deletedRecords[existingTombIdx].peerId = remoteClock.peerId;
         }
       } else {
-        state.deletedRecords.push({ service: d.service, type: d.type, deletedAt: remoteDeletedAt });
+        state.deletedRecords.push({ service: d.service, type: d.type, deletedAt: remoteDeletedAt, logicalCounter: remoteClock.counter, peerId: remoteClock.peerId });
       }
     }
   }
 
-  // 2. Reconcile passwords with LWW
+  // 2. Reconcile passwords with Lamport logical clock
   if (Array.isArray(vaultData.passwords)) {
     for (const p of vaultData.passwords) {
       if (!p.service || !p.credential) continue;
       const target = normalizeDomain(p.service);
       const remoteUpdatedAt = Number(p.updatedAt) || (p.createdAt ? new Date(p.createdAt).getTime() : Date.now());
+      const remoteClock = { counter: Number(p.logicalCounter) || 0, peerId: p.peerId || fromPeerId || '', updatedAt: remoteUpdatedAt };
 
       const tomb = state.deletedRecords.find(r => normalizeDomain(r.service) === target && r.type === 'password');
-      if (tomb && Number(tomb.deletedAt) >= remoteUpdatedAt) {
-        continue; // Tombstone is newer than incoming password
+      if (tomb) {
+        const tombClock = { counter: Number(tomb.logicalCounter) || 0, peerId: tomb.peerId || '', updatedAt: Number(tomb.deletedAt) || 0 };
+        if (compareLogicalClocks(tombClock, remoteClock) >= 0) {
+          continue; // Tombstone is logically newer than incoming password
+        }
       }
 
-      if (tomb && remoteUpdatedAt > tomb.deletedAt) {
+      if (tomb && compareLogicalClocks(remoteClock, { counter: tomb.logicalCounter, peerId: tomb.peerId, updatedAt: tomb.deletedAt }) > 0) {
         state.deletedRecords = state.deletedRecords.filter(r => !(normalizeDomain(r.service) === target && r.type === 'password'));
       }
 
       const existingIdx = state.passwords.findIndex(x => normalizeDomain(x.service) === target);
       if (existingIdx >= 0) {
-        const localUpdatedAt = Number(state.passwords[existingIdx].updatedAt) || (state.passwords[existingIdx].createdAt ? new Date(state.passwords[existingIdx].createdAt).getTime() : 0);
-        if (remoteUpdatedAt > localUpdatedAt) {
+        const localPwd = state.passwords[existingIdx];
+        const localClock = { counter: Number(localPwd.logicalCounter) || 0, peerId: localPwd.peerId || '', updatedAt: Number(localPwd.updatedAt) || 0 };
+        if (compareLogicalClocks(remoteClock, localClock) > 0) {
           state.passwords[existingIdx] = {
             service: p.service,
             credential: p.credential,
             username: p.username || '',
-            createdAt: p.createdAt || new Date().toISOString(),
-            updatedAt: remoteUpdatedAt
+            otpSecret: p.otpSecret || localPwd.otpSecret || '',
+            createdAt: p.createdAt || localPwd.createdAt || new Date().toISOString(),
+            updatedAt: remoteUpdatedAt,
+            logicalCounter: remoteClock.counter,
+            peerId: remoteClock.peerId
           };
           stateChanged = true;
           importedPasswords++;
@@ -1391,8 +1430,11 @@ function applyVaultSync(vaultData: any, callbacks?: GridCallbacks, fromPeerId?: 
           service: p.service,
           credential: p.credential,
           username: p.username || '',
+          otpSecret: p.otpSecret || '',
           createdAt: p.createdAt || new Date().toISOString(),
-          updatedAt: remoteUpdatedAt
+          updatedAt: remoteUpdatedAt,
+          logicalCounter: remoteClock.counter,
+          peerId: remoteClock.peerId
         });
         stateChanged = true;
         importedPasswords++;
@@ -1532,13 +1574,21 @@ function broadcastVaultToPeer(peerId: string, arg2: any, arg3?: any, arg4?: any)
     vaultData: {
       passwords: (state.passwords || []).map(p => ({
         ...p,
+        logicalCounter: p.logicalCounter || 1,
+        peerId: p.peerId || state?.devicePublicKey || '',
         updatedAt: Number(p.updatedAt) || (p.createdAt ? new Date(p.createdAt).getTime() : Date.now())
       })),
       otps: (state.otps || []).map(o => ({
         ...o,
+        logicalCounter: o.logicalCounter || 1,
+        peerId: o.peerId || state?.devicePublicKey || '',
         updatedAt: Number(o.updatedAt) || (o.createdAt ? new Date(o.createdAt).getTime() : Date.now())
       })),
-      deleted: state.deletedRecords || [],
+      deleted: (state.deletedRecords || []).map(d => ({
+        ...d,
+        logicalCounter: d.logicalCounter || 1,
+        peerId: d.peerId || state?.devicePublicKey || ''
+      })),
       timestamp: Date.now(),
       isReply
     }
@@ -1958,7 +2008,7 @@ export function initMobileVault() {
       return { success: true };
     },
 
-    async addPassword(service: string, credential: string, username = '') {
+    async addPassword(service: string, credential: string, username = '', otpSecret = '', logicalCounter = 0, peerId = '') {
       const state = loadVault();
       if (!state) throw new Error('Vault is locked or uninitialized');
 
@@ -1966,12 +2016,18 @@ export function initMobileVault() {
       const target = normalizeDomain(cleanService);
       const now = Date.now();
       const existingIdx = state.passwords.findIndex(p => normalizeDomain(p.service) === target);
+      const nextCounter = logicalCounter > 0 ? logicalCounter : ((existingIdx >= 0 ? state.passwords[existingIdx].logicalCounter || 0 : 0) + 1);
+      const effectivePeerId = peerId || state.devicePublicKey;
+
       const entry: StoredCredential = {
         service: cleanService,
         credential,
         username: username.trim(),
-        createdAt: new Date().toISOString(),
-        updatedAt: now
+        otpSecret: otpSecret || (existingIdx >= 0 ? state.passwords[existingIdx].otpSecret : ''),
+        createdAt: existingIdx >= 0 ? state.passwords[existingIdx].createdAt : new Date().toISOString(),
+        updatedAt: now,
+        logicalCounter: nextCounter,
+        peerId: effectivePeerId
       };
 
       if (existingIdx >= 0) {
@@ -1982,7 +2038,7 @@ export function initMobileVault() {
 
       // Remove from tombstones if previously deleted
       if (state.deletedRecords) {
-        state.deletedRecords = state.deletedRecords.filter(d => !(normalizeDomain(d.service) === target && d.type === 'password' && d.deletedAt <= now));
+        state.deletedRecords = state.deletedRecords.filter(d => !(normalizeDomain(d.service) === target && d.type === 'password' && (d.logicalCounter || 0) <= nextCounter));
       }
 
       saveVault(state);
@@ -1991,8 +2047,8 @@ export function initMobileVault() {
       // Broadcast update to all active/trusted peers and room if connected
       if (activeSocket && activeSocket.readyState === WebSocket.OPEN) {
         const peers = getActiveAndTrustedPeers(state);
-        for (const peerId of peers) {
-          broadcastVaultToPeer(peerId, activeSocket, false);
+        for (const pid of peers) {
+          broadcastVaultToPeer(pid, activeSocket, false);
         }
         broadcastVaultToPeer('*', activeSocket, false);
       }
@@ -2005,7 +2061,7 @@ export function initMobileVault() {
       if (!state) return { success: true, entries: [] };
       return {
         success: true,
-        entries: state.passwords.map(p => ({ service: p.service, username: p.username || '', createdAt: p.createdAt }))
+        entries: state.passwords.map(p => ({ service: p.service, username: p.username || '', otpSecret: p.otpSecret || '', createdAt: p.createdAt }))
       };
     },
 
@@ -2015,7 +2071,7 @@ export function initMobileVault() {
       const target = normalizeDomain(service);
       const entry = state.passwords.find(p => normalizeDomain(p.service) === target);
       if (!entry) return { success: false, error: 'Not found' };
-      return { success: true, password: entry.credential, username: entry.username || '' };
+      return { success: true, password: entry.credential, username: entry.username || '', otpSecret: entry.otpSecret || '' };
     },
 
     async deletePassword(service: string) {
@@ -2023,13 +2079,19 @@ export function initMobileVault() {
       if (!state) throw new Error('Vault is locked');
       const target = normalizeDomain(service);
       const now = Date.now();
+      const existingIdx = state.passwords.findIndex(p => normalizeDomain(p.service) === target);
+      const nextCounter = (existingIdx >= 0 ? state.passwords[existingIdx].logicalCounter || 0 : 0) + 1;
+      const effectivePeerId = state.devicePublicKey;
+
       state.passwords = state.passwords.filter(p => normalizeDomain(p.service) !== target);
       if (!state.deletedRecords) state.deletedRecords = [];
       const existingTombIdx = state.deletedRecords.findIndex(d => normalizeDomain(d.service) === target && d.type === 'password');
       if (existingTombIdx >= 0) {
         state.deletedRecords[existingTombIdx].deletedAt = now;
+        state.deletedRecords[existingTombIdx].logicalCounter = Math.max(state.deletedRecords[existingTombIdx].logicalCounter || 0, nextCounter);
+        state.deletedRecords[existingTombIdx].peerId = effectivePeerId;
       } else {
-        state.deletedRecords.push({ service: service.trim(), type: 'password', deletedAt: now });
+        state.deletedRecords.push({ service: service.trim(), type: 'password', deletedAt: now, logicalCounter: nextCounter, peerId: effectivePeerId });
       }
       saveVault(state);
       notifyVaultUpdated();

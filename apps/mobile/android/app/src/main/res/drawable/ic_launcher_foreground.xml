@@ -1,0 +1,71 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportHeight="108"
+    android:viewportWidth="108">
+
+    <!-- Outer Ambient Glow / Facet Shadow -->
+    <path
+        android:fillType="evenOdd"
+        android:pathData="M54,23 L79,33 C79,57 66,75 54,85 C42,75 29,57 29,33 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="54"
+                android:startY="23"
+                android:endX="54"
+                android:endY="85"
+                android:type="linear">
+                <item android:color="#3300E599" android:offset="0.0" />
+                <item android:color="#1A00C8FF" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Outer Shield Border -->
+    <path
+        android:pathData="M54,24 L78,34 C78,56 65,74 54,84 C43,74 30,56 30,34 Z"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:startX="30"
+                android:startY="24"
+                android:endX="78"
+                android:endY="84"
+                android:type="linear">
+                <item android:color="#00E599" android:offset="0.0" />
+                <item android:color="#00C8FF" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Inner Shield Body -->
+    <path
+        android:fillColor="#141B2D"
+        android:pathData="M54,28 L74,36.5 C74,54 63,69 54,78 C45,69 34,54 34,36.5 Z" />
+
+    <!-- Shield Geometric Facet Left -->
+    <path
+        android:fillColor="#1A243B"
+        android:pathData="M54,28 L34,36.5 C34,54 45,69 54,78 Z" />
+
+    <!-- Central Keyhole & Vault Lock Core -->
+    <path
+        android:pathData="M48,48 C48,44.7 50.7,42 54,42 C57.3,42 60,44.7 60,48 L60,51 L48,51 Z"
+        android:strokeColor="#00E599"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+
+    <path
+        android:fillColor="#0A0E1A"
+        android:strokeColor="#00C8FF"
+        android:strokeWidth="1.5"
+        android:pathData="M46,51 L62,51 C63.1,51 64,51.9 64,53 L64,63 C64,64.1 63.1,65 62,65 L46,65 C44.9,65 44,64.1 44,63 L44,53 C44,51.9 44.9,51 46,51 Z" />
+
+    <path
+        android:fillColor="#00E599"
+        android:pathData="M54,55 C55.1,55 56,55.9 56,57 C56,57.7 55.6,58.3 55,58.7 L55,61.5 L53,61.5 L53,58.7 C52.4,58.3 52,57.7 52,57 C52,55.9 52.9,55 54,55 Z" />
+</vector>

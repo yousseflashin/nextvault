@@ -159,11 +159,11 @@ public class NexVaultAutofillService extends AutofillService {
                 hasDatasets = true;
             }
 
-            // 2. 1Password Fallback Method:
-            // Only offer fallback credentials inside browsers when a credential field is present,
-            // or in native apps that are not excluded.
-            if (!matched && (hasActualPassword || hasUsername) && credentials.length() > 0 && !isExcludedPackage(domain)) {
-                int limit = Math.min(credentials.length(), 10);
+            // 2. Fallback Credential Suggestions:
+            // ONLY offer fallback credentials if an ACTUAL password field is present on the screen
+            // and the domain is not excluded. NEVER dump credentials into search bars or arbitrary text boxes!
+            if (!matched && hasActualPassword && credentials.length() > 0 && !isExcludedPackage(domain)) {
+                int limit = Math.min(credentials.length(), 5);
                 for (int i = 0; i < limit; i++) {
                     JSONObject credential = credentials.getJSONObject(i);
                     String service = credential.optString("service", "Saved Login");
@@ -379,16 +379,21 @@ public class NexVaultAutofillService extends AutofillService {
         if (hintText == null) hintText = "";
         String combined = (probe + " " + hintText).toLowerCase(Locale.ROOT);
 
-        // Explicitly protect login and credential fields from blacklist
-        if (combined.contains("email") || combined.contains("mail") || combined.contains("login")
-            || combined.contains("user") || combined.contains("pass") || combined.contains("account")) {
+        // Strict search & utility rejection: search, query, filter, find, keyword, omnibox MUST ALWAYS be blacklisted!
+        if (combined.matches(".*\\b(search|query|filter|find|keyword|lookup|omnibox|url_bar|location_bar|address_bar|search_box|search_src_text)\\b.*")
+            || combined.contains("search") || combined.contains("query") || combined.contains("filter")) {
+            return true;
+        }
+
+        // Explicitly protect genuine password and username fields from non-search blacklist
+        if (combined.contains("current-password") || combined.contains("new-password") || combined.matches(".*\\b(password|passwd|pwd)\\b.*")
+            || combined.matches(".*\\b(username|user_id|userid|login_id|email)\\b.*")) {
             return false;
         }
 
         String blacklistPattern = ".*\\b("
             + "address|addr|street|city|state|zip|zipcode|postal|postcode|country|province|region|county|"
             + "apt|suite|unit|floor|building|po_box|pobox|delivery|shipping|billing|destination|location|"
-            + "search|query|filter|find|keyword|"
             + "first_name|firstname|fname|last_name|lastname|lname|middle_name|full_name|fullname|cardholder|bday|birthday|gender|sex|tax|vat|company|"
             + "card|cvv|cvc|exp|coupon|promo|discount|voucher|"
             + "comment|message|chat|note|notes|bio|description|feedback|review|subject|qty|quantity|amount|price"
@@ -619,8 +624,14 @@ public class NexVaultAutofillService extends AutofillService {
                 + (node.getContentDescription() == null ? "" : node.getContentDescription()))
                 .toLowerCase(Locale.ROOT).replace('_', ' ').replace('-', ' ').replace('.', ' ');
 
+            // Strictly ignore search boxes, queries, and filters from collecting saved credentials!
+            if (probe.contains("search") || probe.contains("query") || probe.contains("filter") || probe.contains("lookup") || probe.contains("omnibox")) {
+                for (int i = 0; i < node.getChildCount(); i++) collectSavedValues(node.getChildAt(i), values);
+                return;
+            }
+
             if (probe.matches(".*\\b(pass|password|passwd|pwd|secret)\\b.*")) isPassword = true;
-            if (probe.matches(".*\\b(user|username|email|login|account|identifier)\\b.*")) isUsername = true;
+            if (probe.matches(".*\\b(username|user_id|userid|email|login_id)\\b.*")) isUsername = true;
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && node.getHtmlInfo() != null) {
                 try {

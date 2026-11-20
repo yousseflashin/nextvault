@@ -56,20 +56,34 @@ class NexVaultDatabase {
         if (Array.isArray(passCols) && !passCols.some(c => c.name === 'updated_at')) {
           db.exec('ALTER TABLE passwords ADD COLUMN updated_at INTEGER DEFAULT 0');
         }
+        if (Array.isArray(passCols) && !passCols.some(c => c.name === 'logical_counter')) {
+          db.exec('ALTER TABLE passwords ADD COLUMN logical_counter INTEGER DEFAULT 0');
+        }
+        if (Array.isArray(passCols) && !passCols.some(c => c.name === 'peer_id')) {
+          db.exec('ALTER TABLE passwords ADD COLUMN peer_id TEXT DEFAULT ""');
+        }
+        if (Array.isArray(passCols) && !passCols.some(c => c.name === 'otp_secret')) {
+          db.exec('ALTER TABLE passwords ADD COLUMN otp_secret TEXT DEFAULT ""');
+        }
         const otpCols = db.pragma('table_info(otp_secrets)');
         if (Array.isArray(otpCols) && !otpCols.some(c => c.name === 'updated_at')) {
           db.exec('ALTER TABLE otp_secrets ADD COLUMN updated_at INTEGER DEFAULT 0');
         }
+        if (Array.isArray(otpCols) && !otpCols.some(c => c.name === 'logical_counter')) {
+          db.exec('ALTER TABLE otp_secrets ADD COLUMN logical_counter INTEGER DEFAULT 0');
+        }
+        if (Array.isArray(otpCols) && !otpCols.some(c => c.name === 'peer_id')) {
+          db.exec('ALTER TABLE otp_secrets ADD COLUMN peer_id TEXT DEFAULT ""');
+        }
         db.exec(`
-          CREATE TABLE IF NOT EXISTS deleted_records (
-            user_id INTEGER NOT NULL,
-            service_name TEXT NOT NULL,
-            item_type TEXT NOT NULL,
-            deleted_at INTEGER NOT NULL,
-            PRIMARY KEY (user_id, service_name, item_type),
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-          );
-        `);
+          CREATE TABLE IF NOT EXISTS deleted_records (\n            user_id INTEGER NOT NULL,\n            service_name TEXT NOT NULL,\n            item_type TEXT NOT NULL,\n            deleted_at INTEGER NOT NULL,\n            logical_counter INTEGER DEFAULT 0,\n            peer_id TEXT DEFAULT "",\n            PRIMARY KEY (user_id, service_name, item_type),\n            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE\n          );\n        `);
+        const delCols = db.pragma('table_info(deleted_records)');
+        if (Array.isArray(delCols) && !delCols.some(c => c.name === 'logical_counter')) {
+          db.exec('ALTER TABLE deleted_records ADD COLUMN logical_counter INTEGER DEFAULT 0');
+        }
+        if (Array.isArray(delCols) && !delCols.some(c => c.name === 'peer_id')) {
+          db.exec('ALTER TABLE deleted_records ADD COLUMN peer_id TEXT DEFAULT ""');
+        }
       } catch {}
       db.close();
     } catch {
@@ -106,8 +120,11 @@ class NexVaultDatabase {
         password_hash TEXT NOT NULL,
         iv TEXT NOT NULL,
         encrypted_data TEXT NOT NULL,
+        otp_secret TEXT DEFAULT '',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at INTEGER DEFAULT 0,
+        logical_counter INTEGER DEFAULT 0,
+        peer_id TEXT DEFAULT '',
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       );
 
@@ -119,6 +136,8 @@ class NexVaultDatabase {
         secret TEXT NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at INTEGER DEFAULT 0,
+        logical_counter INTEGER DEFAULT 0,
+        peer_id TEXT DEFAULT '',
         iv TEXT NOT NULL,
         encrypted_data TEXT NOT NULL,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -129,6 +148,8 @@ class NexVaultDatabase {
         service_name TEXT NOT NULL,
         item_type TEXT NOT NULL,
         deleted_at INTEGER NOT NULL,
+        logical_counter INTEGER DEFAULT 0,
+        peer_id TEXT DEFAULT '',
         PRIMARY KEY (user_id, service_name, item_type),
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       );
@@ -231,7 +252,7 @@ class NexVaultDatabase {
   /**
    * Add or update password for user
    */
-  addPassword(userId, serviceName, passwordPlainText, encryptionKey, username = '', updatedAt = Date.now()) {
+  addPassword(userId, serviceName, passwordPlainText, encryptionKey, username = '', updatedAt = Date.now(), logicalCounter = 0, peerId = '', otpSecret = '') {
     const passwordHash = this.hashPassword(passwordPlainText);
     const iv = this.generateIv();
     const encryptedData = this.encryptData(passwordPlainText, encryptionKey, iv);
@@ -239,17 +260,21 @@ class NexVaultDatabase {
     const clean = this.normalizeDomain(serviceName);
 
     const existing = this.getPassword(userId, serviceName);
+    const nextCounter = logicalCounter > 0 ? Number(logicalCounter) : ((existing?.logical_counter || 0) + 1);
+    const effectivePeerId = peerId || existing?.peer_id || '';
+    const effectiveOtpSecret = otpSecret || existing?.otp_secret || '';
+
     if (existing && existing.id) {
       this.getDb().prepare(`
         UPDATE passwords 
-        SET service_name = ?, username = ?, password_hash = ?, iv = ?, encrypted_data = ?, updated_at = ?, created_at = CURRENT_TIMESTAMP
+        SET service_name = ?, username = ?, password_hash = ?, iv = ?, encrypted_data = ?, updated_at = ?, logical_counter = ?, peer_id = ?, otp_secret = ?, created_at = CURRENT_TIMESTAMP
         WHERE id = ?
-      `).run(serviceName, username, passwordHash, iv, encryptedData, effectiveUpdatedAt, existing.id);
+      `).run(serviceName, username, passwordHash, iv, encryptedData, effectiveUpdatedAt, nextCounter, effectivePeerId, effectiveOtpSecret, existing.id);
     } else {
       this.getDb().prepare(`
-        INSERT INTO passwords (user_id, service_name, username, password_hash, iv, encrypted_data, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(userId, serviceName, username, passwordHash, iv, encryptedData, effectiveUpdatedAt);
+        INSERT INTO passwords (user_id, service_name, username, password_hash, iv, encrypted_data, updated_at, logical_counter, peer_id, otp_secret)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(userId, serviceName, username, passwordHash, iv, encryptedData, effectiveUpdatedAt, nextCounter, effectivePeerId, effectiveOtpSecret);
     }
 
     // Clear any tombstone for this service name that is older than or equal to this update
@@ -259,20 +284,22 @@ class NexVaultDatabase {
         WHERE user_id = ? AND item_type = 'password' AND (
           LOWER(TRIM(service_name)) = LOWER(TRIM(?))
           OR LOWER(TRIM(service_name)) = LOWER(TRIM(?))
-        ) AND deleted_at <= ?
-      `).run(userId, serviceName, clean, effectiveUpdatedAt);
+        ) AND (logical_counter < ? OR (logical_counter = ? AND deleted_at <= ?))
+      `).run(userId, serviceName, clean, nextCounter, nextCounter, effectiveUpdatedAt);
     } catch {}
   }
 
   /**
-   * Delete password for user and service with timestamp
+   * Delete password for user and service with timestamp and logical clock
    */
-  deletePassword(userId, serviceName, deletedAt = Date.now()) {
+  deletePassword(userId, serviceName, deletedAt = Date.now(), logicalCounter = 0, peerId = '') {
     if (!serviceName) return;
     const effectiveDeletedAt = Number(deletedAt) || Date.now();
     const raw = String(serviceName).trim();
     const clean = this.normalizeDomain(raw);
     const baseName = clean.includes('.') ? clean.split('.')[0] : clean;
+    const existing = this.getPassword(userId, serviceName);
+    const nextCounter = logicalCounter > 0 ? Number(logicalCounter) : ((existing?.logical_counter || 0) + 1);
 
     this.getDb().prepare(`
       DELETE FROM passwords 
@@ -286,16 +313,22 @@ class NexVaultDatabase {
 
     try {
       this.getDb().prepare(`
-        INSERT INTO deleted_records (user_id, service_name, item_type, deleted_at)
-        VALUES (?, LOWER(TRIM(?)), 'password', ?)
-        ON CONFLICT(user_id, service_name, item_type) DO UPDATE SET deleted_at = MAX(deleted_records.deleted_at, excluded.deleted_at)
-      `).run(userId, clean, effectiveDeletedAt);
+        INSERT INTO deleted_records (user_id, service_name, item_type, deleted_at, logical_counter, peer_id)
+        VALUES (?, LOWER(TRIM(?)), 'password', ?, ?, ?)
+        ON CONFLICT(user_id, service_name, item_type) DO UPDATE SET 
+          deleted_at = excluded.deleted_at,
+          logical_counter = MAX(deleted_records.logical_counter, excluded.logical_counter),
+          peer_id = excluded.peer_id
+      `).run(userId, clean, effectiveDeletedAt, nextCounter, peerId);
       if (raw.toLowerCase() !== clean) {
         this.getDb().prepare(`
-          INSERT INTO deleted_records (user_id, service_name, item_type, deleted_at)
-          VALUES (?, LOWER(TRIM(?)), 'password', ?)
-          ON CONFLICT(user_id, service_name, item_type) DO UPDATE SET deleted_at = MAX(deleted_records.deleted_at, excluded.deleted_at)
-        `).run(userId, raw, effectiveDeletedAt);
+          INSERT INTO deleted_records (user_id, service_name, item_type, deleted_at, logical_counter, peer_id)
+          VALUES (?, LOWER(TRIM(?)), 'password', ?, ?, ?)
+          ON CONFLICT(user_id, service_name, item_type) DO UPDATE SET 
+            deleted_at = excluded.deleted_at,
+            logical_counter = MAX(deleted_records.logical_counter, excluded.logical_counter),
+            peer_id = excluded.peer_id
+        `).run(userId, raw, effectiveDeletedAt, nextCounter, peerId);
       }
     } catch {}
   }
@@ -346,18 +379,22 @@ class NexVaultDatabase {
   }
 
   /**
-   * Record a tombstone explicitly
+   * Record a tombstone explicitly with Lamport logical clock
    */
-  recordTombstone(userId, serviceName, itemType, deletedAt = Date.now()) {
+  recordTombstone(userId, serviceName, itemType, deletedAt = Date.now(), logicalCounter = 0, peerId = '') {
     if (!serviceName) return;
     const effectiveDeletedAt = Number(deletedAt) || Date.now();
     const clean = this.normalizeDomain(serviceName);
+    const counter = Number(logicalCounter) || 1;
     try {
       this.getDb().prepare(`
-        INSERT INTO deleted_records (user_id, service_name, item_type, deleted_at)
-        VALUES (?, LOWER(TRIM(?)), ?, ?)
-        ON CONFLICT(user_id, service_name, item_type) DO UPDATE SET deleted_at = MAX(deleted_records.deleted_at, excluded.deleted_at)
-      `).run(userId, clean, itemType, effectiveDeletedAt);
+        INSERT INTO deleted_records (user_id, service_name, item_type, deleted_at, logical_counter, peer_id)
+        VALUES (?, LOWER(TRIM(?)), ?, ?, ?, ?)
+        ON CONFLICT(user_id, service_name, item_type) DO UPDATE SET 
+          deleted_at = excluded.deleted_at,
+          logical_counter = MAX(deleted_records.logical_counter, excluded.logical_counter),
+          peer_id = excluded.peer_id
+      `).run(userId, clean, itemType, effectiveDeletedAt, counter, peerId);
     } catch {}
   }
 
@@ -366,7 +403,7 @@ class NexVaultDatabase {
    */
   getDeletedRecords(userId) {
     try {
-      const rows = this.getDb().prepare('SELECT service_name as service, item_type as type, deleted_at as deletedAt FROM deleted_records WHERE user_id = ?').all(userId);
+      const rows = this.getDb().prepare('SELECT service_name as service, item_type as type, deleted_at as deletedAt, logical_counter as logicalCounter, peer_id as peerId FROM deleted_records WHERE user_id = ?').all(userId);
       return rows || [];
     } catch {
       return [];
@@ -383,15 +420,15 @@ class NexVaultDatabase {
       const baseName = clean.includes('.') ? clean.split('.')[0] : clean;
 
       const row = this.getDb().prepare(`
-        SELECT deleted_at FROM deleted_records 
+        SELECT deleted_at, logical_counter, peer_id FROM deleted_records 
         WHERE user_id = ? AND item_type = ? AND (
-          LOWER(TRIM(service_name)) = ?
-          OR LOWER(TRIM(service_name)) = ?
-          OR LOWER(TRIM(service_name)) = ?
+          LOWER(TRIM(service_name)) = LOWER(?)
+          OR LOWER(TRIM(service_name)) = LOWER(?)
+          OR LOWER(TRIM(service_name)) = LOWER(?)
+          OR LOWER(service_name) LIKE '%' || LOWER(?) || '%'
         )
-        ORDER BY deleted_at DESC
-        LIMIT 1
-      `).get(userId, itemType, raw, clean, baseName);
+      `).get(userId, itemType, raw, clean, baseName, clean);
+
       return row || null;
     } catch {
       return null;

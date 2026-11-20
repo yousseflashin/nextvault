@@ -258,21 +258,53 @@ public class NexVaultAccessibilityService extends AccessibilityService {
     private boolean isBlacklistedNode(AccessibilityNodeInfo node) {
         if (node == null) return true;
 
+        // 1. Check Class Name for SearchView or SearchBar widgets
+        CharSequence className = node.getClassName();
+        if (className != null) {
+            String cls = className.toString().toLowerCase(Locale.ROOT);
+            if (cls.contains("searchview") || cls.contains("searchbar") || cls.contains("searchautocomplete")) {
+                return true;
+            }
+        }
+
+        // 2. Reject search / filter input variations
+        int inputType = node.getInputType();
+        int variation = inputType & 0x00000ff0;
+        if (variation == 0x000000b0 // TYPE_TEXT_VARIATION_FILTER
+            || variation == 0x000000c0 // TYPE_TEXT_VARIATION_WEB_SEARCH_RESULT
+            || variation == 0x000000a0 // TYPE_TEXT_VARIATION_POSTAL_ADDRESS
+        ) {
+            return true;
+        }
+
         String probe = getNodeProbe(node);
+        if (probe.contains("search") || probe.contains("query") || probe.contains("filter") || probe.contains("find") || probe.contains("keyword") || probe.contains("lookup")) {
+            return true;
+        }
+
         if (probe.matches(BLACKLIST_REGEX)) {
             return true;
         }
 
-        // Check view IDs and class names
+        // Check view IDs
         String viewId = node.getViewIdResourceName();
-        if (viewId != null && viewId.toLowerCase(Locale.ROOT).matches(BLACKLIST_REGEX)) {
-            return true;
+        if (viewId != null) {
+            String lowerId = viewId.toLowerCase(Locale.ROOT);
+            if (lowerId.contains("search") || lowerId.contains("query") || lowerId.contains("filter")
+                || lowerId.contains("find") || lowerId.contains("lookup") || lowerId.contains("keyword")
+                || lowerId.contains("omnibox") || lowerId.contains("url_bar") || lowerId.contains("address_bar")) {
+                return true;
+            }
+            if (lowerId.matches(BLACKLIST_REGEX)) {
+                return true;
+            }
         }
 
         return false;
     }
 
     private boolean isPasswordNode(AccessibilityNodeInfo node) {
+        if (isBlacklistedNode(node)) return false;
         if (node.isPassword()) return true;
 
         int inputType = node.getInputType();
@@ -290,9 +322,10 @@ public class NexVaultAccessibilityService extends AccessibilityService {
 
     private boolean isUsernameNode(AccessibilityNodeInfo node) {
         if (isPasswordNode(node)) return false;
+        if (isBlacklistedNode(node)) return false;
 
         String probe = getNodeProbe(node);
-        if (probe.matches(".*\\b(username|user_id|userid|user_name|login_id|login|signin|sign_in|auth|member_id|handle|email|user)\\b.*")) {
+        if (probe.matches(".*\\b(username|user_id|userid|user_name|login_id|login|signin|sign_in|member_id|handle|email)\\b.*")) {
             return true;
         }
 
@@ -307,7 +340,7 @@ public class NexVaultAccessibilityService extends AccessibilityService {
     private String getNodeProbe(AccessibilityNodeInfo node) {
         StringBuilder sb = new StringBuilder();
         if (node.getViewIdResourceName() != null) sb.append(node.getViewIdResourceName()).append(" ");
-        if (node.getText() != null) sb.append(node.getText()).append(" ");
+        // DO NOT inspect node.getText()! Structural metadata only to avoid matching typed user search queries.
         if (node.getContentDescription() != null) sb.append(node.getContentDescription()).append(" ");
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && node.getHintText() != null) {
             sb.append(node.getHintText()).append(" ");

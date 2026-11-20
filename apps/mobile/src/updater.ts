@@ -100,14 +100,15 @@ const isSha256 = (s: unknown): s is string => typeof s === 'string' && /^[a-f0-9
 async function latestFromManifest() {
   const m = await getJson(LATEST_MANIFEST_URL);
   const a = m?.mobile;
-  if (m?.schemaVersion !== 2 || !m.version || !a?.url || !isSha256(a.sha256) || !(a.size > 0)) {
+  const mobileVersion = a?.version || m?.version;
+  if (!mobileVersion || !a?.url || !isSha256(a.sha256) || !(a.size > 0)) {
     throw new Error('Release manifest is incomplete');
   }
   return {
-    version: String(m.version),
+    version: String(mobileVersion),
     asset: { filename: a.filename, url: a.url, size: a.size, sha256: a.sha256.toLowerCase(), versionCode: a.versionCode } as UpdateAsset,
     releaseUrl: m.releaseUrl as string,
-    releaseName: `NexVault ${m.tag}`,
+    releaseName: `NexVault Mobile ${a.tag || m.tag || ('v' + mobileVersion)}`,
     notes: '',
     publishedAt: m.publishedAt as string,
     source: 'manifest' as const
