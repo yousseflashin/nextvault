@@ -1,8 +1,11 @@
 /**
- * qrScanner.ts - Mobile camera & image QR code reader for 2FA OTP codes.
- * Uses the Web standard BarcodeDetector API (native in Chromium / Android WebView)
- * with support for live camera scanning and file/image upload fallback.
+ * qrScanner.ts - Universal QR code scanner for 2FA TOTP authenticator keys.
+ *
+ * Uses pure JS `jsQR` engine for 100% reliable scanning in any Android WebView,
+ * Capacitor environment, or browser, with native BarcodeDetector acceleration
+ * when available.
  */
+import jsQR from 'jsqr';
 
 export interface QrScanResult {
   raw: string;
@@ -17,19 +20,8 @@ export interface QrScanResult {
   };
 }
 
-export async function isBarcodeDetectorSupported(): Promise<boolean> {
-  if (typeof window === 'undefined') return false;
-  if (!('BarcodeDetector' in window)) return false;
-  try {
-    const formats = await (window as any).BarcodeDetector.getSupportedFormats();
-    return Array.isArray(formats) && formats.includes('qr_code');
-  } catch {
-    return 'BarcodeDetector' in window;
-  }
-}
-
 /**
- * Request camera permission from native Android or browser environment
+ * Request camera permission from native Android Capacitor plugin or web mediaDevices.
  */
 export async function requestCameraPermission(): Promise<boolean> {
   if (typeof window === 'undefined') return false;
@@ -48,7 +40,9 @@ export async function requestCameraPermission(): Promise<boolean> {
   // 2. Standard Web mediaDevices permission request
   try {
     if (navigator?.mediaDevices?.getUserMedia) {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } }
+      });
       stream.getTracks().forEach(t => t.stop());
       return true;
     }
@@ -60,31 +54,60 @@ export async function requestCameraPermission(): Promise<boolean> {
 }
 
 /**
- * Scan a QR code from a File / Blob / Image element
+ * Scan a QR code from an image File or Blob.
  */
-export async function scanQrFromImageSource(source: File | Blob | HTMLImageElement | HTMLCanvasElement): Promise<string | null> {
+export async function scanQrFromImageSource(source: File | Blob): Promise<string | null> {
   try {
-    let target: any = source;
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return null;
 
-    if (source instanceof Blob || source instanceof File) {
-      if ('createImageBitmap' in window) {
-        target = await createImageBitmap(source);
-      } else {
-        target = await new Promise<HTMLImageElement>((resolve, reject) => {
-          const img = new Image();
-          img.onload = () => resolve(img);
-          img.onerror = reject;
-          img.src = URL.createObjectURL(source);
-        });
-      }
+    let width = 0;
+    let height = 0;
+
+    if (typeof createImageBitmap === 'function') {
+      const bitmap = await createImageBitmap(source);
+      width = bitmap.width;
+      height = bitmap.height;
+      canvas.width = width;
+      canvas.height = height;
+      ctx.drawImage(bitmap, 0, 0);
+    } else {
+      const img = new Image();
+      const url = URL.createObjectURL(source);
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = reject;
+        img.src = url;
+      });
+      URL.revokeObjectURL(url);
+      width = img.naturalWidth || img.width;
+      height = img.naturalHeight || img.height;
+      canvas.width = width;
+      canvas.height = height;
+      ctx.drawImage(img, 0, 0);
     }
 
+    if (width === 0 || height === 0) return null;
+
+    // 1. Try native BarcodeDetector if available
     if ('BarcodeDetector' in window) {
-      const detector = new (window as any).BarcodeDetector({ formats: ['qr_code'] });
-      const barcodes = await detector.detect(target);
-      if (barcodes && barcodes.length > 0 && barcodes[0].rawValue) {
-        return barcodes[0].rawValue;
-      }
+      try {
+        const detector = new (window as any).BarcodeDetector({ formats: ['qr_code'] });
+        const barcodes = await detector.detect(canvas);
+        if (barcodes && barcodes.length > 0 && barcodes[0].rawValue) {
+          return barcodes[0].rawValue.trim();
+        }
+      } catch {}
+    }
+
+    // 2. Guaranteed jsQR fallback on pixel data
+    const imgData = ctx.getImageData(0, 0, width, height);
+    const code = jsQR(imgData.data, width, height, {
+      inversionAttempts: 'attemptBoth'
+    });
+    if (code && code.data) {
+      return code.data.trim();
     }
   } catch (err) {
     console.warn('[QR] Error scanning image source:', err);
@@ -93,7 +116,8 @@ export async function scanQrFromImageSource(source: File | Blob | HTMLImageEleme
 }
 
 /**
- * Start real-time camera scanning on a <video> element
+ * Start real-time camera scanning on a <video> element.
+ * Uses native BarcodeDetector when available and jsQR frame analysis.
  */
 export async function startCameraQrScanner(
   videoElement: HTMLVideoElement,
@@ -102,7 +126,7 @@ export async function startCameraQrScanner(
 ): Promise<() => void> {
   let active = true;
   let stream: MediaStream | null = null;
-  let rafId: number | null = null;
+  let animId: number | null = null;
 
   try {
     const constraints: MediaStreamConstraints = {
@@ -122,47 +146,92 @@ export async function startCameraQrScanner(
 
     videoElement.srcObject = stream;
     videoElement.setAttribute('playsinline', 'true');
+    videoElement.muted = true;
     await videoElement.play();
 
-    const detector = ('BarcodeDetector' in window)
-      ? new (window as any).BarcodeDetector({ formats: ['qr_code'] })
-      : null;
+    // Prepare offscreen canvas for frame capture
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+    let detector: any = null;
+    if ('BarcodeDetector' in window) {
+      try {
+        detector = new (window as any).BarcodeDetector({ formats: ['qr_code'] });
+      } catch {}
+    }
 
     let isScanning = false;
+    let lastScanTime = 0;
 
-    const scanFrame = async () => {
+    const processFrame = async (timestamp: number) => {
       if (!active) return;
 
-      if (!isScanning && videoElement.readyState >= videoElement.HAVE_CURRENT_DATA) {
+      // Scan every ~120ms to save CPU & battery
+      if (timestamp - lastScanTime >= 120 && !isScanning && videoElement.readyState >= videoElement.HAVE_CURRENT_DATA) {
         isScanning = true;
+        lastScanTime = timestamp;
+
         try {
+          let detectedText: string | null = null;
+
+          // Strategy A: Native BarcodeDetector
           if (detector) {
-            const barcodes = await detector.detect(videoElement);
-            if (barcodes && barcodes.length > 0 && barcodes[0].rawValue) {
-              const code = barcodes[0].rawValue.trim();
-              if (code) {
-                // Vibrate if supported for haptic feedback
-                if (typeof navigator !== 'undefined' && navigator.vibrate) {
-                  try { navigator.vibrate(100); } catch {}
-                }
-                onDetected(code);
-                return; // Stop scanning once detected
+            try {
+              const barcodes = await detector.detect(videoElement);
+              if (barcodes && barcodes.length > 0 && barcodes[0].rawValue) {
+                detectedText = barcodes[0].rawValue.trim();
               }
+            } catch {}
+          }
+
+          // Strategy B: jsQR on canvas frame (bulletproof fallback)
+          if (!detectedText && ctx && videoElement.videoWidth > 0 && videoElement.videoHeight > 0) {
+            const vw = videoElement.videoWidth;
+            const vh = videoElement.videoHeight;
+
+            // Scale down high-res video to ~640px for faster QR recognition
+            const maxDim = 640;
+            const scale = Math.min(1, maxDim / Math.max(vw, vh));
+            const cw = Math.floor(vw * scale);
+            const ch = Math.floor(vh * scale);
+
+            if (canvas.width !== cw || canvas.height !== ch) {
+              canvas.width = cw;
+              canvas.height = ch;
+            }
+
+            ctx.drawImage(videoElement, 0, 0, cw, ch);
+            const imgData = ctx.getImageData(0, 0, cw, ch);
+            const qr = jsQR(imgData.data, cw, ch, {
+              inversionAttempts: 'dontInvert'
+            });
+
+            if (qr && qr.data) {
+              detectedText = qr.data.trim();
             }
           }
+
+          if (detectedText && active) {
+            // Haptic feedback
+            if (typeof navigator !== 'undefined' && navigator.vibrate) {
+              try { navigator.vibrate(80); } catch {}
+            }
+            onDetected(detectedText);
+            return; // Stop scanning loop on detection
+          }
         } catch {
-          // Frame detection error, continue next frame
+          // ignore transient frame decode errors
         } finally {
           isScanning = false;
         }
       }
 
       if (active) {
-        rafId = requestAnimationFrame(scanFrame);
+        animId = requestAnimationFrame(processFrame);
       }
     };
 
-    rafId = requestAnimationFrame(scanFrame);
+    animId = requestAnimationFrame(processFrame);
   } catch (err: any) {
     console.error('[QR] Camera access error:', err);
     onError?.(err);
@@ -170,7 +239,7 @@ export async function startCameraQrScanner(
 
   return () => {
     active = false;
-    if (rafId) cancelAnimationFrame(rafId);
+    if (animId) cancelAnimationFrame(animId);
     if (stream) {
       stream.getTracks().forEach(t => t.stop());
     }
@@ -179,4 +248,3 @@ export async function startCameraQrScanner(
     }
   };
 }
-

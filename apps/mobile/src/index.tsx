@@ -42,10 +42,20 @@ function CircularCountdown({ seconds, period = 30, size = 26 }: { seconds: numbe
   const circumference = normalizedRadius * 2 * Math.PI;
   const strokeDashoffset = circumference - (seconds / period) * circumference;
   const isUrgent = seconds <= 5;
-  const strokeColor = isUrgent ? '#ef4444' : '#10b981';
+  const strokeColor = seconds <= 5 ? '#ef4444' : seconds <= 10 ? '#f59e0b' : '#00e599';
 
   return (
-    <div style={{ position: 'relative', width: size, height: size, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+    <div style={{
+      position: 'relative',
+      width: size,
+      height: size,
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexShrink: 0,
+      transform: isUrgent ? 'scale(1.08)' : 'scale(1)',
+      transition: 'transform 0.3s cubic-bezier(0.2, 0, 0, 1)'
+    }}>
       <svg height={size} width={size} style={{ transform: 'rotate(-90deg)', display: 'block' }}>
         <circle
           stroke="rgba(255, 255, 255, 0.12)"
@@ -69,8 +79,8 @@ function CircularCountdown({ seconds, period = 30, size = 26 }: { seconds: numbe
       </svg>
       <span style={{
         position: 'absolute',
-        fontSize: Math.round(size * 0.38),
-        fontWeight: 700,
+        fontSize: Math.round(size * 0.4),
+        fontWeight: 800,
         fontFamily: 'var(--nv-font-mono)',
         color: strokeColor,
         lineHeight: 1
@@ -575,16 +585,21 @@ function QrScannerModal({
 
   return (
     <div className="nv-modal-backdrop" onClick={onClose}>
-      <div className="nv-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px' }}>
+      <div className="nv-modal" onClick={e => e.stopPropagation()}>
         <div className="nv-modal-header">
           <div className="nv-modal-title">📷 Scan 2FA QR Code</div>
-          <button className="nv-btn nv-btn-ghost nv-btn-sm" type="button" onClick={onClose}>✕</button>
+          <button className="nv-btn-icon" type="button" onClick={onClose}>✕</button>
         </div>
         <div className="nv-modal-body">
           <div className="nv-qr-viewfinder">
             <video ref={videoRef} className="nv-qr-video" playsInline autoPlay muted />
-            <div className="nv-qr-target" />
+            <div className="nv-qr-target">
+              <div className="nv-qr-laser" />
+            </div>
           </div>
+          <p style={{ fontSize: '0.75rem', color: 'var(--nv-muted)', textAlign: 'center', margin: '0' }}>
+            Align QR code inside the frame to scan automatically
+          </p>
 
           {camErr && (
             <div style={{ background: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.35)', borderRadius: 'var(--nv-radius-sm)', padding: '0.65rem', textAlign: 'center' }}>
@@ -613,6 +628,7 @@ function QrScannerModal({
             <button
               className="nv-btn nv-btn-ghost nv-btn-sm"
               type="button"
+              style={{ padding: '0.65rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
               onClick={() => fileInputRef.current?.click()}
             >
               📁 Choose QR Screenshot / Image
@@ -638,6 +654,271 @@ function QrScannerModal({
         </div>
         <div className="nv-modal-footer">
           <button className="nv-btn nv-btn-ghost nv-btn-sm" type="button" onClick={onClose}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AddOtpModal({
+  isOpen,
+  onClose,
+  editingService,
+  service,
+  setService,
+  account,
+  setAccount,
+  secret,
+  setSecret,
+  digits,
+  setDigits,
+  period,
+  setPeriod,
+  algorithm,
+  setAlgorithm,
+  onSave,
+  onOpenScanner,
+  onFileSelect,
+  showToast
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  editingService: string | null;
+  service: string;
+  setService: (s: string) => void;
+  account: string;
+  setAccount: (a: string) => void;
+  secret: string;
+  setSecret: (s: string) => void;
+  digits: number;
+  setDigits: (d: number) => void;
+  period: number;
+  setPeriod: (p: number) => void;
+  algorithm: 'SHA1' | 'SHA256' | 'SHA512';
+  setAlgorithm: (a: 'SHA1' | 'SHA256' | 'SHA512') => void;
+  onSave: () => void;
+  onOpenScanner: () => void;
+  onFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  showToast: (m: string) => void;
+}) {
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  if (!isOpen) return null;
+
+  async function handlePasteKey() {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text) return;
+      const parsed = parseOtpAuthUri(text);
+      if (parsed) {
+        setService(parsed.service);
+        setAccount(parsed.account || '');
+        setSecret(parsed.secret);
+        setDigits(parsed.digits || 6);
+        setPeriod(parsed.period || 30);
+        setAlgorithm((parsed.algorithm as any) || 'SHA1');
+        showToast(`Parsed otpauth URI for "${parsed.service}"`);
+      } else {
+        const clean = text.trim().replace(/\s+/g, '').toUpperCase();
+        setSecret(clean);
+        showToast('Pasted secret key');
+      }
+    } catch {
+      showToast('Clipboard access unavailable. Type or paste manually.');
+    }
+  }
+
+  return (
+    <div className="nv-modal-backdrop" onClick={onClose}>
+      <div className="nv-modal" onClick={e => e.stopPropagation()}>
+        <div className="nv-modal-header">
+          <div className="nv-modal-title">
+            {editingService ? '✏️ Edit 2FA Authenticator' : '⚡ Add 2FA Authenticator'}
+          </div>
+          <button className="nv-btn-icon" onClick={onClose} title="Close">✕</button>
+        </div>
+
+        <div className="nv-modal-body">
+          {/* Quick Scanner Actions */}
+          {!editingService && (
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.25rem' }}>
+              <button
+                type="button"
+                className="nv-btn nv-btn-accent nv-btn-sm"
+                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '0.65rem' }}
+                onClick={() => { onClose(); onOpenScanner(); }}
+              >
+                <span>📷</span>
+                <span>Scan QR Code</span>
+              </button>
+              <input
+                type="file"
+                ref={fileRef}
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={(e) => { onClose(); onFileSelect(e); }}
+              />
+              <button
+                type="button"
+                className="nv-btn nv-btn-ghost nv-btn-sm"
+                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '0.65rem' }}
+                onClick={() => fileRef.current?.click()}
+              >
+                <span>📁</span>
+                <span>Upload QR Image</span>
+              </button>
+            </div>
+          )}
+
+          {!editingService && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', margin: '0.1rem 0' }}>
+              <div style={{ flex: 1, height: 1, background: 'var(--nv-border)' }} />
+              <span style={{ fontSize: '0.68rem', color: 'var(--nv-muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                Or Enter Setup Key
+              </span>
+              <div style={{ flex: 1, height: 1, background: 'var(--nv-border)' }} />
+            </div>
+          )}
+
+          {/* Account / Service Name */}
+          <div className="nv-m3-field">
+            <label className="nv-m3-field-label">Account / Service Name *</label>
+            <div className="nv-m3-field-input-wrap">
+              <input
+                className="nv-m3-field-input"
+                placeholder="e.g. GitHub, Google, AWS, Binance"
+                value={service}
+                onChange={e => setService(e.target.value)}
+                autoFocus={!editingService}
+              />
+            </div>
+          </div>
+
+          {/* Account / Email */}
+          <div className="nv-m3-field">
+            <label className="nv-m3-field-label">Username / Email (Optional)</label>
+            <div className="nv-m3-field-input-wrap">
+              <input
+                className="nv-m3-field-input"
+                placeholder="e.g. user@gmail.com"
+                value={account}
+                onChange={e => setAccount(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* Secret Key */}
+          <div className="nv-m3-field">
+            <label className="nv-m3-field-label">Your Key / Secret (Base32) *</label>
+            <div className="nv-m3-field-input-wrap">
+              <input
+                className="nv-m3-field-input nv-mono"
+                style={{ letterSpacing: '1px', textTransform: 'uppercase' }}
+                placeholder="e.g. JBSWY3DPEHPK3PXP"
+                value={secret}
+                onChange={e => setSecret(e.target.value.replace(/\s+/g, '').toUpperCase())}
+              />
+              <button
+                type="button"
+                className="nv-btn nv-btn-ghost nv-btn-sm"
+                style={{ padding: '0.4rem 0.65rem', borderLeft: '1px solid var(--nv-border)', borderRadius: 0, fontSize: '0.72rem' }}
+                onClick={handlePasteKey}
+                title="Paste from clipboard"
+              >
+                📋 Paste
+              </button>
+            </div>
+          </div>
+
+          {/* Advanced Accordion Toggle */}
+          <div>
+            <button
+              type="button"
+              className="nv-btn nv-btn-ghost nv-btn-sm"
+              style={{ padding: '0.3rem 0', fontSize: '0.75rem', color: 'var(--nv-accent)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+              onClick={() => setShowAdvanced(!showAdvanced)}
+            >
+              <span>{showAdvanced ? '▼' : '▶'}</span>
+              <span>Advanced Options (Digits, Period, Algorithm)</span>
+            </button>
+
+            {showAdvanced && (
+              <div style={{ marginTop: '0.5rem', padding: '0.75rem', background: 'var(--nv-bg-2)', borderRadius: 'var(--nv-radius-sm)', border: '1px solid var(--nv-border)', display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.74rem', color: 'var(--nv-text-secondary)' }}>Key Type:</span>
+                  <span className="nv-badge success" style={{ fontSize: '0.68rem' }}>Time-based (TOTP)</span>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.74rem', color: 'var(--nv-text-secondary)' }}>Code Length:</span>
+                  <div style={{ display: 'flex', gap: '0.3rem' }}>
+                    <button
+                      type="button"
+                      className={`nv-badge ${digits === 6 ? 'success' : ''}`}
+                      style={{ cursor: 'pointer', padding: '4px 10px', fontSize: '0.7rem' }}
+                      onClick={() => setDigits(6)}
+                    >
+                      6 Digits
+                    </button>
+                    <button
+                      type="button"
+                      className={`nv-badge ${digits === 8 ? 'success' : ''}`}
+                      style={{ cursor: 'pointer', padding: '4px 10px', fontSize: '0.7rem' }}
+                      onClick={() => setDigits(8)}
+                    >
+                      8 Digits
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.74rem', color: 'var(--nv-text-secondary)' }}>Refresh Period:</span>
+                  <div style={{ display: 'flex', gap: '0.3rem' }}>
+                    <button
+                      type="button"
+                      className={`nv-badge ${period === 30 ? 'success' : ''}`}
+                      style={{ cursor: 'pointer', padding: '4px 10px', fontSize: '0.7rem' }}
+                      onClick={() => setPeriod(30)}
+                    >
+                      30s (Default)
+                    </button>
+                    <button
+                      type="button"
+                      className={`nv-badge ${period === 60 ? 'success' : ''}`}
+                      style={{ cursor: 'pointer', padding: '4px 10px', fontSize: '0.7rem' }}
+                      onClick={() => setPeriod(60)}
+                    >
+                      60s
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.74rem', color: 'var(--nv-text-secondary)' }}>Algorithm:</span>
+                  <select
+                    className="nv-select nv-select-sm"
+                    style={{ fontSize: '0.72rem', padding: '2px 8px' }}
+                    value={algorithm}
+                    onChange={e => setAlgorithm(e.target.value as any)}
+                  >
+                    <option value="SHA1">SHA-1 (Default)</option>
+                    <option value="SHA256">SHA-256</option>
+                    <option value="SHA512">SHA-512</option>
+                  </select>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="nv-modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', padding: '0.9rem 1.4rem' }}>
+          <button className="nv-btn nv-btn-ghost nv-btn-sm" type="button" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="nv-btn nv-btn-accent" type="button" onClick={onSave} disabled={!service.trim() || !secret.trim()}>
+            {editingService ? 'Update Authenticator' : 'Save 2FA Account'}
+          </button>
         </div>
       </div>
     </div>
@@ -1004,12 +1285,16 @@ function App() {
   }
 
   // OTP State
-  const [otpItems, setOtpItems] = useState<{ service: string; code?: string }[]>([]);
+  const [otpItems, setOtpItems] = useState<{ service: string; code?: string; account?: string; digits?: number; period?: number }[]>([]);
   const [otpSearch, setOtpSearch] = useState('');
   const [showAddOtp, setShowAddOtp] = useState(false);
   const [editingOtpService, setEditingOtpService] = useState<string | null>(null);
   const [otpService, setOtpService] = useState('');
+  const [otpAccount, setOtpAccount] = useState('');
   const [otpSecret, setOtpSecret] = useState('');
+  const [otpDigits, setOtpDigits] = useState<number>(6);
+  const [otpPeriod, setOtpPeriod] = useState<number>(30);
+  const [otpAlgorithm, setOtpAlgorithm] = useState<'SHA1' | 'SHA256' | 'SHA512'>('SHA1');
   const [countdown, setCountdown] = useState(30);
 
   // Security & Auto-Lock State
@@ -1156,20 +1441,38 @@ function App() {
     const parsed = parseOtpAuthUri(rawCode);
     if (parsed) {
       setOtpService(parsed.service);
+      setOtpAccount(parsed.account || '');
       setOtpSecret(parsed.secret);
+      setOtpDigits(parsed.digits || 6);
+      setOtpPeriod(parsed.period || 30);
+      setOtpAlgorithm((parsed.algorithm as any) || 'SHA1');
       setShowAddOtp(true);
-      setActiveTab('otp');
-      showToast(`Scanned QR for "${parsed.service}". Click Save to add.`);
+      setVaultCategory('2fa');
+      setActiveTab('vault');
+      showToast(`Scanned 2FA QR for "${parsed.service}".`);
     } else {
       const cleaned = rawCode.trim().replace(/\s+/g, '').toUpperCase();
       if (/^[A-Z2-7]{16,64}$/.test(cleaned)) {
         setOtpSecret(cleaned);
         setShowAddOtp(true);
-        setActiveTab('otp');
+        setVaultCategory('2fa');
+        setActiveTab('vault');
         showToast('Detected Base32 TOTP secret from QR code!');
       } else {
-        showToast('Scanned code is not a valid otpauth:// URI');
+        showToast('Scanned code is not a valid 2FA QR code or otpauth URI');
       }
+    }
+  }
+
+  async function handleQrFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    showToast('Scanning image for QR code...');
+    const result = await scanQrFromImageSource(file);
+    if (result) {
+      onQrCodeDetected(result);
+    } else {
+      showToast('Could not detect a QR code in this image.');
     }
   }
 
@@ -1761,15 +2064,20 @@ function App() {
   async function onSaveOTP() {
     const s = otpService.trim();
     const sec = otpSecret.trim().toUpperCase().replace(/\s/g, '');
-    if (!s || !sec) return setStatus('Enter service and secret key');
+    const acc = otpAccount.trim();
+    if (!s || !sec) return setStatus('Enter account name and secret key');
     try {
-      const r = await (window as any).nexVault.addOTP(s, sec);
+      const r = await (window as any).nexVault.addOTP(s, sec, acc, otpDigits, otpPeriod, otpAlgorithm);
       if (r.success) {
         if (editingOtpService && editingOtpService !== s) {
           await (window as any).nexVault.deleteOTP(editingOtpService);
         }
         setOtpService('');
+        setOtpAccount('');
         setOtpSecret('');
+        setOtpDigits(6);
+        setOtpPeriod(30);
+        setOtpAlgorithm('SHA1');
         setEditingOtpService(null);
         setShowAddOtp(false);
         refreshOTPs(false);
@@ -1821,9 +2129,14 @@ function App() {
       if (!entry?.success) throw new Error(entry?.error || 'Authenticator not found');
       setEditingOtpService(serviceName);
       setOtpService(serviceName);
+      setOtpAccount(entry.account || '');
       setOtpSecret(entry.secret || '');
+      setOtpDigits(entry.digits || 6);
+      setOtpPeriod(entry.period || 30);
+      setOtpAlgorithm(entry.algorithm || 'SHA1');
       setShowAddOtp(true);
-      setActiveTab('otp');
+      setVaultCategory('2fa');
+      setActiveTab('vault');
     } catch (err: any) {
       showToast('Edit error: ' + err.message);
     }
@@ -1882,12 +2195,13 @@ function App() {
   }
 
   const filteredVaultItems = useMemo(() => {
-    let source: { service: string; username?: string; createdAt: string; isOtp?: boolean; secret?: string; code?: string; otpCode?: string }[] = [];
+    let source: { service: string; username?: string; account?: string; createdAt: string; isOtp?: boolean; secret?: string; code?: string; otpCode?: string }[] = [];
 
     if (vaultCategory === '2fa') {
       source = otpItems.map(o => ({
         service: o.service,
-        username: '2FA Authenticator',
+        account: o.account || '',
+        username: o.account || '2FA Authenticator',
         createdAt: (o as any).createdAt || '',
         isOtp: true,
         code: o.code
@@ -1910,7 +2224,8 @@ function App() {
           .filter(o => !loginServices.has(o.service.toLowerCase().trim()))
           .map(o => ({
             service: o.service,
-            username: '2FA Authenticator',
+            account: o.account || '',
+            username: o.account || '2FA Authenticator',
             createdAt: (o as any).createdAt || '',
             isOtp: true,
             code: o.code
@@ -1998,6 +2313,12 @@ function App() {
                   <span className="nv-badge success" style={{ fontSize: '0.62rem' }}>Login + 2FA</span>
                 ) : null}
               </div>
+              {v.isOtp && v.account && (
+                <span className="nv-vault-meta">
+                  <span>👤</span>
+                  <span>{v.account}</span>
+                </span>
+              )}
               {v.username && !v.isOtp && (
                 <span
                   className="nv-vault-meta"
@@ -2453,35 +2774,60 @@ function App() {
               {/* PAGE 2: VAULT */}
               {activeTab === 'vault' && (
                 <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.4rem' }}>
-                    <div style={{ fontSize: '1rem', fontWeight: 700, color: '#fff' }}>Vault Logins</div>
-                    <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
-                      {vaultItems.length > 0 && (
-                        <button
-                          className="nv-btn nv-btn-ghost nv-btn-sm"
-                          style={{ color: 'var(--nv-danger)', borderColor: 'rgba(239, 68, 68, 0.3)' }}
-                          onClick={onDeleteAllVault}
-                          title="Delete all passwords from vault and mesh"
-                        >
-                          🗑 Delete All
-                        </button>
-                      )}
-                      <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={() => refreshVault(true)}>
-                        {isSyncing ? 'Syncing...' : 'Sync'}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
+                      <span style={{ fontSize: '1.2rem', fontWeight: 700, color: '#fff', letterSpacing: '-0.01em' }}>
+                        {vaultCategory === '2fa' ? '2FA Authenticator' : vaultCategory === 'logins' ? 'Vault Logins' : 'All Credentials'}
+                      </span>
+                      <span className="nv-badge" style={{ fontSize: '0.68rem', padding: '2px 8px' }}>
+                        {vaultCategory === '2fa' ? otpItems.length : vaultCategory === 'logins' ? vaultItems.length : (vaultItems.length + otpItems.length)}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <button
+                        className="nv-btn nv-btn-accent nv-btn-sm"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '0.35rem 0.65rem' }}
+                        onClick={() => setIsScanningQr(true)}
+                        title="Scan 2FA QR Code"
+                      >
+                        <span>📷</span>
+                        <span>Scan QR</span>
                       </button>
-                      <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={() => setImportModalType('vault')}>
-                        📥 Import
+                      <button
+                        className="nv-btn nv-btn-ghost nv-btn-sm"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                        onClick={() => {
+                          setEditingOtpService(null);
+                          setOtpService('');
+                          setOtpAccount('');
+                          setOtpSecret('');
+                          setOtpDigits(6);
+                          setOtpPeriod(30);
+                          setOtpAlgorithm('SHA1');
+                          setShowAddOtp(true);
+                        }}
+                        title="Add 2FA Authenticator"
+                      >
+                        <span>⚡</span>
+                        <span>+ 2FA</span>
                       </button>
-                      <button className="nv-btn nv-btn-sm" onClick={() => {
-                        if (!showAddVault) {
-                          setEditingVaultService(null);
-                          setService('');
-                          setVaultUsername('');
-                          setCredential('');
-                        }
-                        setShowAddVault(!showAddVault);
-                      }}>
-                        {showAddVault ? '✕ Close' : '+ Add'}
+                      <button
+                        className="nv-btn nv-btn-sm"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                        onClick={() => {
+                          if (!showAddVault) {
+                            setEditingVaultService(null);
+                            setService('');
+                            setVaultUsername('');
+                            setCredential('');
+                          }
+                          setShowAddVault(!showAddVault);
+                        }}
+                      >
+                        {showAddVault ? '✕' : '+ Login'}
+                      </button>
+                      <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={() => { refreshVault(true); refreshOTPs(true); }} title="Sync">
+                        {isSyncing ? '...' : '🔄'}
                       </button>
                     </div>
                   </div>
@@ -2489,7 +2835,7 @@ function App() {
                   <div className="nv-search-bar">
                     <span>🔍</span>
                     <input
-                      placeholder="Search passwords..."
+                      placeholder="Search logins & 2FA authenticators..."
                       value={vaultSearch}
                       onChange={e => setVaultSearch(e.target.value)}
                     />
@@ -2500,56 +2846,38 @@ function App() {
                     )}
                   </div>
 
-                  {/* Category Pills: All, Logins, 2FA Authenticator */}
-                  <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.5rem', marginBottom: '0.6rem', overflowX: 'auto', paddingBottom: '2px' }}>
+                  {/* Material 3 Segmented Filter Chips */}
+                  <div className="nv-m3-filter-group" style={{ marginBottom: '0.75rem' }}>
                     <button
                       type="button"
-                      className="nv-badge"
-                      style={{
-                        cursor: 'pointer',
-                        padding: '6px 14px',
-                        fontSize: '0.75rem',
-                        fontWeight: 600,
-                        background: vaultCategory === 'all' ? 'var(--nv-primary-light)' : 'var(--nv-surface)',
-                        borderColor: vaultCategory === 'all' ? 'var(--nv-primary)' : 'var(--nv-border)',
-                        color: vaultCategory === 'all' ? '#fff' : 'var(--nv-text-secondary)'
-                      }}
+                      className={`nv-m3-chip ${vaultCategory === 'all' ? 'active' : ''}`}
                       onClick={() => setVaultCategory('all')}
                     >
-                      All ({vaultItems.length + otpItems.length})
+                      <span>🗂️</span>
+                      <span>All ({vaultItems.length + otpItems.length})</span>
                     </button>
                     <button
                       type="button"
-                      className="nv-badge"
-                      style={{
-                        cursor: 'pointer',
-                        padding: '6px 14px',
-                        fontSize: '0.75rem',
-                        fontWeight: 600,
-                        background: vaultCategory === 'logins' ? 'var(--nv-primary-light)' : 'var(--nv-surface)',
-                        borderColor: vaultCategory === 'logins' ? 'var(--nv-primary)' : 'var(--nv-border)',
-                        color: vaultCategory === 'logins' ? '#fff' : 'var(--nv-text-secondary)'
-                      }}
+                      className={`nv-m3-chip ${vaultCategory === 'logins' ? 'active' : ''}`}
                       onClick={() => setVaultCategory('logins')}
                     >
-                      Logins ({vaultItems.length})
+                      <span>🔑</span>
+                      <span>Logins ({vaultItems.length})</span>
                     </button>
                     <button
                       type="button"
-                      className="nv-badge"
-                      style={{
-                        cursor: 'pointer',
-                        padding: '6px 14px',
-                        fontSize: '0.75rem',
-                        fontWeight: 600,
-                        background: vaultCategory === '2fa' ? 'var(--nv-primary-light)' : 'var(--nv-surface)',
-                        borderColor: vaultCategory === '2fa' ? 'var(--nv-primary)' : 'var(--nv-border)',
-                        color: vaultCategory === '2fa' ? '#fff' : 'var(--nv-text-secondary)'
-                      }}
+                      className={`nv-m3-chip ${vaultCategory === '2fa' ? 'active' : ''}`}
                       onClick={() => setVaultCategory('2fa')}
                     >
-                      2FA Codes ({otpItems.length})
+                      <span>⚡</span>
+                      <span>2FA Codes ({otpItems.length})</span>
                     </button>
+                    {vaultCategory === '2fa' && (
+                      <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <CircularCountdown seconds={countdown} size={22} />
+                        <span style={{ fontSize: '0.72rem', color: 'var(--nv-muted)', fontFamily: 'var(--nv-font-mono)' }}>{countdown}s</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Sorting & Filter Options */}
@@ -3680,35 +4008,34 @@ function App() {
         {unlocked && (
           <nav className="nv-bottom-nav">
             <button
-              className={`nv-nav-button ${activeTab === 'vault' || activeTab === 'otp' ? 'active' : ''}`}
+              className={`nv-nav-button ${activeTab === 'vault' ? 'active' : ''}`}
               onClick={() => setActiveTab('vault')}
             >
-              <span className="nav-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21 2-2 2m-1.5 1.5L16 7l-1.5-1.5M16 7l-4 4m0 0a5.5 5.5 0 1 1-7.78 7.78 5.5 5.5 0 0 1 7.78-7.78Z"/></svg>
-              </span>
+              <div className="nav-icon-container">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21 2-2 2m-1.5 1.5L16 7l-1.5-1.5M16 7l-4 4m0 0a5.5 5.5 0 1 1-7.78 7.78 5.5 5.5 0 0 1 7.78-7.78Z"/></svg>
+              </div>
               <span>Vault</span>
             </button>
             <button
               className={`nv-nav-button ${activeTab === 'grid' ? 'active' : ''}`}
               onClick={() => setActiveTab('grid')}
             >
-              <span className="nav-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="6" height="6" x="9" y="2" rx="1"/><rect width="6" height="6" x="2" y="16" rx="1"/><rect width="6" height="6" x="16" y="16" rx="1"/><path d="M12 8v4m0 0H5v4m7-4h7v4"/></svg>
-              </span>
+              <div className="nav-icon-container">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="6" height="6" x="9" y="2" rx="1"/><rect width="6" height="6" x="2" y="16" rx="1"/><rect width="6" height="6" x="16" y="16" rx="1"/><path d="M12 8v4m0 0H5v4m7-4h7v4"/></svg>
+              </div>
               <span>Mesh Sync</span>
             </button>
             <button
               className={`nv-nav-button ${activeTab === 'settings' || activeTab === 'security' ? 'active' : ''}`}
               onClick={() => setActiveTab('settings')}
-              style={{ position: 'relative' }}
             >
-              <span className="nav-icon">
-                <Shield size={20} />
-              </span>
-              <span>Security &amp; Settings</span>
-              {incomingExtensionRequest && (
-                <span style={{ position: 'absolute', top: 6, right: '30%', width: 7, height: 7, borderRadius: '50%', background: 'var(--nv-primary)', boxShadow: '0 0 6px var(--nv-primary)' }} />
-              )}
+              <div className="nav-icon-container">
+                <Shield size={22} />
+                {incomingExtensionRequest && (
+                  <span style={{ position: 'absolute', top: 3, right: 14, width: 7, height: 7, borderRadius: '50%', background: '#00e599', boxShadow: '0 0 8px #00e599' }} />
+                )}
+              </div>
+              <span>Settings</span>
             </button>
           </nav>
         )}
@@ -3743,6 +4070,56 @@ function App() {
             diagStatus={diagStatus}
           />
         )}
+
+        {/* Material 3 Floating Action Button (FAB) */}
+        {unlocked && activeTab === 'vault' && (
+          <button
+            type="button"
+            className="nv-fab"
+            onClick={() => {
+              if (vaultCategory === '2fa') {
+                setIsScanningQr(true);
+              } else {
+                setEditingOtpService(null);
+                setOtpService('');
+                setOtpAccount('');
+                setOtpSecret('');
+                setOtpDigits(6);
+                setOtpPeriod(30);
+                setOtpAlgorithm('SHA1');
+                setShowAddOtp(true);
+              }
+            }}
+            title={vaultCategory === '2fa' ? 'Scan 2FA QR Code' : 'Add Item'}
+          >
+            <span style={{ fontSize: '1.5rem', lineHeight: 1, fontWeight: 700 }}>
+              {vaultCategory === '2fa' ? '📷' : '+'}
+            </span>
+          </button>
+        )}
+
+        {/* Add / Edit 2FA Authenticator Modal */}
+        <AddOtpModal
+          isOpen={showAddOtp}
+          onClose={() => setShowAddOtp(false)}
+          editingService={editingOtpService}
+          service={otpService}
+          setService={setOtpService}
+          account={otpAccount}
+          setAccount={setOtpAccount}
+          secret={otpSecret}
+          setSecret={setOtpSecret}
+          digits={otpDigits}
+          setDigits={setOtpDigits}
+          period={otpPeriod}
+          setPeriod={setOtpPeriod}
+          algorithm={otpAlgorithm}
+          setAlgorithm={setOtpAlgorithm}
+          onSave={onSaveOTP}
+          onOpenScanner={() => setIsScanningQr(true)}
+          onFileSelect={handleQrFileSelect}
+          showToast={showToast}
+        />
 
       </div>
     </div>

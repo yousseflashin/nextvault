@@ -55,6 +55,10 @@ export interface StoredOTP {
   code?: string;
   logicalCounter?: number;
   peerId?: string;
+  account?: string;
+  digits?: number;
+  period?: number;
+  algorithm?: string;
 }
 
 export function compareLogicalClocks(
@@ -2152,7 +2156,7 @@ export function initMobileVault() {
       return { success: true, count };
     },
 
-    async addOTP(service: string, secret: string) {
+    async addOTP(service: string, secret: string, account = '', digits = 6, period = 30, algorithm = 'SHA1') {
       const state = loadVault();
       if (!state) throw new Error('Vault is locked or uninitialized');
 
@@ -2163,6 +2167,10 @@ export function initMobileVault() {
       const entry: StoredOTP = {
         service: cleanService,
         secret,
+        account: account.trim(),
+        digits,
+        period,
+        algorithm,
         createdAt: new Date().toISOString(),
         updatedAt: now
       };
@@ -2198,8 +2206,11 @@ export function initMobileVault() {
       const entriesWithCodes = await Promise.all(
         state.otps.map(async o => ({
           service: o.service,
+          account: o.account || '',
+          digits: o.digits || 6,
+          period: o.period || 30,
           createdAt: o.createdAt,
-          code: await calculateTotpCode(o.secret)
+          code: await calculateTotpCode(o.secret, o.period || 30, o.digits || 6)
         }))
       );
       return {
@@ -2214,7 +2225,7 @@ export function initMobileVault() {
       const target = normalizeDomain(service);
       const entry = state.otps.find(o => normalizeDomain(o.service) === target);
       if (!entry) return { success: false, error: 'Not found' };
-      const code = await calculateTotpCode(entry.secret);
+      const code = await calculateTotpCode(entry.secret, entry.period || 30, entry.digits || 6);
       return { success: true, code };
     },
 
@@ -2224,7 +2235,15 @@ export function initMobileVault() {
       const target = normalizeDomain(service);
       const entry = state.otps.find(o => normalizeDomain(o.service) === target);
       if (!entry) return { success: false, error: 'Not found' };
-      return { success: true, service: entry.service, secret: entry.secret };
+      return {
+        success: true,
+        service: entry.service,
+        secret: entry.secret,
+        account: entry.account || '',
+        digits: entry.digits || 6,
+        period: entry.period || 30,
+        algorithm: entry.algorithm || 'SHA1'
+      };
     },
 
     async deleteOTP(service: string) {
