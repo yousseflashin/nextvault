@@ -37,9 +37,24 @@ public class AutofillBridgePlugin extends Plugin {
     @PluginMethod
     public void openSettings(PluginCall call) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            Intent intent = new Intent(Settings.ACTION_REQUEST_SET_AUTOFILL_SERVICE);
-            intent.setData(android.net.Uri.parse("package:" + getContext().getPackageName()));
-            getContext().startActivity(intent);
+            try {
+                Intent intent = new Intent(Settings.ACTION_REQUEST_SET_AUTOFILL_SERVICE);
+                intent.setData(android.net.Uri.parse("package:" + getContext().getPackageName()));
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                getContext().startActivity(intent);
+            } catch (Exception e1) {
+                try {
+                    Intent fallback = new Intent(Settings.ACTION_REQUEST_SET_AUTOFILL_SERVICE);
+                    fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    getContext().startActivity(fallback);
+                } catch (Exception e2) {
+                    try {
+                        Intent settingsIntent = new Intent(Settings.ACTION_SETTINGS);
+                        settingsIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        getContext().startActivity(settingsIntent);
+                    } catch (Exception ignored) {}
+                }
+            }
         }
         call.resolve();
     }

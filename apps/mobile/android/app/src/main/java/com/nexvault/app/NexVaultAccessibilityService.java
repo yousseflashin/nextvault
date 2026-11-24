@@ -219,15 +219,10 @@ public class NexVaultAccessibilityService extends AccessibilityService {
             targetDomain = normalizePackageName(packageName);
         }
 
-        if (targetDomain.isEmpty()) {
-            hideOverlay();
-            return;
-        }
-
         // 4. Query credentials matching this domain/package
         List<JSONObject> matchingCreds = findCredentialsForDomain(targetDomain);
-        if (matchingCreds.isEmpty() && isBrowser && extractBrowserDomain().isEmpty()) {
-            matchingCreds = findSingleBrowserCredential();
+        if (matchingCreds.isEmpty()) {
+            matchingCreds = getAllCredentials();
         }
         Rect nodeBounds = new Rect();
         node.getBoundsInScreen(nodeBounds);
@@ -245,7 +240,7 @@ public class NexVaultAccessibilityService extends AccessibilityService {
             });
         } else if (isPass) {
             // Option to generate strong password anchored relative to this password field
-            showOverlay(targetDomain, "⚡ Generate Strong Password", true, nodeBounds, (view) -> {
+            showOverlay(targetDomain.isEmpty() ? "NexVault" : targetDomain, "⚡ Generate Strong Password", true, nodeBounds, (view) -> {
                 String generated = generateStrongPassword(24);
                 fillNodeText(node, generated);
                 hideOverlay();
@@ -321,8 +316,17 @@ public class NexVaultAccessibilityService extends AccessibilityService {
     }
 
     private boolean isUsernameNode(AccessibilityNodeInfo node) {
+        if (node == null || !node.isEditable()) return false;
         if (isPasswordNode(node)) return false;
         if (isBlacklistedNode(node)) return false;
+
+        int inputType = node.getInputType();
+        int variation = inputType & 0x00000ff0;
+        if (variation == 0x00000020 // TYPE_TEXT_VARIATION_EMAIL_ADDRESS
+            || variation == 0x000000d0 // TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS
+        ) {
+            return true;
+        }
 
         String probe = getNodeProbe(node);
         if (probe.matches(".*\\b(username|user_id|userid|user_name|login_id|login|signin|sign_in|member_id|handle|email)\\b.*")) {
@@ -334,16 +338,47 @@ public class NexVaultAccessibilityService extends AccessibilityService {
             return true;
         }
 
+        // If the form/window contains an editable password field, this editable field is the username field
+        if (hasAdjacentPasswordField()) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private boolean hasAdjacentPasswordField() {
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null) return false;
+        try {
+            List<AccessibilityNodeInfo> editables = new ArrayList<>();
+            collectEditableNodes(root, editables);
+            for (AccessibilityNodeInfo e : editables) {
+                if (e != null && isPasswordNode(e)) {
+                    return true;
+                }
+            }
+        } catch (Exception ignored) {
+        } finally {
+            root.recycle();
+        }
         return false;
     }
 
     private String getNodeProbe(AccessibilityNodeInfo node) {
         StringBuilder sb = new StringBuilder();
         if (node.getViewIdResourceName() != null) sb.append(node.getViewIdResourceName()).append(" ");
-        // DO NOT inspect node.getText()! Structural metadata only to avoid matching typed user search queries.
         if (node.getContentDescription() != null) sb.append(node.getContentDescription()).append(" ");
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && node.getHintText() != null) {
             sb.append(node.getHintText()).append(" ");
+        }
+        // Inspect placeholder/text if short and indicative of credentials
+        CharSequence text = node.getText();
+        if (text != null && text.length() > 0 && text.length() <= 40) {
+            String lower = text.toString().toLowerCase(Locale.ROOT);
+            if (lower.contains("user") || lower.contains("email") || lower.contains("login")
+                || lower.contains("pass") || lower.contains("sign in") || lower.contains("account")) {
+                sb.append(lower).append(" ");
+            }
         }
         return sb.toString().toLowerCase(Locale.ROOT);
     }
@@ -390,8 +425,14 @@ public class NexVaultAccessibilityService extends AccessibilityService {
                 return;
             }
         }
-        if (!textValue.isEmpty() && isLikelyUrl(textValue)
-            && (node.isEditable() || hintValue.contains("address") || hintValue.contains("web"))) {
+        if (!textValue.isEmpty() && isLikelyUrl(textValue)) {
+            out.add(node);
+            return;
+        }
+
+        CharSequence desc = node.getContentDescription();
+        String descValue = desc == null ? "" : desc.toString();
+        if (!descValue.isEmpty() && isLikelyUrl(descValue)) {
             out.add(node);
             return;
         }
@@ -439,18 +480,50 @@ public class NexVaultAccessibilityService extends AccessibilityService {
             String jsonStr = NativeCredentialStore.read(this);
             JSONArray array = new JSONArray(jsonStr);
             String normTarget = cleanUrl(domain);
-            String targetStem = packageStem(normTarget);
+            String targetStem = extractStem(normTarget);
 
             for (int i = 0; i < array.length(); i++) {
                 JSONObject cred = array.getJSONObject(i);
                 String service = cleanUrl(cred.optString("service", ""));
                 if (service.isEmpty()) continue;
 
-                String serviceStem = packageStem(service);
-                if (service.equals(normTarget)
-                    || service.contains(normTarget)
-                    || normTarget.contains(service)
-                    || (!targetStem.isEmpty() && targetStem.equals(serviceStem))) {
+                String serviceStem = extractStem(service);
+                boolean matched = false;
+
+                // 1. Direct or subdomain match
+                if (service.equalsIgnoreCase(normTarget)
+                    || normTarget.endsWith("." + service)
+                    || service.endsWith("." + normTarget)
+                    || (!serviceStem.isEmpty() && !targetStem.isEmpty() && serviceStem.equalsIgnoreCase(targetStem))) {
+                    matched = true;
+                }
+
+                // 2. Package segment matching for native apps (e.g. "com.spotify.music" -> "spotify")
+                if (!matched && normTarget.contains(".")) {
+                    String[] segments = normTarget.split("\\.");
+                    for (String seg : segments) {
+                        if (seg.length() > 2 && !isGenericSegment(seg)) {
+                            if (seg.equalsIgnoreCase(serviceStem) || service.toLowerCase(Locale.ROOT).contains(seg)) {
+                                matched = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (!matched && service.contains(".")) {
+                    String[] segments = service.split("\\.");
+                    for (String seg : segments) {
+                        if (seg.length() > 2 && !isGenericSegment(seg)) {
+                            if (seg.equalsIgnoreCase(targetStem) || normTarget.toLowerCase(Locale.ROOT).contains(seg)) {
+                                matched = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (matched) {
                     matches.add(cred);
                 }
             }
@@ -459,35 +532,39 @@ public class NexVaultAccessibilityService extends AccessibilityService {
         return matches;
     }
 
-    private List<JSONObject> findSingleBrowserCredential() {
-        List<JSONObject> matches = new ArrayList<>();
+    private List<JSONObject> getAllCredentials() {
+        List<JSONObject> list = new ArrayList<>();
         try {
             JSONArray array = new JSONArray(NativeCredentialStore.read(this));
             for (int i = 0; i < array.length(); i++) {
                 JSONObject credential = array.getJSONObject(i);
                 if (!credential.optString("username").isEmpty() || !credential.optString("password").isEmpty()) {
-                    matches.add(credential);
+                    list.add(credential);
                 }
             }
         } catch (Exception ignored) {}
-        return matches.size() == 1 ? matches : new ArrayList<>();
+        return list;
     }
 
-    private String packageStem(String value) {
-        if (value == null || value.isEmpty()) return "";
-        String[] parts = value.toLowerCase(Locale.ROOT).split("\\.");
-        for (int i = parts.length - 1; i >= 0; i--) {
-            String part = parts[i];
-            if (!part.isEmpty()
-                && !part.equals("android")
-                && !part.equals("app")
-                && !part.equals("com")
-                && !part.equals("org")
-                && !part.equals("net")
-                && !part.equals("io")
-                && !part.equals("co")) return part;
-        }
-        return "";
+    private static boolean isGenericSegment(String seg) {
+        String s = seg.toLowerCase(Locale.ROOT);
+        return s.equals("com") || s.equals("android") || s.equals("app") || s.equals("org")
+            || s.equals("net") || s.equals("io") || s.equals("co") || s.equals("google")
+            || s.equals("mobile") || s.equals("client") || s.equals("ui") || s.equals("main");
+    }
+
+    private static String extractStem(String host) {
+        if (host == null || host.isEmpty()) return "";
+        String clean = host.toLowerCase(Locale.ROOT).replaceAll("^(https?://)?(www\\.)?", "");
+        int slash = clean.indexOf('/');
+        if (slash >= 0) clean = clean.substring(0, slash);
+        int colon = clean.indexOf(':');
+        if (colon >= 0) clean = clean.substring(0, colon);
+
+        int lastDot = clean.lastIndexOf('.');
+        String withoutTld = (lastDot > 0) ? clean.substring(0, lastDot) : clean;
+        int prevDot = withoutTld.lastIndexOf('.');
+        return (prevDot >= 0) ? withoutTld.substring(prevDot + 1) : withoutTld;
     }
 
     private AccessibilityNodeInfo findFocusedEditable(AccessibilityNodeInfo node) {

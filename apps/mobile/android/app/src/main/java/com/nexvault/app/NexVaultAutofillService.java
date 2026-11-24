@@ -160,9 +160,9 @@ public class NexVaultAutofillService extends AutofillService {
             }
 
             // 2. Fallback Credential Suggestions:
-            // ONLY offer fallback credentials if an ACTUAL password field is present on the screen
+            // Offer fallback credentials if an actual password field OR recognized username field is present
             // and the domain is not excluded. NEVER dump credentials into search bars or arbitrary text boxes!
-            if (!matched && hasActualPassword && credentials.length() > 0 && !isExcludedPackage(domain)) {
+            if (!matched && (hasActualPassword || hasUsername) && credentials.length() > 0 && !isExcludedPackage(domain)) {
                 int limit = Math.min(credentials.length(), 5);
                 for (int i = 0; i < limit; i++) {
                     JSONObject credential = credentials.getJSONObject(i);
@@ -360,8 +360,8 @@ public class NexVaultAutofillService extends AutofillService {
 
         if (password) username = false;
 
-        // Add ONLY verified credential fields
-        if (!blacklisted && node.getAutofillId() != null && (password || username)) {
+        // Add verified credential fields or candidate editable inputs
+        if (!blacklisted && node.getAutofillId() != null && (password || username || node.isFocused() || inputType != 0)) {
             fields.add(new Field(node.getAutofillId(), password, username, node.isFocused()));
         }
 
@@ -467,6 +467,16 @@ public class NexVaultAutofillService extends AutofillService {
                 if (segment.length() > 2
                     && !segment.equals("com") && !segment.equals("android") && !segment.equals("app") && !segment.equals("org") && !segment.equals("google")
                     && (segment.equalsIgnoreCase(stemService) || segment.contains(stemService) || stemService.contains(segment))) {
+                    return true;
+                }
+            }
+        }
+        if (normService.contains(".")) {
+            String[] segments = normService.split("\\.");
+            for (String segment : segments) {
+                if (segment.length() > 2
+                    && !segment.equals("com") && !segment.equals("android") && !segment.equals("app") && !segment.equals("org") && !segment.equals("google")
+                    && (segment.equalsIgnoreCase(stemDomain) || segment.contains(stemDomain) || stemDomain.contains(segment))) {
                     return true;
                 }
             }

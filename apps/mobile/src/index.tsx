@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
+import nexVaultIcon from './assets/icon.png';
+import nexVaultCover from './assets/cover.jpg';
 import './cyber/cyber.css';
 import './main.css';
 import {
@@ -1880,26 +1882,39 @@ function App() {
   }
 
   const filteredVaultItems = useMemo(() => {
-    let source: { service: string; username?: string; createdAt: string; isOtp?: boolean; secret?: string }[] = [];
+    let source: { service: string; username?: string; createdAt: string; isOtp?: boolean; secret?: string; code?: string; otpCode?: string }[] = [];
 
     if (vaultCategory === '2fa') {
       source = otpItems.map(o => ({
         service: o.service,
         username: '2FA Authenticator',
-        createdAt: o.createdAt,
+        createdAt: (o as any).createdAt || '',
         isOtp: true,
-        secret: o.secret
+        code: o.code
       }));
     } else if (vaultCategory === 'logins') {
       source = vaultItems.map(v => ({ ...v, isOtp: false }));
     } else {
-      // 'all': logins first, plus standalone OTPs
+      // 'all': logins first (annotated with matching OTP code if any), plus standalone OTPs
       const loginServices = new Set(vaultItems.map(v => v.service.toLowerCase().trim()));
       source = [
-        ...vaultItems.map(v => ({ ...v, isOtp: false })),
+        ...vaultItems.map(v => {
+          const matchingOtp = otpItems.find(o => o.service.toLowerCase().trim() === v.service.toLowerCase().trim());
+          return {
+            ...v,
+            isOtp: false,
+            otpCode: matchingOtp?.code
+          };
+        }),
         ...otpItems
           .filter(o => !loginServices.has(o.service.toLowerCase().trim()))
-          .map(o => ({ service: o.service, username: '2FA Authenticator', createdAt: o.createdAt, isOtp: true, secret: o.secret }))
+          .map(o => ({
+            service: o.service,
+            username: '2FA Authenticator',
+            createdAt: (o as any).createdAt || '',
+            isOtp: true,
+            code: o.code
+          }))
       ];
     }
 
@@ -1955,6 +1970,121 @@ function App() {
     return sortedKeys.map(k => ({ key: k, label: map.get(k)!.label, items: map.get(k)!.items }));
   }, [filteredVaultItems, vaultGroup]);
 
+  function renderVaultCard(v: { service: string; username?: string; createdAt: string; isOtp?: boolean; code?: string; otpCode?: string }) {
+    const hasOtp = Boolean(v.isOtp || v.otpCode);
+    const currentOtpCode = v.isOtp ? v.code : v.otpCode;
+    const cleanOtp = (currentOtpCode || '').replace(/\s+/g, '');
+    const formattedOtp = cleanOtp.length === 6 ? `${cleanOtp.slice(0, 3)} ${cleanOtp.slice(3)}` : (cleanOtp || '------');
+    const isPassCopied = copiedKey === `pass-${v.service}`;
+    const isUserCopied = copiedKey === `user-${v.username}`;
+    const isOtpCopied = copiedKey === `otp-${v.service}`;
+
+    return (
+      <div className="nv-vault-item" key={v.service}>
+        <div className="nv-vault-header-row">
+          <div className="nv-vault-left">
+            <div
+              className="nv-avatar-monogram"
+              style={v.isOtp ? { background: 'linear-gradient(135deg, rgba(14, 165, 233, 0.25), rgba(16, 185, 129, 0.25))', borderColor: 'rgba(14, 165, 233, 0.35)' } : {}}
+            >
+              {(v.service.charAt(0) || 'V').toUpperCase()}
+            </div>
+            <div className="nv-vault-info">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                <span className="nv-vault-service">{v.service}</span>
+                {v.isOtp ? (
+                  <span className="nv-badge" style={{ fontSize: '0.62rem', background: 'rgba(14, 165, 233, 0.15)', color: 'var(--nv-accent)', borderColor: 'rgba(14, 165, 233, 0.3)' }}>2FA</span>
+                ) : v.otpCode ? (
+                  <span className="nv-badge success" style={{ fontSize: '0.62rem' }}>Login + 2FA</span>
+                ) : null}
+              </div>
+              {v.username && !v.isOtp && (
+                <span
+                  className="nv-vault-meta"
+                  onClick={() => copyUsername(v.username!)}
+                  style={{ cursor: 'pointer' }}
+                  title="Click to copy username"
+                >
+                  <span>👤</span>
+                  <span>{v.username}</span>
+                  {isUserCopied && <span style={{ color: 'var(--nv-primary)', fontWeight: 600 }}>✓ Copied</span>}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="nv-vault-actions">
+            <button
+              className="nv-btn-icon"
+              onClick={() => v.isOtp ? editOTP(v.service) : editPassword(v.service)}
+              title="Edit"
+            >
+              ✏️
+            </button>
+            <button
+              className="nv-btn-icon"
+              style={{ color: 'var(--nv-danger)' }}
+              onClick={() => v.isOtp ? deleteOTP(v.service) : deletePassword(v.service)}
+              title="Delete"
+            >
+              🗑
+            </button>
+          </div>
+        </div>
+
+        {/* 2FA TOTP Bar if present */}
+        {hasOtp && (
+          <div
+            className="nv-vault-totp-box"
+            onClick={() => copyOTP(cleanOtp, v.service)}
+            style={{ cursor: 'pointer' }}
+            title="Click to copy 2FA TOTP code"
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+              <CircularCountdown seconds={countdown} size={24} />
+              <span className="nv-totp-code">{formattedOtp}</span>
+            </div>
+            <button
+              className="nv-btn nv-btn-ghost nv-btn-sm"
+              style={isOtpCopied ? { background: 'rgba(16, 185, 129, 0.25)', borderColor: 'var(--nv-primary)', color: 'var(--nv-primary)' } : {}}
+              onClick={(e) => { e.stopPropagation(); copyOTP(cleanOtp, v.service); }}
+            >
+              {isOtpCopied ? '✓ Copied' : 'Copy 2FA'}
+            </button>
+          </div>
+        )}
+
+        {/* Actions / Details Row */}
+        <div className="nv-vault-details-row">
+          <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+            {!v.isOtp && (
+              <button
+                className="nv-btn nv-btn-sm"
+                style={isPassCopied ? { background: 'rgba(16, 185, 129, 0.25)', borderColor: 'var(--nv-primary)', color: 'var(--nv-primary)' } : {}}
+                onClick={() => copyPassword(v.service)}
+                title="Copy password"
+              >
+                {isPassCopied ? '✓ Copied Password' : '⚡ Copy Password'}
+              </button>
+            )}
+            {v.username && !v.isOtp && (
+              <button
+                className="nv-btn nv-btn-ghost nv-btn-sm"
+                style={isUserCopied ? { background: 'rgba(16, 185, 129, 0.25)', borderColor: 'var(--nv-primary)', color: 'var(--nv-primary)' } : {}}
+                onClick={() => copyUsername(v.username!)}
+                title="Copy username"
+              >
+                {isUserCopied ? '✓ Copied User' : '👤 User'}
+              </button>
+            )}
+          </div>
+          <span style={{ fontSize: '0.68rem', color: 'var(--nv-muted)', marginLeft: 'auto' }}>
+            {v.createdAt ? new Date(v.createdAt).toLocaleDateString() : ''}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="nv-app">
       <div className="nv-app-layer">
@@ -1962,30 +2092,37 @@ function App() {
         {/* Header */}
         <header className="nv-app-header">
           <div className="nv-app-brand">
-            <img src="/icon.png" alt="NextVault" style={{ width: 24, height: 24, borderRadius: 5, objectFit: 'contain' }} />
-            <span className="nv-app-title">Next<span>Vault</span></span>
-            <span className="nv-badge" style={{ fontSize: '0.62rem' }}>v{CURRENT_VERSION}</span>
+            <div className="nv-app-brand-icon-box">
+              <img
+                src={nexVaultIcon}
+                alt="NextVault"
+                className="nv-app-brand-img"
+                onError={(e) => {
+                  (e.currentTarget as HTMLElement).style.display = 'none';
+                  const fallback = e.currentTarget.parentElement?.querySelector('.nv-brand-fallback');
+                  if (fallback) (fallback as HTMLElement).style.display = 'inline-flex';
+                }}
+              />
+              <span className="nv-brand-fallback" style={{ display: 'none' }}>
+                <Shield size={18} />
+              </span>
+            </div>
+            <div className="nv-app-brand-text">
+              <span className="nv-app-title">Next<span>Vault</span></span>
+              <span className="nv-version-pill">v{CURRENT_VERSION}</span>
+            </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
             {unlocked && (
-              <>
-                <button
-                  className="nv-btn nv-btn-ghost"
-                  style={{ padding: '0.25rem 0.55rem', fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '3px' }}
-                  onClick={openQuickFill}
-                  title="Quick Fill credentials"
-                >
-                  <Shield size={12} />
-                  <span>Fill</span>
-                </button>
-                <button
-                  className="nv-btn nv-btn-ghost"
-                  style={{ padding: '0.25rem 0.55rem', fontSize: '0.7rem' }}
-                  onClick={onLockVault}
-                >
-                  Lock
-                </button>
-              </>
+              <button
+                className="nv-btn nv-btn-ghost nv-btn-sm"
+                style={{ fontSize: '0.72rem', padding: '0.28rem 0.55rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                onClick={onLockVault}
+                title="Lock Mobile Vault"
+              >
+                <span>🔒</span>
+                <span>Lock</span>
+              </button>
             )}
             <StatusPill ok={unlocked} label={unlocked ? 'unlocked' : 'locked'} />
           </div>
@@ -2082,7 +2219,7 @@ function App() {
             /* LOCKED AUTH SCREEN WITH HERO COVER BANNER */
             <div className="nv-hero-cover-card" style={{ margin: 'auto 0' }}>
               <div className="nv-hero-cover-media">
-                <img src="/cover.jpg" alt="NextVault Cover" className="nv-hero-cover-img" />
+                <img src={nexVaultCover} alt="NextVault Cover" className="nv-hero-cover-img" />
                 <div className="nv-hero-cover-gradient" />
                 <div className="nv-hero-cover-content">
                   <span className="nv-hero-chip">P2P ENCRYPTED MESH</span>
@@ -2527,112 +2664,14 @@ function App() {
                           </div>
                           {!isCollapsed && (
                             <div className="nv-group-items">
-                              {grp.items.map(v => (
-                                <div className="nv-vault-item" key={v.service}>
-                                  <div className="nv-vault-left">
-                                    <div className="nv-avatar-monogram">
-                                      {(v.service.charAt(0) || 'V').toUpperCase()}
-                                    </div>
-                                    <div className="nv-vault-info">
-                                      <span className="nv-vault-service">{v.service}</span>
-                                      <span className="nv-vault-meta">
-                                        {v.username ? `👤 ${v.username}` : `Saved ${new Date(v.createdAt).toLocaleDateString()}`}
-                                      </span>
-                                    </div>
-                                  </div>
-                                  <div className="nv-vault-actions">
-                                    <button
-                                      className="nv-btn nv-btn-sm"
-                                      style={copiedKey === `pass-${v.service}` ? { background: 'rgba(16, 185, 129, 0.25)', borderColor: 'var(--nv-primary)', color: 'var(--nv-primary)' } : {}}
-                                      onClick={() => copyPassword(v.service)}
-                                      title="Copy password"
-                                    >
-                                      {copiedKey === `pass-${v.service}` ? '✓ Copied' : '⚡ Pass'}
-                                    </button>
-                                    {v.username && (
-                                      <button
-                                        className="nv-btn nv-btn-ghost nv-btn-sm"
-                                        style={copiedKey === `user-${v.username}` ? { background: 'rgba(16, 185, 129, 0.25)', borderColor: 'var(--nv-primary)', color: 'var(--nv-primary)' } : {}}
-                                        onClick={() => copyUsername(v.username!)}
-                                        title="Copy username"
-                                      >
-                                        {copiedKey === `user-${v.username}` ? '✓ User' : '👤 User'}
-                                      </button>
-                                    )}
-                                    <button
-                                      className="nv-btn-icon"
-                                      onClick={() => editPassword(v.service)}
-                                      title="Edit credential"
-                                    >
-                                      ✏️
-                                    </button>
-                                    <button
-                                      className="nv-btn-icon"
-                                      style={{ color: 'var(--nv-danger)' }}
-                                      onClick={() => deletePassword(v.service)}
-                                      title="Delete credential"
-                                    >
-                                      🗑
-                                    </button>
-                                  </div>
-                                </div>
-                              ))}
+                              {grp.items.map(v => renderVaultCard(v))}
                             </div>
                           )}
                         </div>
                       );
                     })
                   ) : (
-                    filteredVaultItems.map(v => (
-                      <div className="nv-vault-item" key={v.service}>
-                        <div className="nv-vault-left">
-                          <div className="nv-avatar-monogram">
-                            {(v.service.charAt(0) || 'V').toUpperCase()}
-                          </div>
-                          <div className="nv-vault-info">
-                            <span className="nv-vault-service">{v.service}</span>
-                            <span className="nv-vault-meta">
-                              {v.username ? `👤 ${v.username}` : `Saved ${new Date(v.createdAt).toLocaleDateString()}`}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="nv-vault-actions">
-                          <button
-                            className="nv-btn nv-btn-sm"
-                            style={copiedKey === `pass-${v.service}` ? { background: 'rgba(16, 185, 129, 0.25)', borderColor: 'var(--nv-primary)', color: 'var(--nv-primary)' } : {}}
-                            onClick={() => copyPassword(v.service)}
-                            title="Copy password"
-                          >
-                            {copiedKey === `pass-${v.service}` ? '✓ Copied' : '⚡ Pass'}
-                          </button>
-                          {v.username && (
-                            <button
-                              className="nv-btn nv-btn-ghost nv-btn-sm"
-                              style={copiedKey === `user-${v.username}` ? { background: 'rgba(16, 185, 129, 0.25)', borderColor: 'var(--nv-primary)', color: 'var(--nv-primary)' } : {}}
-                              onClick={() => copyUsername(v.username!)}
-                              title="Copy username"
-                            >
-                              {copiedKey === `user-${v.username}` ? '✓ User' : '👤 User'}
-                            </button>
-                          )}
-                          <button
-                            className="nv-btn-icon"
-                            onClick={() => editPassword(v.service)}
-                            title="Edit credential"
-                          >
-                            ✏️
-                          </button>
-                          <button
-                            className="nv-btn-icon"
-                            style={{ color: 'var(--nv-danger)' }}
-                            onClick={() => deletePassword(v.service)}
-                            title="Delete credential"
-                          >
-                            🗑
-                          </button>
-                        </div>
-                      </div>
-                    ))
+                    filteredVaultItems.map(v => renderVaultCard(v))
                   )}
                 </div>
               )}

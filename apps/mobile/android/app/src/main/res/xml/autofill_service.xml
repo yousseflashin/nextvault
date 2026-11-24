@@ -1,10 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <autofill-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:settingsActivity="com.nexvault.app.MainActivity">
-    <compatibility-package android:name="com.android.chrome" android:maxLongVersionCode="711900039" />
-    <compatibility-package android:name="com.chrome.beta" android:maxLongVersionCode="711900039" />
-    <compatibility-package android:name="com.chrome.canary" android:maxLongVersionCode="711900039" />
-    <compatibility-package android:name="com.chrome.dev" android:maxLongVersionCode="711900039" />
-    <compatibility-package android:name="org.chromium.chrome" android:maxLongVersionCode="711900039" />
-    <compatibility-package android:name="com.brave.browser" android:maxLongVersionCode="711900039" />
+    <compatibility-package android:name="com.android.chrome" />
+    <compatibility-package android:name="com.chrome.beta" />
+    <compatibility-package android:name="com.chrome.canary" />
+    <compatibility-package android:name="com.chrome.dev" />
+    <compatibility-package android:name="org.chromium.chrome" />
+    <compatibility-package android:name="com.brave.browser" />
+    <compatibility-package android:name="org.mozilla.firefox" />
+    <compatibility-package android:name="org.mozilla.fenix" />
+    <compatibility-package android:name="com.microsoft.emmx" />
+    <compatibility-package android:name="com.sec.android.app.sbrowser" />
+    <compatibility-package android:name="com.opera.browser" />
+    <compatibility-package android:name="com.opera.mini.native" />
+    <compatibility-package android:name="com.opera.touch" />
+    <compatibility-package android:name="com.duckduckgo.mobile.android" />
+    <compatibility-package android:name="com.vivaldi.browser" />
 </autofill-service>
