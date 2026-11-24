@@ -9,12 +9,11 @@
  * Usage:
  *   node scripts/generate-release-manifest.mjs --dir <artifacts-dir> [--version 0.1.31] [--sync-website]
  *
- * The directory must contain at least one *.AppImage and one *.apk.
- * Outputs (written into the same directory):
- *   - release-info.json   (schema v2, consumed by the website and in-app updaters)
+ * Outputs (written into the target directory):
+ *   - release-info.json   (schema v2, consumed by website and in-app updaters)
  *   - SHA256SUMS.txt      (compatible with `sha256sum -c`)
  */
-import { copyFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import {
   GITHUB_REPO,
@@ -42,12 +41,15 @@ const version = (arg('version') || readRootVersion()).replace(/^v/, '');
 parseVersion(version);
 const tag = `v${version}`;
 
+if (!existsSync(dir)) {
+  throw new Error(`Artifact directory does not exist: ${dir}`);
+}
+
 const files = readdirSync(dir);
-function pickArtifact(ext, versionHint) {
+
+function findArtifact(ext, versionHint) {
   const matches = files.filter((f) => f.toLowerCase().endsWith(ext));
-  if (matches.length === 0) {
-    throw new Error(`Expected a *${ext} binary in ${dir}, found none`);
-  }
+  if (matches.length === 0) return null;
   if (matches.length === 1) return matches[0];
   const versionMatch = matches.find((f) => f.includes(versionHint));
   return versionMatch || matches.sort()[matches.length - 1];
@@ -65,8 +67,66 @@ async function describe(filename) {
   };
 }
 
-const desktopFile = pickArtifact('.appimage', version);
-const mobileFile = pickArtifact('.apk', version);
+let existingManifest = null;
+const manifestPath = join(dir, MANIFEST_FILENAME);
+const websiteManifestPath = join(ROOT, 'apps', 'website', 'public', MANIFEST_FILENAME);
+
+for (const p of [manifestPath, websiteManifestPath]) {
+  if (existsSync(p)) {
+    try {
+      const data = JSON.parse(readFileSync(p, 'utf8'));
+      if (data && data.schemaVersion === MANIFEST_SCHEMA_VERSION) {
+        existingManifest = data;
+        break;
+      }
+    } catch {}
+  }
+}
+
+const desktopFile = findArtifact('.appimage', version);
+const mobileFile = findArtifact('.apk', version);
+
+if (!desktopFile && !mobileFile && !existingManifest) {
+  throw new Error(`Expected at least one *.AppImage or *.apk binary in ${dir}, found none`);
+}
+
+let desktopData = null;
+if (desktopFile) {
+  desktopData = {
+    platform: 'linux-x86_64',
+    arch: 'x86_64',
+    format: 'AppImage',
+    ...(await describe(desktopFile)),
+    requirements: PLATFORM_REQUIREMENTS.desktop
+  };
+} else if (existingManifest?.desktop) {
+  desktopData = {
+    ...existingManifest.desktop,
+    url: releaseDownloadUrl(tag, existingManifest.desktop.filename)
+  };
+}
+
+let mobileData = null;
+if (mobileFile) {
+  mobileData = {
+    platform: 'android',
+    arch: 'universal',
+    format: 'APK',
+    ...(await describe(mobileFile)),
+    versionCode: androidVersionCode(version),
+    requirements: PLATFORM_REQUIREMENTS.mobile
+  };
+} else if (existingManifest?.mobile) {
+  mobileData = {
+    ...existingManifest.mobile,
+    versionCode: androidVersionCode(version),
+    url: releaseDownloadUrl(tag, existingManifest.mobile.filename)
+  };
+}
+
+if (!desktopData || !mobileData) {
+  throw new Error(`Could not resolve complete release data: desktop=${Boolean(desktopData)}, mobile=${Boolean(mobileData)}`);
+}
 
 const manifest = {
   schemaVersion: MANIFEST_SCHEMA_VERSION,
@@ -74,21 +134,8 @@ const manifest = {
   tag,
   publishedAt: new Date().toISOString(),
   releaseUrl: `https://github.com/${GITHUB_REPO}/releases/tag/${tag}`,
-  desktop: {
-    platform: 'linux-x86_64',
-    arch: 'x86_64',
-    format: 'AppImage',
-    ...(await describe(desktopFile)),
-    requirements: PLATFORM_REQUIREMENTS.desktop
-  },
-  mobile: {
-    platform: 'android',
-    arch: 'universal',
-    format: 'APK',
-    ...(await describe(mobileFile)),
-    versionCode: androidVersionCode(version),
-    requirements: PLATFORM_REQUIREMENTS.mobile
-  }
+  desktop: desktopData,
+  mobile: mobileData
 };
 
 const problems = validateManifest(manifest);
@@ -96,20 +143,23 @@ if (problems.length) {
   throw new Error(`Generated manifest is invalid:\n  - ${problems.join('\n  - ')}`);
 }
 
-const manifestPath = join(dir, MANIFEST_FILENAME);
 writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
-writeFileSync(
-  join(dir, 'SHA256SUMS.txt'),
-  [manifest.desktop, manifest.mobile].map((a) => `${a.sha256}  ${a.filename}`).join('\n') + '\n'
-);
 
-console.log(`Release manifest for ${tag}:`);
+const checksumEntries = [];
+if (desktopFile) checksumEntries.push(`${manifest.desktop.sha256}  ${manifest.desktop.filename}`);
+else if (manifest.desktop.sha256) checksumEntries.push(`${manifest.desktop.sha256}  ${manifest.desktop.filename}`);
+
+if (mobileFile) checksumEntries.push(`${manifest.mobile.sha256}  ${manifest.mobile.filename}`);
+else if (manifest.mobile.sha256) checksumEntries.push(`${manifest.mobile.sha256}  ${manifest.mobile.filename}`);
+
+writeFileSync(join(dir, 'SHA256SUMS.txt'), checksumEntries.join('\n') + '\n');
+
+console.log(`[manifest] Release manifest generated for ${tag}:`);
 console.log(`  desktop  ${manifest.desktop.filename}  ${manifest.desktop.sizeFormatted} (${manifest.desktop.size} B)  sha256:${manifest.desktop.sha256}`);
 console.log(`  mobile   ${manifest.mobile.filename}  ${manifest.mobile.sizeFormatted} (${manifest.mobile.size} B)  sha256:${manifest.mobile.sha256}`);
-console.log(`Wrote ${manifestPath} and SHA256SUMS.txt`);
+console.log(`[manifest] Wrote ${manifestPath} and SHA256SUMS.txt`);
 
 if (hasFlag('sync-website')) {
-  const websiteManifest = join(ROOT, 'apps', 'website', 'public', MANIFEST_FILENAME);
-  copyFileSync(manifestPath, websiteManifest);
-  console.log(`Synced manifest -> ${websiteManifest}`);
+  copyFileSync(manifestPath, websiteManifestPath);
+  console.log(`[manifest] Synced manifest -> ${websiteManifestPath}`);
 }

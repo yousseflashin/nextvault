@@ -17,8 +17,7 @@ import https from 'node:https';
 import readline from 'node:readline';
 import { spawnSync } from 'node:child_process';
 
-const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..');
-const GITHUB_REPO = 'yousseflashin/nextvault';
+import { ROOT, GITHUB_REPO } from './lib/release-common.mjs';
 
 function getCurrentBranch() {
   try {
@@ -176,6 +175,11 @@ async function main() {
   console.log('====================================================\n');
 
   if (!token) {
+    if (!process.stdin.isTTY) {
+      console.error('[upload] ✖ GITHUB_TOKEN not found in environment, .env, or .env.dev.');
+      console.error('[upload]   Please set GITHUB_TOKEN or add it to .env.dev to upload to GitHub Releases.');
+      process.exit(1);
+    }
     console.log('⚠️ GITHUB_TOKEN not found in environment, .env, or .env.dev.\n');
     console.log('You can generate a token here: https://github.com/settings/tokens/new?scopes=repo&description=NexVault+Releases\n');
     const inputToken = await promptQuestion('👉 Paste your GitHub Personal Access Token (or press Ctrl+C to cancel): ');

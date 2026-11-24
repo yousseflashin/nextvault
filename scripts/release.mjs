@@ -2,27 +2,40 @@
 /**
  * scripts/release.mjs
  *
- * Cuts a NexVault release. This script ONLY versions and tags; GitHub Actions
- * (.github/workflows/release.yml) builds, signs, checksums and publishes.
+ * Professional-grade release orchestrator for NexVault:
  *
- *   1. Bumps the version in every package/manifest (root package.json is the source of truth).
- *   2. Commits "chore(release): vX.Y.Z" and creates an annotated tag vX.Y.Z.
- *   3. Pushes the branch and the tag → CI release pipeline starts.
+ *   1. Pre-flight verification (git status, valid semver bump, tag uniqueness).
+ *   2. Pre-release tests (runs full unit test suite before touching any files).
+ *   3. Synchronized version stamping across all workspaces, lockfiles, and manifests.
+ *   4. Deterministic builds & artifact measurement (AppImage + Android APK).
+ *   5. Real hash & size measurement into release-info.json schema-v2 + SHA256SUMS.txt.
+ *   6. Website build with fresh release metadata.
+ *   7. Clean atomic git commit + annotated tag.
+ *   8. Push to remote and upload to GitHub Releases.
  *
  * Usage:
- *   npm run release                  # patch bump
- *   npm run release -- minor         # minor bump
- *   npm run release -- 1.2.3         # explicit version
- *   npm run release -- patch --dry-run
- *   npm run release -- patch --no-push
- *
- * CI usage (verifies a tag matches every versioned file):
- *   node scripts/release.mjs --verify v1.2.3
+ *   npm run release                  # Standard patch bump (e.g. 0.1.44 -> 0.1.45)
+ *   npm run release -- minor         # Minor bump
+ *   npm run release -- 0.2.0         # Explicit semver
+ *   npm run release -- --dry-run     # Preview without modifying files or git
+ *   npm run release -- --no-build    # Fast CI mode: bumps versions, commits, tags, pushes (CI builds)
+ *   npm run release -- --no-push     # Local release only without pushing to remote
+ *   npm run release -- --target=mobile   # Mobile-only decoupled release
+ *   npm run release -- --target=desktop  # Desktop-only decoupled release
+ *   npm run release -- --verify v0.1.45  # Verification gate for CI runners
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { ROOT, bumpVersion, compareVersions, parseVersion, readRootVersion } from './lib/release-common.mjs';
+import {
+  ROOT,
+  GITHUB_REPO,
+  androidVersionCode,
+  bumpVersion,
+  compareVersions,
+  parseVersion,
+  readRootVersion
+} from './lib/release-common.mjs';
 
 /** Every JSON file carrying the product version. */
 const JSON_VERSION_FILES = [
@@ -47,7 +60,7 @@ const LOCKFILES = [
   'apps/website/package-lock.json'
 ];
 
-/** Static text that shows the version before the runtime value loads. */
+/** Static text templates that show the version in desktop. */
 const TEXT_REPLACEMENTS = [
   {
     file: 'apps/desktop/src/index.html',
@@ -64,6 +77,15 @@ const fail = (msg) => { console.error(`[release] ✖ ${msg}`); process.exit(1); 
 function git(args, { allowFailure = false, capture = false } = {}) {
   const res = spawnSync('git', args, { cwd: ROOT, encoding: 'utf8', stdio: capture ? 'pipe' : 'inherit' });
   if (res.status !== 0 && !allowFailure) fail(`git ${args.join(' ')} failed${res.stderr ? `: ${res.stderr.trim()}` : ''}`);
+  return res;
+}
+
+function run(cmd, args, { cwd = ROOT } = {}) {
+  log(`> ${cmd} ${args.join(' ')}`);
+  const res = spawnSync(cmd, args, { cwd, stdio: 'inherit', env: process.env });
+  if (res.status !== 0) {
+    fail(`Step failed: ${cmd} ${args.join(' ')} (exit code ${res.status})`);
+  }
   return res;
 }
 
@@ -94,13 +116,11 @@ function verify(tag) {
 // ---------------------------------------------------------------- bump mode
 function bumpFiles(next, target = 'all') {
   if (target === 'mobile') {
-    // 1. apps/mobile/package.json
     const mobJson = readJson('apps/mobile/package.json');
     mobJson.version = next;
     writeJson('apps/mobile/package.json', mobJson);
     log('  ✓ apps/mobile/package.json');
 
-    // 2. apps/mobile/package-lock.json
     if (existsSync(join(ROOT, 'apps/mobile/package-lock.json'))) {
       const lock = readJson('apps/mobile/package-lock.json');
       lock.version = next;
@@ -109,12 +129,11 @@ function bumpFiles(next, target = 'all') {
       log('  ✓ apps/mobile/package-lock.json');
     }
 
-    // 3. update release-info.json mobile block
     if (existsSync(join(ROOT, 'apps/website/public/release-info.json'))) {
       const relInfo = readJson('apps/website/public/release-info.json');
       if (relInfo.mobile) {
         relInfo.mobile.version = next;
-        relInfo.mobile.versionCode = 100000 + (parseVersion(next)[0] * 1000000) + (parseVersion(next)[1] * 1000) + parseVersion(next)[2];
+        relInfo.mobile.versionCode = androidVersionCode(next);
         relInfo.mobile.filename = `NexVault-${next}.apk`;
         relInfo.mobile.tag = `v${next}-mobile`;
         relInfo.mobile.url = `https://github.com/${GITHUB_REPO}/releases/download/${relInfo.mobile.tag}/${relInfo.mobile.filename}`;
@@ -126,13 +145,11 @@ function bumpFiles(next, target = 'all') {
   }
 
   if (target === 'desktop') {
-    // 1. apps/desktop/package.json
     const dtJson = readJson('apps/desktop/package.json');
     dtJson.version = next;
     writeJson('apps/desktop/package.json', dtJson);
     log('  ✓ apps/desktop/package.json');
 
-    // 2. apps/desktop/package-lock.json
     if (existsSync(join(ROOT, 'apps/desktop/package-lock.json'))) {
       const lock = readJson('apps/desktop/package-lock.json');
       lock.version = next;
@@ -141,7 +158,6 @@ function bumpFiles(next, target = 'all') {
       log('  ✓ apps/desktop/package-lock.json');
     }
 
-    // 3. apps/desktop/src/index.html replacements
     for (const { file, apply } of TEXT_REPLACEMENTS) {
       const abs = join(ROOT, file);
       if (!existsSync(abs)) continue;
@@ -153,7 +169,6 @@ function bumpFiles(next, target = 'all') {
       }
     }
 
-    // 4. update release-info.json desktop block
     if (existsSync(join(ROOT, 'apps/website/public/release-info.json'))) {
       const relInfo = readJson('apps/website/public/release-info.json');
       if (relInfo.desktop) {
@@ -168,6 +183,7 @@ function bumpFiles(next, target = 'all') {
     return;
   }
 
+  // Target 'all': bump all packages and manifests
   for (const rel of JSON_VERSION_FILES) {
     if (!existsSync(join(ROOT, rel))) continue;
     const data = readJson(rel);
@@ -205,16 +221,17 @@ function bumpFiles(next, target = 'all') {
     }
     if (relInfo.mobile) {
       relInfo.mobile.version = next;
-      relInfo.mobile.versionCode = 100000 + (parseVersion(next)[0] * 1000000) + (parseVersion(next)[1] * 1000) + parseVersion(next)[2];
+      relInfo.mobile.versionCode = androidVersionCode(next);
       relInfo.mobile.filename = `NexVault-${next}.apk`;
       relInfo.mobile.tag = `v${next}`;
       relInfo.mobile.url = `https://github.com/${GITHUB_REPO}/releases/download/v${next}/${relInfo.mobile.filename}`;
     }
     writeJson('apps/website/public/release-info.json', relInfo);
-    log('  ✓ apps/website/public/release-info.json (all blocks)');
+    log('  ✓ apps/website/public/release-info.json');
   }
 }
 
+// ---------------------------------------------------------------- main logic
 const argv = process.argv.slice(2);
 const flags = new Set(argv.filter((a) => a.startsWith('--')));
 const positional = argv.filter((a) => !a.startsWith('--'));
@@ -226,7 +243,7 @@ for (const f of flags) {
   }
 }
 if (!['all', 'mobile', 'desktop'].includes(target)) {
-  fail(`Invalid target \"${target}\". Expected 'all', 'mobile', or 'desktop'.`);
+  fail(`Invalid target "${target}". Expected 'all', 'mobile', or 'desktop'.`);
 }
 
 if (flags.has('--verify')) {
@@ -248,10 +265,16 @@ if (compareVersions(next, current) <= 0) fail(`New version ${next} must be great
 const tag = target === 'all' ? `v${next}` : `v${next}-${target}`;
 const dryRun = flags.has('--dry-run');
 const push = !flags.has('--no-push');
+const noBuild = flags.has('--no-build');
+const skipTests = flags.has('--no-test');
+const noUpload = flags.has('--no-upload');
 
 console.log('====================================================');
-console.log(`  NexVault release [target=${target}]: v${current} → ${tag}${dryRun ? '  (dry run)' : ''}`);
-console.log('====================================================');
+console.log(`  NexVault Professional Release Pipeline`);
+console.log(`  Target:  ${target}`);
+console.log(`  Version: v${current} → ${tag}${dryRun ? '  (DRY RUN)' : ''}`);
+console.log(`  Build:   ${noBuild ? 'Skipped (--no-build)' : 'Full Build & Measure'}`);
+console.log('====================================================\n');
 
 // Guard rails
 const dirty = git(['status', '--porcelain'], { capture: true }).stdout.trim();
@@ -265,35 +288,96 @@ const branch = git(['rev-parse', '--abbrev-ref', 'HEAD'], { capture: true }).std
 if (branch !== 'main') log(`⚠ Releasing from branch "${branch}" (not main).`);
 
 if (dryRun) {
-  const targetFiles = target === 'mobile' 
-    ? ['apps/mobile/package.json', 'apps/mobile/package-lock.json', 'apps/website/public/release-info.json (mobile block)']
-    : target === 'desktop'
-    ? ['apps/desktop/package.json', 'apps/desktop/package-lock.json', 'apps/website/public/release-info.json (desktop block)', ...TEXT_REPLACEMENTS.map((t) => t.file)]
-    : [...JSON_VERSION_FILES, ...LOCKFILES, ...TEXT_REPLACEMENTS.map((t) => t.file), 'apps/website/public/release-info.json'];
-  log(`Would update: ${targetFiles.join(', ')}`);
-  log(`Would commit, tag ${tag}${push ? ` and push to origin/${branch}` : ''}.`);
+  log(`[dry-run] Would bump versions from ${current} to ${next} (target: ${target}).`);
+  if (!noBuild) log('[dry-run] Would build desktop, mobile, and website artifacts.');
+  log(`[dry-run] Would commit, tag ${tag}${push ? ` and push to origin/${branch}` : ''}.`);
   process.exit(0);
 }
 
-log(`Updating versions to ${next} (target: ${target})...`);
+// 1. Pre-flight tests
+if (!skipTests) {
+  log('[1/6] Running pre-release verification tests...');
+  run('npm', ['run', 'test:core']);
+  run('npm', ['run', 'test:relay']);
+  log('✓ Pre-release tests passed.');
+} else {
+  log('[1/6] Skipping pre-release tests (--no-test).');
+}
+
+// 2. Bump versions
+log(`[2/6] Stamping version ${next} across workspaces (target: ${target})...`);
 bumpFiles(next, target);
 
+// 3. Build & Measure Artifacts (if not --no-build)
+if (!noBuild) {
+  log('[3/6] Building production artifacts...');
+  run('npm', ['run', 'sync:assets']);
+  run('npm', ['run', 'sync:core']);
+
+  if (target === 'all' || target === 'desktop') {
+    log('Building Desktop AppImage...');
+    run('npm', ['--prefix', 'apps/desktop', 'run', 'build']);
+  }
+
+  if (target === 'all' || target === 'mobile') {
+    log('Building Mobile Android APK...');
+    run('node', ['scripts/build-mobile-android.mjs']);
+  }
+
+  log('Consolidating artifacts and measuring real SHA-256 hashes & sizes...');
+  run('node', ['scripts/publish-builds.mjs']);
+
+  log('Building landing website with fresh manifest...');
+  run('npm', ['--prefix', 'apps/website', 'run', 'build']);
+} else {
+  log('[3/6] Skipping artifact compilation (--no-build).');
+}
+
+// 4. Git Stage & Commit
+log('[4/6] Staging files and creating atomic release commit...');
 git(['add', '-A']);
-// Never ship a token by accident.
+
+// Check for accidental token leaks
 const leaked = git(['diff', '--cached', '--name-only', '-G', '(ghp_|github_pat_)[A-Za-z0-9_]{20,}'], { capture: true }).stdout.trim();
 if (leaked) {
   git(['reset', '-q']);
   fail(`Aborting: staged files contain what looks like a GitHub token:\n${leaked}`);
 }
+
 git(['commit', '-m', `chore(release): ${tag}`]);
 git(['tag', '-a', tag, '-m', `NexVault ${tag}`]);
-log(`✓ Created commit and tag ${tag}`);
+log(`✓ Created release commit and tag ${tag}`);
 
+// 5. Push to Git remote
 if (push) {
+  log(`[5/6] Pushing ${branch} and ${tag} to remote...`);
   git(['push', 'origin', branch]);
   git(['push', 'origin', tag]);
-  log(`✓ Pushed ${branch} and ${tag}. GitHub Actions is now building the release:`);
-  log('  https://github.com/yousseflashin/nextvault/actions/workflows/release.yml');
+  log(`✓ Successfully pushed ${branch} and ${tag}.`);
 } else {
-  log(`Not pushed. When ready: git push origin ${branch} && git push origin ${tag}`);
+  log(`[5/6] Skipping git push (--no-push). Run when ready: git push origin ${branch} && git push origin ${tag}`);
 }
+
+// 6. Upload to GitHub Releases (if token present and not disabled)
+if (!noUpload && !noBuild) {
+  log('[6/6] Checking for GitHub Release upload capability...');
+  const envDevPath = join(ROOT, '.env.dev');
+  let hasToken = Boolean(process.env.GITHUB_TOKEN || process.env.GH_TOKEN);
+  if (!hasToken && existsSync(envDevPath)) {
+    const devContent = readFileSync(envDevPath, 'utf8');
+    if (/GITHUB_TOKEN=[\w-]{20,}/.test(devContent)) hasToken = true;
+  }
+
+  if (hasToken) {
+    log('GitHub token found — uploading release artifacts...');
+    run('node', ['scripts/upload-release.mjs', next]);
+  } else {
+    log('Note: GITHUB_TOKEN not set. Artifacts are ready in ./release/. GitHub Actions will publish, or run npm run release:upload manually.');
+  }
+} else {
+  log('[6/6] Skipping GitHub Release upload.');
+}
+
+console.log('\n====================================================');
+console.log(`🎉 NexVault Release ${tag} complete!`);
+console.log('====================================================\n');
