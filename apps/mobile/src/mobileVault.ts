@@ -845,20 +845,12 @@ export async function mergeNativeAutofillCredentials() {
   try {
     pendingResult = await AutofillBridge.readPendingCredentials();
   } catch {}
-  let activeResult: any = null;
-  try {
-    activeResult = await AutofillBridge.readCredentials();
-  } catch {}
-
   const pendingCredentials = JSON.parse(pendingResult?.credentialsJson || '[]');
-  const activeCredentials = JSON.parse(activeResult?.credentialsJson || '[]');
-  const incoming = [
-    ...(Array.isArray(pendingCredentials) ? pendingCredentials : []),
-    ...(Array.isArray(activeCredentials) ? activeCredentials : [])
-  ];
+  const incoming = Array.isArray(pendingCredentials) ? pendingCredentials : [];
+  if (!incoming.length) return;
 
   const state = loadVault();
-  if (!state || !incoming.length) return;
+  if (!state) return;
 
   let changed = false;
   for (const nativeCredential of incoming) {

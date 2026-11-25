@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "version": "0.1.52",
   "tag": "v0.1.52",
-  "publishedAt": "2026-11-25T14:42:12.591Z",
+  "publishedAt": "2026-11-25T15:06:02.148Z",
   "releaseUrl": "https://github.com/yousseflashin/nextvault/releases/tag/v0.1.52",
   "desktop": {
     "platform": "linux-x86_64",
@@ -21,9 +21,9 @@
     "format": "APK",
     "filename": "NexVault-0.1.52.apk",
     "url": "https://github.com/yousseflashin/nextvault/releases/download/v0.1.52/NexVault-0.1.52.apk",
-    "size": 13027224,
+    "size": 13027976,
     "sizeFormatted": "12.4 MB",
-    "sha256": "9770f979b5b9a54b9e9a2bc6765d50dbeb4bb88d667eb3a2c0c4aa241b9bda7f",
+    "sha256": "62b0a748271461735960272736f0a313eedebfc3bed22311e15088546023db66",
     "versionCode": 101052,
     "requirements": "Android 7.0+ (API 24+ · ARM64 / x86_64)"
   }

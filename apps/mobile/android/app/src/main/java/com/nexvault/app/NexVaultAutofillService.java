@@ -210,6 +210,7 @@ public class NexVaultAutofillService extends AutofillService {
                 if (field.username) usernameIds.add(field.id);
             }
 
+            boolean hasSaveInfo = false;
             if (!passwordIds.isEmpty() || !usernameIds.isEmpty()) {
                 int saveType = SaveInfo.SAVE_DATA_TYPE_PASSWORD;
                 if (!usernameIds.isEmpty()) {
@@ -232,9 +233,10 @@ public class NexVaultAutofillService extends AutofillService {
                     saveInfoBuilder.setFlags(SaveInfo.FLAG_SAVE_ON_ALL_VIEWS_INVISIBLE);
                 }
                 response.setSaveInfo(saveInfoBuilder.build());
+                hasSaveInfo = true;
             }
 
-            if (hasDatasets) {
+            if (hasDatasets || hasSaveInfo) {
                 callback.onSuccess(response.build());
             } else {
                 callback.onSuccess(null);
@@ -602,7 +604,9 @@ public class NexVaultAutofillService extends AutofillService {
                 if (cleanDomain.startsWith("package:")) {
                     cleanDomain = cleanDomain.substring(8);
                 }
-                if (cleanDomain.startsWith("com.") || cleanDomain.startsWith("org.") || cleanDomain.startsWith("net.") || cleanDomain.startsWith("io.")) {
+                if (isBrowserPackage(cleanDomain)) {
+                    cleanDomain = "web-login";
+                } else if (cleanDomain.startsWith("com.") || cleanDomain.startsWith("org.") || cleanDomain.startsWith("net.") || cleanDomain.startsWith("io.")) {
                     String[] parts = cleanDomain.split("\\.");
                     if (parts.length >= 2) {
                         for (int i = 1; i < parts.length; i++) {
@@ -614,6 +618,7 @@ public class NexVaultAutofillService extends AutofillService {
                         }
                     }
                 }
+                android.util.Log.d("NexVaultAutofill", "Saving captured credential for: " + cleanDomain + ", username: " + values.username);
 
                 // 1. Save to dedicated pending queue (strictly preserved for encrypted vault ingestion)
                 JSONArray pending = new JSONArray(NativeCredentialStore.readPending(this));
