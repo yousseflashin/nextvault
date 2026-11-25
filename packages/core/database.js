@@ -4,11 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const { nacl, naclUtil } = require('./crypto');
 const { getStoreKey } = require('./storeKey');
-
-function normalizeDomain(service) {
-  if (!service) return '';
-  return String(service).trim().toLowerCase().replace(/^(https?:\/\/)?(www\.)?/, '').replace(/\/.*$/, '');
-}
+const { normalizeDomain } = require('./domainUtils');
 
 class NexVaultDatabase {
   constructor(userDataPath) {

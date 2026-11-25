@@ -10,5 +10,6 @@ module.exports = {
   parseBulkImport: require('./importParser').parseBulkImport,
   parseOtpAuthUri: require('./importParser').parseOtpAuthUri,
   LamportClock: require('./multiLeaderReplica').LamportClock,
-  MultiLeaderReplica: require('./multiLeaderReplica').MultiLeaderReplica
+  MultiLeaderReplica: require('./multiLeaderReplica').MultiLeaderReplica,
+  normalizeDomain: require('./domainUtils').normalizeDomain
 };

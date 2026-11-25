@@ -1,4 +1,4 @@
-const { normalizeDomain } = require('../database');
+const { normalizeDomain } = require('../domainUtils');
 
 describe('Credential Merge & Inbound Queue Ingestion Logic', () => {
   function mergeCredentials(vaultPasswords, incomingList, devicePublicKey = 'device-test-1') {
