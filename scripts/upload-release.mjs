@@ -67,6 +67,10 @@ if (!token && existsSync(join(ROOT, '.github_token'))) {
 }
 
 const args = process.argv.slice(2);
+const tokenFlag = args.find(a => a.startsWith('--token='));
+if (tokenFlag) {
+  token = tokenFlag.split('=')[1]?.trim() || token;
+}
 let versionArg = args.find(a => !a.startsWith('--'));
 
 if (!versionArg) {

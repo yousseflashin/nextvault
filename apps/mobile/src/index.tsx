@@ -2070,7 +2070,6 @@ function App() {
 
   function onLockVault() {
     (window as any).nexVault.lock?.();
-    clearAutofillCredentials();
     setUnlocked(false);
     setPassword('');
     setStatus('Vault locked.');

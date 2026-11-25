@@ -258,10 +258,17 @@ if (flags.has('--help') || flags.has('-h')) {
   process.exit(0);
 }
 
+let tokenArg = null;
+for (const f of flags) {
+  if (f.startsWith('--token=')) tokenArg = f;
+}
+
 if (flags.has('--upload-only')) {
   const ver = positional[0] || readRootVersion();
   log(`Uploading existing release artifacts for v${ver}...`);
-  run('node', ['scripts/upload-release.mjs', ver]);
+  const uploadArgs = ['scripts/upload-release.mjs', ver];
+  if (tokenArg) uploadArgs.push(tokenArg);
+  run('node', uploadArgs);
   process.exit(0);
 }
 
@@ -393,7 +400,7 @@ if (push) {
 if (!noUpload && !noBuild) {
   log('[6/6] Checking for GitHub Release upload capability...');
   const envDevPath = join(ROOT, '.env.dev');
-  let hasToken = Boolean(process.env.GITHUB_TOKEN || process.env.GH_TOKEN);
+  let hasToken = Boolean(process.env.GITHUB_TOKEN || process.env.GH_TOKEN || tokenArg);
   if (!hasToken && existsSync(envDevPath)) {
     const devContent = readFileSync(envDevPath, 'utf8');
     if (/GITHUB_TOKEN=[\w-]{20,}/.test(devContent)) hasToken = true;
@@ -401,9 +408,11 @@ if (!noUpload && !noBuild) {
 
   if (hasToken) {
     log('GitHub token found — uploading release artifacts...');
-    run('node', ['scripts/upload-release.mjs', next]);
+    const uploadArgs = ['scripts/upload-release.mjs', next];
+    if (tokenArg) uploadArgs.push(tokenArg);
+    run('node', uploadArgs);
   } else if (forceUpload) {
-    fail('Upload requested (--upload) but no GITHUB_TOKEN or GH_TOKEN found in environment or .env.dev!');
+    fail('Upload requested (--upload) but no GITHUB_TOKEN found in environment, .env.dev, or --token=...');
   } else {
     log('Note: GITHUB_TOKEN not set. Artifacts are ready in ./release/. GitHub Actions will publish, or run npm run release -- --upload.');
   }
