@@ -6,140 +6,42 @@
    ============================================================ */
 
 :root {
-  /* ============================================================
-     GOOGLE MATERIAL DESIGN 3 (MD3) CANONICAL TOKENS
-     ============================================================ */
+  /* Google Material 3 Expressive Tonal Surfaces */
+  --nv-bg: #070a11;
+  --nv-bg-2: #0b101d;
+  --nv-surface-dim: #090e18;
+  --nv-surface: #0f1526;
+  --nv-surface-2: #141d33;
+  --nv-surface-hover: #18223a;
+  --nv-surface-active: #1e2a47;
+  --nv-surface-container-low: #101728;
+  --nv-surface-container: #141c30;
+  --nv-surface-container-high: #19243c;
+  --nv-surface-container-highest: #202c49;
 
-  /* MD3 Color Tokens (--md-sys-color-*) */
-  --md-sys-color-primary: #00e599;
-  --md-sys-color-on-primary: #003822;
-  --md-sys-color-primary-container: #005234;
-  --md-sys-color-on-primary-container: #75ffb8;
-  --md-sys-color-primary-fixed: #75ffb8;
-  --md-sys-color-primary-fixed-dim: #00e599;
-  --md-sys-color-on-primary-fixed: #002113;
-  --md-sys-color-on-primary-fixed-variant: #005234;
-
-  --md-sys-color-secondary: #00d4ff;
-  --md-sys-color-on-secondary: #003544;
-  --md-sys-color-secondary-container: #004d62;
-  --md-sys-color-on-secondary-container: #bce9ff;
-  --md-sys-color-secondary-fixed: #bce9ff;
-  --md-sys-color-secondary-fixed-dim: #00d4ff;
-  --md-sys-color-on-secondary-fixed: #001f29;
-  --md-sys-color-on-secondary-fixed-variant: #004d62;
-
-  --md-sys-color-tertiary: #a0c9ff;
-  --md-sys-color-on-tertiary: #00325a;
-  --md-sys-color-tertiary-container: #1b4474;
-  --md-sys-color-on-tertiary-container: #d1e4ff;
-
-  --md-sys-color-error: #ffb4ab;
-  --md-sys-color-on-error: #690005;
-  --md-sys-color-error-container: #93000a;
-  --md-sys-color-on-error-container: #ffdad6;
-
-  /* MD3 Tonal Surfaces & Hierarchy */
-  --md-sys-color-surface: #0b0f19;
-  --md-sys-color-on-surface: #e2e2ec;
-  --md-sys-color-on-surface-variant: #c4c6d0;
-  --md-sys-color-surface-dim: #0b0f19;
-  --md-sys-color-surface-bright: #34394a;
-  --md-sys-color-surface-container-lowest: #070a12;
-  --md-sys-color-surface-container-low: #0f1422;
-  --md-sys-color-surface-container: #13192a;
-  --md-sys-color-surface-container-high: #182035;
-  --md-sys-color-surface-container-highest: #1e2740;
-
-  /* MD3 Outlines */
-  --md-sys-color-outline: #8e9099;
-  --md-sys-color-outline-variant: rgba(255, 255, 255, 0.08);
-
-  /* MD3 Inverse */
-  --md-sys-color-inverse-surface: #e2e2ec;
-  --md-sys-color-inverse-on-surface: #2e3038;
-  --md-sys-color-inverse-primary: #006d44;
-
-  /* MD3 Shape Tokens (--md-sys-shape-corner-*) */
-  --md-sys-shape-corner-none: 0px;
-  --md-sys-shape-corner-extra-small: 4px;
-  --md-sys-shape-corner-small: 8px;
-  --md-sys-shape-corner-medium: 12px;
-  --md-sys-shape-corner-large: 16px;
-  --md-sys-shape-corner-large-increased: 20px;
-  --md-sys-shape-corner-extra-large: 28px;
-  --md-sys-shape-corner-extra-large-increased: 32px;
-  --md-sys-shape-corner-full: 9999px;
-
-  /* MD3 Typography Tokens (--md-sys-typescale-*) */
-  --md-sys-typescale-display-large-font: 'Roboto Flex', Roboto, -apple-system, BlinkMacSystemFont, sans-serif;
-  --md-sys-typescale-display-large-size: 3.5rem;
-  --md-sys-typescale-display-large-weight: 400;
-  --md-sys-typescale-display-large-line-height: 4rem;
-
-  --md-sys-typescale-headline-large-font: 'Roboto Flex', Roboto, -apple-system, BlinkMacSystemFont, sans-serif;
-  --md-sys-typescale-headline-large-size: 2rem;
-  --md-sys-typescale-headline-large-weight: 600;
-  --md-sys-typescale-headline-large-line-height: 2.5rem;
-
-  --md-sys-typescale-title-large-font: 'Roboto Flex', Roboto, -apple-system, BlinkMacSystemFont, sans-serif;
-  --md-sys-typescale-title-large-size: 1.375rem;
-  --md-sys-typescale-title-large-weight: 600;
-  --md-sys-typescale-title-large-line-height: 1.75rem;
-
-  --md-sys-typescale-body-large-font: 'Roboto Flex', Roboto, -apple-system, BlinkMacSystemFont, sans-serif;
-  --md-sys-typescale-body-large-size: 1rem;
-  --md-sys-typescale-body-large-weight: 400;
-  --md-sys-typescale-body-large-line-height: 1.5rem;
-
-  --md-sys-typescale-label-large-font: 'Roboto Flex', Roboto, -apple-system, BlinkMacSystemFont, sans-serif;
-  --md-sys-typescale-label-large-size: 0.875rem;
-  --md-sys-typescale-label-large-weight: 600;
-  --md-sys-typescale-label-large-line-height: 1.25rem;
-
-  /* MD3 Motion & Spring Physics */
-  --md-sys-motion-easing-emphasized: cubic-bezier(0.2, 0, 0, 1);
-  --md-sys-motion-easing-emphasized-decelerate: cubic-bezier(0.05, 0.7, 0.1, 1);
-  --md-sys-motion-easing-emphasized-accelerate: cubic-bezier(0.3, 0, 0.8, 0.15);
-  --md-sys-motion-duration-short1: 50ms;
-  --md-sys-motion-duration-short2: 100ms;
-  --md-sys-motion-duration-medium1: 250ms;
-  --md-sys-motion-duration-medium2: 300ms;
-  --md-sys-motion-duration-long1: 400ms;
-  --md-sys-motion-duration-long2: 500ms;
-
-  /* Backward Compatibility Aliases for NextVault (--nv-*) */
-  --nv-bg: var(--md-sys-color-surface-container-lowest);
-  --nv-bg-2: var(--md-sys-color-surface-container-low);
-  --nv-surface-dim: var(--md-sys-color-surface-dim);
-  --nv-surface: var(--md-sys-color-surface-container);
-  --nv-surface-2: var(--md-sys-color-surface-container-high);
-  --nv-surface-hover: var(--md-sys-color-surface-container-high);
-  --nv-surface-active: var(--md-sys-color-surface-container-highest);
-  --nv-surface-container-low: var(--md-sys-color-surface-container-low);
-  --nv-surface-container: var(--md-sys-color-surface-container);
-  --nv-surface-container-high: var(--md-sys-color-surface-container-high);
-  --nv-surface-container-highest: var(--md-sys-color-surface-container-highest);
-
-  --nv-border: var(--md-sys-color-outline-variant);
+  /* M3 Elevation Hairlines & Dividers */
+  --nv-border: rgba(255, 255, 255, 0.08);
   --nv-border-subtle: rgba(255, 255, 255, 0.04);
   --nv-border-strong: rgba(255, 255, 255, 0.16);
-  --nv-border-active: var(--md-sys-color-primary);
+  --nv-border-active: #00e599;
 
-  --nv-primary: var(--md-sys-color-primary);
+  /* M3 Primary Palette (Radiant Emerald Mint) */
+  --nv-primary: #00e599;
   --nv-primary-hover: #00c784;
   --nv-primary-light: rgba(0, 229, 153, 0.12);
-  --nv-primary-container: var(--md-sys-color-primary-container);
-  --nv-on-primary: var(--md-sys-color-on-primary);
+  --nv-primary-container: rgba(0, 229, 153, 0.16);
+  --nv-on-primary: #04120b;
   --nv-glow-primary: 0 0 20px rgba(0, 229, 153, 0.28);
 
-  --nv-accent: var(--md-sys-color-secondary);
+  /* M3 Secondary Accent (Electric Cyan) */
+  --nv-accent: #00d4ff;
   --nv-accent-hover: #00b8e6;
   --nv-accent-light: rgba(0, 212, 255, 0.12);
-  --nv-accent-container: var(--md-sys-color-secondary-container);
-  --nv-on-accent: var(--md-sys-color-on-secondary);
+  --nv-accent-container: rgba(0, 212, 255, 0.16);
+  --nv-on-accent: #041018;
   --nv-glow-accent: 0 0 20px rgba(0, 212, 255, 0.25);
 
+  /* M3 Semantic State Colors */
   --nv-danger: #ff5252;
   --nv-danger-hover: #ff3838;
   --nv-danger-light: rgba(255, 82, 82, 0.14);
@@ -147,25 +49,28 @@
   --nv-warning-hover: #ffa726;
   --nv-warning-light: rgba(255, 183, 77, 0.14);
 
-  --nv-text: var(--md-sys-color-on-surface);
-  --nv-text-secondary: var(--md-sys-color-on-surface-variant);
-  --nv-muted: var(--md-sys-color-outline);
+  /* M3 High-Contrast Typography */
+  --nv-text: #f8fafc;
+  --nv-text-secondary: #94a3b8;
+  --nv-muted: #64748b;
 
-  --nv-font-sans: 'Roboto Flex', Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
-  --nv-font-mono: 'Roboto Mono', ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  --nv-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --nv-font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
 
-  --nv-radius-xs: var(--md-sys-shape-corner-extra-small);
-  --nv-radius-sm: var(--md-sys-shape-corner-small);
-  --nv-radius: var(--md-sys-shape-corner-large);
-  --nv-radius-lg: var(--md-sys-shape-corner-large-increased);
-  --nv-radius-xl: var(--md-sys-shape-corner-extra-large);
-  --nv-radius-xxl: var(--md-sys-shape-corner-extra-large-increased);
-  --nv-radius-pill: var(--md-sys-shape-corner-full);
+  /* Google Material 3 Shape Tokens */
+  --nv-radius-xs: 6px;
+  --nv-radius-sm: 10px;
+  --nv-radius: 16px;
+  --nv-radius-lg: 20px;
+  --nv-radius-xl: 24px;
+  --nv-radius-xxl: 28px;
+  --nv-radius-pill: 9999px;
 
-  --nv-ease-spring: var(--md-sys-motion-easing-emphasized);
-  --nv-ease-emphasized: var(--md-sys-motion-easing-emphasized-decelerate);
-  --nv-card-shadow: 0 2px 12px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  --nv-card-shadow-elevated: 0 8px 30px rgba(0, 0, 0, 0.4), 0 0 16px rgba(0, 229, 153, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  /* M3 Motion & Spring Physics */
+  --nv-ease-spring: cubic-bezier(0.2, 0, 0, 1);
+  --nv-ease-emphasized: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --nv-card-shadow: 0 4px 20px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --nv-card-shadow-elevated: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 20px rgba(0, 229, 153, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 * { box-sizing: border-box; }
