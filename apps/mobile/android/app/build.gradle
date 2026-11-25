@@ -49,22 +49,34 @@ android {
         }
     }
     signingConfigs {
-        if (hasReleaseSigning) {
-            release {
+        release {
+            if (hasReleaseSigning) {
                 storeFile file(releaseStoreFile)
                 storePassword signingValue('NEXVAULT_KEYSTORE_PASSWORD', 'storePassword')
                 keyAlias signingValue('NEXVAULT_KEY_ALIAS', 'keyAlias')
                 keyPassword signingValue('NEXVAULT_KEY_PASSWORD', 'keyPassword') ?: signingValue('NEXVAULT_KEYSTORE_PASSWORD', 'storePassword')
+            } else {
+                storeFile file("${rootDir}/keystore/nexvault.keystore")
+                storePassword 'android'
+                keyAlias 'androiddebugkey'
+                keyPassword 'android'
             }
+        }
+        debug {
+            storeFile file("${rootDir}/keystore/nexvault.keystore")
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
         }
     }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-            if (hasReleaseSigning) {
-                signingConfig signingConfigs.release
-            }
+            signingConfig signingConfigs.release
+        }
+        debug {
+            signingConfig signingConfigs.debug
         }
     }
 }

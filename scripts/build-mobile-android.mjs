@@ -149,7 +149,9 @@ if (/version "(?:2[5-9]|[3-9]\d)/.test(verOut)) {
 }
 
 const keystorePropsPath = join(ROOT, 'apps', 'mobile', 'android', 'keystore.properties');
+const canonicalKeystorePath = join(ROOT, 'apps', 'mobile', 'android', 'keystore', 'nexvault.keystore');
 const hasReleaseSigning = Boolean(
+  existsSync(canonicalKeystorePath) ||
   (process.env.NEXVAULT_KEYSTORE_PATH && existsSync(process.env.NEXVAULT_KEYSTORE_PATH)) ||
   existsSync(keystorePropsPath)
 );
