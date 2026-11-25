@@ -105,7 +105,19 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: gradle
-      - uses: android-actions/setup-android@v3
+      - name: Accept Android SDK licenses
+        run: |
+          export ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          SDKMANAGER=$(which sdkmanager || echo "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager")
+          if [ -x "$SDKMANAGER" ]; then
+            yes | "$SDKMANAGER" --licenses || true
+          elif [ -d "$ANDROID_HOME/cmdline-tools" ]; then
+            LATEST_SM=$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f -executable | head -n1)
+            if [ -n "$LATEST_SM" ]; then
+              yes | "$LATEST_SM" --licenses || true
+            fi
+          fi
       - name: Check signing secrets
         env:
           KS: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
