@@ -264,7 +264,7 @@ async function main() {
   const allFiles = readdirSync(releaseDir);
   const filesToUpload = allFiles.filter(f => {
     if (f === 'release-info.json' || f === 'SHA256SUMS.txt') return true;
-    if (f.endsWith('.apk')) return true;
+    if (f.endsWith('.apk') && (f.includes(version) || allFiles.filter(x => x.endsWith('.apk')).length === 1)) return true;
     if (f.endsWith('.AppImage') && (f.includes(version) || allFiles.filter(x => x.endsWith('.AppImage')).length === 1)) return true;
     return false;
   });
