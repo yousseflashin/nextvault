@@ -185,32 +185,36 @@ export default function DeepWebHero() {
               </div>
 
               {/* Dual Responsive Download CTA Buttons */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <a
                   href={desktopUrl}
                   onMouseEnter={() => setSelectedPlatform('desktop')}
-                  className={`px-4 py-3.5 rounded-xl font-mono text-xs uppercase tracking-wider transition flex items-center justify-between gap-2 ${
+                  className={`px-5 py-4 rounded-2xl font-sans text-xs uppercase tracking-wider transition-all duration-200 active:scale-95 flex items-center justify-between gap-3 ${
                     selectedPlatform === 'desktop'
                       ? 'font-bold text-black bg-gradient-to-r from-dw-green to-dw-cyan shadow-glow'
                       : 'font-semibold text-dw-text bg-dw-surface hover:bg-dw-surface2 border border-dw-border hover:border-dw-green/50'
                   }`}
                 >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                    </svg>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+                      selectedPlatform === 'desktop' ? 'bg-black/15 text-black' : 'bg-white/5 text-dw-green'
+                    }`}>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      </svg>
+                    </div>
                     <div className="text-left truncate">
-                      <span className="block leading-tight">Desktop {currentTag}</span>
-                      <span className={`block text-[10px] font-normal ${selectedPlatform === 'desktop' ? 'text-black/75' : 'text-dw-muted'}`}>
-                        x86_64 AppImage · {desktopSize}
+                      <span className="block leading-tight font-extrabold text-[13px]">Desktop {currentTag}</span>
+                      <span className={`block text-[11px] font-normal font-mono ${selectedPlatform === 'desktop' ? 'text-black/75' : 'text-dw-muted'}`}>
+                        AppImage · {desktopSize}
                       </span>
                     </div>
                   </div>
                   {recommended === 'desktop' && (
-                    <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold shrink-0 ${
+                    <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold shrink-0 ${
                       selectedPlatform === 'desktop' ? 'bg-black/20 text-black' : 'bg-dw-green/15 text-dw-green'
                     }`}>
-                      DESKTOP PEER
+                      RECOMMENDED
                     </span>
                   )}
                 </a>
@@ -218,28 +222,32 @@ export default function DeepWebHero() {
                 <a
                   href={mobileUrl}
                   onMouseEnter={() => setSelectedPlatform('mobile')}
-                  className={`px-4 py-3.5 rounded-xl font-mono text-xs uppercase tracking-wider transition flex items-center justify-between gap-2 ${
+                  className={`px-5 py-4 rounded-2xl font-sans text-xs uppercase tracking-wider transition-all duration-200 active:scale-95 flex items-center justify-between gap-3 ${
                     selectedPlatform === 'mobile'
                       ? 'font-bold text-black bg-gradient-to-r from-dw-cyan to-dw-green shadow-glowCyan'
                       : 'font-semibold text-dw-text bg-dw-surface hover:bg-dw-surface2 border border-dw-border hover:border-dw-cyan/50'
                   }`}
                 >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                    </svg>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+                      selectedPlatform === 'mobile' ? 'bg-black/15 text-black' : 'bg-white/5 text-dw-cyan'
+                    }`}>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                      </svg>
+                    </div>
                     <div className="text-left truncate">
-                      <span className="block leading-tight">Android {currentTag}</span>
-                      <span className={`block text-[10px] font-normal ${selectedPlatform === 'mobile' ? 'text-black/75' : 'text-dw-muted'}`}>
-                        Signed APK · {mobileSize}
+                      <span className="block leading-tight font-extrabold text-[13px]">Android {currentTag}</span>
+                      <span className={`block text-[11px] font-normal font-mono ${selectedPlatform === 'mobile' ? 'text-black/75' : 'text-dw-muted'}`}>
+                        APK · {mobileSize}
                       </span>
                     </div>
                   </div>
                   {recommended === 'mobile' && (
-                    <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold shrink-0 ${
+                    <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold shrink-0 ${
                       selectedPlatform === 'mobile' ? 'bg-black/20 text-black' : 'bg-dw-cyan/15 text-dw-cyan'
                     }`}>
-                      MOBILE PEER
+                      RECOMMENDED
                     </span>
                   )}
                 </a>

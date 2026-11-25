@@ -4,44 +4,58 @@
 
 :root {
   color-scheme: dark;
+  --nv-primary: #00e599;
+  --nv-primary-hover: #00c784;
+  --nv-accent: #00d4ff;
+  --nv-bg: #070a11;
+  --nv-surface: #0f1526;
+  --nv-surface-2: #141d33;
+  --nv-ease-spring: cubic-bezier(0.2, 0, 0, 1);
 }
 
 html {
-  scroll-padding-top: 4.5rem;
+  scroll-padding-top: 5rem;
 }
 
 body {
-  background-color: #05070a;
-  color: #f1f5f9;
+  background-color: #070a11;
+  color: #f8fafc;
   overflow-x: hidden;
   -webkit-tap-highlight-color: transparent;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
-/* Deep Web Minimalist Scrollbar */
+/* Material 3 Minimalist Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #05070a;
+  background: #070a11;
 }
 ::-webkit-scrollbar-thumb {
-  background: #1a2336;
-  border-radius: 3px;
+  background: #172238;
+  border-radius: 999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #00e676;
+  background: #00e599;
 }
 
 @layer utilities {
   .cyber-card {
-    background: linear-gradient(180deg, rgba(14, 19, 30, 0.92) 0%, rgba(9, 13, 20, 0.96) 100%);
-    box-shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.78), inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+    background: linear-gradient(180deg, rgba(16, 23, 38, 0.94) 0%, rgba(11, 16, 27, 0.98) 100%);
+    box-shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.8), inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+    transition: all 0.25s cubic-bezier(0.2, 0, 0, 1);
+  }
+  .cyber-card:hover {
+    border-color: rgba(0, 229, 153, 0.35);
+    box-shadow: 0 20px 48px -12px rgba(0, 0, 0, 0.85), 0 0 24px rgba(0, 229, 153, 0.12), inset 0 1px 0 0 rgba(255, 255, 255, 0.1);
   }
   .cyber-grid-subtle {
     background-image:
-      linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+      linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
     background-size: 40px 40px;
   }
 }

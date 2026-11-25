@@ -380,8 +380,9 @@ public class NexVaultAutofillService extends AutofillService {
         String combined = (probe + " " + hintText).toLowerCase(Locale.ROOT);
 
         // Strict search & utility rejection: search, query, filter, find, keyword, omnibox MUST ALWAYS be blacklisted!
-        if (combined.matches(".*\\b(search|query|filter|find|keyword|lookup|omnibox|url_bar|location_bar|address_bar|search_box|search_src_text)\\b.*")
-            || combined.contains("search") || combined.contains("query") || combined.contains("filter")) {
+        if (combined.matches(".*\\b(search|query|filter|find|keyword|lookup|discover|explore|browse|omnibox|url_bar|location_bar|address_bar|search_box|search_src_text)\\b.*")
+            || combined.contains("search") || combined.contains("query") || combined.contains("filter")
+            || combined.contains("discover") || combined.contains("explore")) {
             return true;
         }
 
@@ -394,9 +395,10 @@ public class NexVaultAutofillService extends AutofillService {
         String blacklistPattern = ".*\\b("
             + "address|addr|street|city|state|zip|zipcode|postal|postcode|country|province|region|county|"
             + "apt|suite|unit|floor|building|po_box|pobox|delivery|shipping|billing|destination|location|"
+            + "tag|tags|caption|title|"
             + "first_name|firstname|fname|last_name|lastname|lname|middle_name|full_name|fullname|cardholder|bday|birthday|gender|sex|tax|vat|company|"
             + "card|cvv|cvc|exp|coupon|promo|discount|voucher|"
-            + "comment|message|chat|note|notes|bio|description|feedback|review|subject|qty|quantity|amount|price"
+            + "comment|message|chat|conversation|reply|dm|note|notes|bio|description|feedback|review|subject|qty|quantity|amount|price"
             + ")\\b.*";
 
         return combined.matches(blacklistPattern);

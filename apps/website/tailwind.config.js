@@ -5,42 +5,45 @@ export default {
     extend: {
       colors: {
         dw: {
-          bg: '#05070a',
-          bg2: '#090d14',
-          surface: '#0e131e',
-          surface2: '#131b2a',
-          border: '#1a2336',
-          borderHover: '#293754',
-          green: '#00e676',
-          greenDim: '#00b359',
+          bg: '#070a11',
+          bg2: '#0b101d',
+          surface: '#0f1526',
+          surface2: '#141d33',
+          border: 'rgba(255, 255, 255, 0.08)',
+          borderHover: 'rgba(255, 255, 255, 0.18)',
+          green: '#00e599',
+          greenDim: '#00c784',
           cyan: '#00d4ff',
-          amber: '#fbbf24',
-          red: '#f43f5e',
-          text: '#f1f5f9',
-          muted: '#8b9bb4',
-          dim: '#475569'
+          amber: '#ffb74d',
+          red: '#ff5252',
+          text: '#f8fafc',
+          muted: '#94a3b8',
+          dim: '#64748b'
         },
         nv: {
-          bg: '#05070a',
-          bg2: '#090d14',
-          surface: '#0e131e',
-          surface2: '#131b2a',
-          primary: '#00e676',
-          primarydim: '#00b359',
+          bg: '#070a11',
+          bg2: '#0b101d',
+          surface: '#0f1526',
+          surface2: '#141d33',
+          primary: '#00e599',
+          primarydim: '#00c784',
           accent: '#00d4ff',
-          danger: '#f43f5e',
-          text: '#f1f5f9',
-          muted: '#8b9bb4',
+          danger: '#ff5252',
+          text: '#f8fafc',
+          muted: '#94a3b8',
         }
       },
       fontFamily: {
         mono: ['ui-monospace', 'SF Mono', 'JetBrains Mono', 'Fira Code', 'Consolas', 'monospace'],
-        sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif']
+        sans: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif']
       },
       boxShadow: {
-        glow: '0 0 16px rgba(0, 230, 118, 0.25)',
-        glowCyan: '0 0 16px rgba(0, 212, 255, 0.25)',
-        deep: '0 12px 36px -8px rgba(0, 0, 0, 0.7)'
+        glow: '0 0 20px rgba(0, 229, 153, 0.32)',
+        glowCyan: '0 0 20px rgba(0, 212, 255, 0.30)',
+        deep: '0 16px 40px -8px rgba(0, 0, 0, 0.8)'
+      },
+      transitionTimingFunction: {
+        spring: 'cubic-bezier(0.2, 0, 0, 1)'
       }
     }
   },

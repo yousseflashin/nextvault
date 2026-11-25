@@ -925,6 +925,262 @@ function AddOtpModal({
   );
 }
 
+function AddCredentialModal({
+  isOpen,
+  onClose,
+  editingService,
+  service,
+  setService,
+  username,
+  setUsername,
+  password,
+  setPassword,
+  onGeneratePassword,
+  onSave,
+  getPasswordScore
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  editingService: string | null;
+  service: string;
+  setService: (s: string) => void;
+  username: string;
+  setUsername: (u: string) => void;
+  password: string;
+  setPassword: (p: string) => void;
+  onGeneratePassword: () => void;
+  onSave: () => void;
+  getPasswordScore: (pwd: string) => number;
+}) {
+  const [showPassword, setShowPassword] = useState(false);
+  if (!isOpen) return null;
+
+  const score = getPasswordScore(password);
+  const scoreLabel = score >= 4 ? 'Very Strong' : score === 3 ? 'Good' : score === 2 ? 'Fair' : score === 1 ? 'Weak' : 'None';
+
+  return (
+    <div className="nv-modal-backdrop" onClick={onClose}>
+      <div className="nv-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
+        <div className="nv-modal-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+            <div style={{
+              width: 38,
+              height: 38,
+              borderRadius: 12,
+              background: 'linear-gradient(135deg, rgba(0, 229, 153, 0.22), rgba(0, 212, 255, 0.22))',
+              border: '1px solid rgba(0, 229, 153, 0.4)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '1.1rem',
+              boxShadow: '0 0 12px rgba(0, 229, 153, 0.25)'
+            }}>
+              🔑
+            </div>
+            <div>
+              <h3 className="nv-modal-title" style={{ fontSize: '1.05rem', margin: 0 }}>
+                {editingService ? 'Edit Credential' : 'Add New Login'}
+              </h3>
+              <p style={{ margin: '2px 0 0', fontSize: '0.74rem', color: 'var(--nv-muted)' }}>
+                Encrypted with AES-256-GCM in local SQLCipher
+              </p>
+            </div>
+          </div>
+          <button type="button" className="nv-btn-icon" onClick={onClose} title="Close">✕</button>
+        </div>
+
+        <div className="nv-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
+          {/* Website / Service */}
+          <div className="nv-m3-field">
+            <label className="nv-m3-label">Website or App Domain</label>
+            <input
+              type="text"
+              className="nv-m3-input"
+              placeholder="e.g. github.com, google.com"
+              value={service}
+              onChange={e => setService(e.target.value)}
+              autoFocus
+            />
+          </div>
+
+          {/* Username / Email */}
+          <div className="nv-m3-field">
+            <label className="nv-m3-label">Username, Email, or Account</label>
+            <input
+              type="text"
+              className="nv-m3-input"
+              placeholder="user@example.com"
+              value={username}
+              onChange={e => setUsername(e.target.value)}
+            />
+          </div>
+
+          {/* Password */}
+          <div className="nv-m3-field">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <label className="nv-m3-label">Password / Secret</label>
+              <button
+                type="button"
+                className="nv-btn nv-btn-ghost nv-btn-sm"
+                style={{ padding: '0.2rem 0.6rem', fontSize: '0.72rem', height: 26, minHeight: 26 }}
+                onClick={onGeneratePassword}
+              >
+                ⚡ Generate Strong
+              </button>
+            </div>
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                className="nv-m3-input"
+                style={{ fontFamily: 'var(--nv-font-mono)', paddingRight: '2.5rem' }}
+                placeholder="Enter or generate password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+              />
+              <button
+                type="button"
+                className="nv-btn-icon"
+                style={{ position: 'absolute', right: 6, width: 28, height: 28, minWidth: 28, minHeight: 28, background: 'transparent', border: 'none' }}
+                onClick={() => setShowPassword(p => !p)}
+                title={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? '👁️' : '🔒'}
+              </button>
+            </div>
+
+            {/* Real-time Strength Meter */}
+            {password && (
+              <div className="nv-strength-wrap" style={{ marginTop: '0.4rem' }}>
+                <div className="nv-strength-bars">
+                  <div className={`nv-strength-bar ${score >= 1 ? (score === 1 ? 'weak' : score === 2 ? 'fair' : score === 3 ? 'good' : 'strong') : ''}`}></div>
+                  <div className={`nv-strength-bar ${score >= 2 ? (score === 2 ? 'fair' : score === 3 ? 'good' : 'strong') : ''}`}></div>
+                  <div className={`nv-strength-bar ${score >= 3 ? (score === 3 ? 'good' : 'strong') : ''}`}></div>
+                  <div className={`nv-strength-bar ${score >= 4 ? 'strong' : ''}`}></div>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--nv-muted)' }}>
+                  <span>Entropy strength</span>
+                  <span style={{ fontWeight: 700, color: score >= 3 ? '#00e599' : score === 2 ? '#ffb74d' : '#ff5252' }}>
+                    {scoreLabel}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="nv-modal-footer">
+          <button type="button" className="nv-btn nv-btn-ghost" onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="nv-btn"
+            disabled={!service.trim() || !password.trim()}
+            onClick={onSave}
+          >
+            {editingService ? 'Update Credential' : 'Save to Vault'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SpeedDialMenu({
+  isOpen,
+  onClose,
+  onAddLogin,
+  onAdd2FA,
+  onScanQr,
+  onSync
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onAddLogin: () => void;
+  onAdd2FA: () => void;
+  onScanQr: () => void;
+  onSync: () => void;
+}) {
+  if (!isOpen) return null;
+
+  return (
+    <div
+      className="nv-modal-backdrop"
+      style={{ alignItems: 'flex-end', paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' }}
+      onClick={onClose}
+    >
+      <div
+        className="nv-modal"
+        onClick={e => e.stopPropagation()}
+        style={{
+          maxWidth: 320,
+          marginRight: '1.25rem',
+          marginLeft: 'auto',
+          borderRadius: 22,
+          background: 'rgba(16, 23, 38, 0.96)',
+          backdropFilter: 'blur(24px)',
+          border: '1px solid rgba(255, 255, 255, 0.12)',
+          boxShadow: '0 16px 40px rgba(0, 0, 0, 0.8), 0 0 24px rgba(0, 229, 153, 0.15)',
+          padding: '0.65rem',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '0.35rem',
+          animation: 'nvModalPop 0.2s cubic-bezier(0.2, 0, 0, 1)'
+        }}
+      >
+        <button
+          type="button"
+          className="nv-speed-dial-item"
+          onClick={() => { onClose(); onScanQr(); }}
+        >
+          <span className="nv-speed-dial-icon" style={{ background: 'rgba(0, 212, 255, 0.18)', color: '#00d4ff' }}>📷</span>
+          <div style={{ textAlign: 'left' }}>
+            <div style={{ fontWeight: 700, fontSize: '0.86rem', color: '#fff' }}>Scan 2FA QR Code</div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--nv-muted)' }}>Use camera or screenshot</div>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          className="nv-speed-dial-item"
+          onClick={() => { onClose(); onAdd2FA(); }}
+        >
+          <span className="nv-speed-dial-icon" style={{ background: 'rgba(0, 229, 153, 0.18)', color: '#00e599' }}>⚡</span>
+          <div style={{ textAlign: 'left' }}>
+            <div style={{ fontWeight: 700, fontSize: '0.86rem', color: '#fff' }}>Add 2FA Authenticator</div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--nv-muted)' }}>Enter key manually (RFC 6238)</div>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          className="nv-speed-dial-item"
+          onClick={() => { onClose(); onAddLogin(); }}
+        >
+          <span className="nv-speed-dial-icon" style={{ background: 'rgba(147, 51, 234, 0.18)', color: '#c084fc' }}>🔑</span>
+          <div style={{ textAlign: 'left' }}>
+            <div style={{ fontWeight: 700, fontSize: '0.86rem', color: '#fff' }}>New Login Credential</div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--nv-muted)' }}>Site, username, password</div>
+          </div>
+        </button>
+
+        <div style={{ height: 1, background: 'rgba(255, 255, 255, 0.08)', margin: '0.2rem 0' }} />
+
+        <button
+          type="button"
+          className="nv-speed-dial-item"
+          onClick={() => { onClose(); onSync(); }}
+        >
+          <span className="nv-speed-dial-icon" style={{ background: 'rgba(255, 255, 255, 0.08)', color: '#94a3b8' }}>🔄</span>
+          <div style={{ textAlign: 'left' }}>
+            <div style={{ fontWeight: 600, fontSize: '0.82rem', color: 'var(--nv-text-secondary)' }}>Sync with P2P Mesh</div>
+          </div>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function BulkImportModal({
   type,
   onClose,
@@ -1288,6 +1544,7 @@ function App() {
   const [otpItems, setOtpItems] = useState<{ service: string; code?: string; account?: string; digits?: number; period?: number }[]>([]);
   const [otpSearch, setOtpSearch] = useState('');
   const [showAddOtp, setShowAddOtp] = useState(false);
+  const [showSpeedDial, setShowSpeedDial] = useState(false);
   const [editingOtpService, setEditingOtpService] = useState<string | null>(null);
   const [otpService, setOtpService] = useState('');
   const [otpAccount, setOtpAccount] = useState('');
@@ -2545,7 +2802,9 @@ function App() {
                 <div className="nv-hero-cover-content">
                   <span className="nv-hero-chip">P2P ENCRYPTED MESH</span>
                   <div className="nv-hero-brand">
-                    <Shield size={36} />
+                    <div className="nv-hero-icon-box">
+                      <img src={nexVaultIcon} alt="NextVault" className="nv-hero-brand-img" />
+                    </div>
                     <div>
                       <h1 className="nv-hero-title">Next<span>Vault</span></h1>
                       <p className="nv-hero-subtitle">Decentralized Zero-Knowledge Security</p>
@@ -2783,51 +3042,20 @@ function App() {
                         {vaultCategory === '2fa' ? otpItems.length : vaultCategory === 'logins' ? vaultItems.length : (vaultItems.length + otpItems.length)}
                       </span>
                     </div>
-                    <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                      <button
-                        className="nv-btn nv-btn-accent nv-btn-sm"
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '0.35rem 0.65rem' }}
-                        onClick={() => setIsScanningQr(true)}
-                        title="Scan 2FA QR Code"
-                      >
-                        <span>📷</span>
-                        <span>Scan QR</span>
-                      </button>
+                    <div style={{ display: 'flex', gap: '0.45rem', alignItems: 'center' }}>
                       <button
                         className="nv-btn nv-btn-ghost nv-btn-sm"
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                        onClick={() => {
-                          setEditingOtpService(null);
-                          setOtpService('');
-                          setOtpAccount('');
-                          setOtpSecret('');
-                          setOtpDigits(6);
-                          setOtpPeriod(30);
-                          setOtpAlgorithm('SHA1');
-                          setShowAddOtp(true);
-                        }}
-                        title="Add 2FA Authenticator"
+                        onClick={() => { refreshVault(true); refreshOTPs(true); }}
+                        title="Sync with P2P Mesh"
                       >
-                        <span>⚡</span>
-                        <span>+ 2FA</span>
+                        {isSyncing ? 'Syncing...' : '🔄 Sync'}
                       </button>
                       <button
                         className="nv-btn nv-btn-sm"
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                        onClick={() => {
-                          if (!showAddVault) {
-                            setEditingVaultService(null);
-                            setService('');
-                            setVaultUsername('');
-                            setCredential('');
-                          }
-                          setShowAddVault(!showAddVault);
-                        }}
+                        onClick={() => setShowSpeedDial(true)}
+                        title="Add items to vault"
                       >
-                        {showAddVault ? '✕' : '+ Login'}
-                      </button>
-                      <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={() => { refreshVault(true); refreshOTPs(true); }} title="Sync">
-                        {isSyncing ? '...' : '🔄'}
+                        + Add
                       </button>
                     </div>
                   </div>
@@ -2910,62 +3138,6 @@ function App() {
                       {filteredVaultItems.length} of {vaultItems.length}
                     </span>
                   </div>
-
-                  {showAddVault && (
-                    <Card style={{ marginBottom: '1rem' }}>
-                      <div style={{ fontWeight: 600, color: '#fff', marginBottom: '0.75rem' }}>{editingVaultService ? 'Edit Credential' : 'Add Credential'}</div>
-                      <div className="nv-form">
-                        <input
-                          className="nv-input"
-                          placeholder="Service / Website (e.g. github.com)"
-                          value={service}
-                          onChange={e => setService(e.target.value)}
-                        />
-                        <input
-                          className="nv-input"
-                          placeholder="Username / Email"
-                          value={vaultUsername}
-                          onChange={e => setVaultUsername(e.target.value)}
-                        />
-                        <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-                          <input
-                            className="nv-input nv-mono"
-                            placeholder="Credential / Password"
-                            value={credential}
-                            onChange={e => setCredential(e.target.value)}
-                          />
-                          <button
-                            type="button"
-                            className="nv-btn nv-btn-ghost nv-btn-sm"
-                            style={{ whiteSpace: 'nowrap', padding: '0.45rem 0.65rem' }}
-                            onClick={generateMobilePassword}
-                            title="Generate strong random password"
-                          >
-                            ⚡ Gen
-                          </button>
-                        </div>
-                        {/* Password strength meter */}
-                        <div className="nv-strength-wrap" style={{ marginTop: '0.15rem', marginBottom: '0.4rem' }}>
-                          <div className="nv-strength-bars">
-                            <div className={`nv-strength-bar ${getPasswordScore(credential) >= 1 ? (getPasswordScore(credential) === 1 ? 'weak' : getPasswordScore(credential) === 2 ? 'fair' : getPasswordScore(credential) === 3 ? 'good' : 'strong') : ''}`}></div>
-                            <div className={`nv-strength-bar ${getPasswordScore(credential) >= 2 ? (getPasswordScore(credential) === 2 ? 'fair' : getPasswordScore(credential) === 3 ? 'good' : 'strong') : ''}`}></div>
-                            <div className={`nv-strength-bar ${getPasswordScore(credential) >= 3 ? (getPasswordScore(credential) === 3 ? 'good' : 'strong') : ''}`}></div>
-                            <div className={`nv-strength-bar ${getPasswordScore(credential) >= 4 ? 'strong' : ''}`}></div>
-                          </div>
-                        </div>
-                        <div className="nv-btn-row">
-                          <button className="nv-btn" onClick={onSavePassword}>{editingVaultService ? 'Update Credential' : 'Save Credential'}</button>
-                          <button className="nv-btn nv-btn-ghost" onClick={() => {
-                            setShowAddVault(false);
-                            setEditingVaultService(null);
-                            setService('');
-                            setVaultUsername('');
-                            setCredential('');
-                          }}>Cancel</button>
-                        </div>
-                      </div>
-                    </Card>
-                  )}
 
                   {filteredVaultItems.length === 0 ? (
                     <div className="nv-empty">
@@ -4076,27 +4248,55 @@ function App() {
           <button
             type="button"
             className="nv-fab"
-            onClick={() => {
-              if (vaultCategory === '2fa') {
-                setIsScanningQr(true);
-              } else {
-                setEditingOtpService(null);
-                setOtpService('');
-                setOtpAccount('');
-                setOtpSecret('');
-                setOtpDigits(6);
-                setOtpPeriod(30);
-                setOtpAlgorithm('SHA1');
-                setShowAddOtp(true);
-              }
-            }}
-            title={vaultCategory === '2fa' ? 'Scan 2FA QR Code' : 'Add Item'}
+            onClick={() => setShowSpeedDial(true)}
+            title="Add to Vault"
           >
-            <span style={{ fontSize: '1.5rem', lineHeight: 1, fontWeight: 700 }}>
-              {vaultCategory === '2fa' ? '📷' : '+'}
+            <span style={{ fontSize: '1.6rem', lineHeight: 1, fontWeight: 700 }}>
+              +
             </span>
           </button>
         )}
+
+        {/* Speed Dial Menu */}
+        <SpeedDialMenu
+          isOpen={showSpeedDial}
+          onClose={() => setShowSpeedDial(false)}
+          onAddLogin={() => {
+            setEditingVaultService(null);
+            setService('');
+            setVaultUsername('');
+            setCredential('');
+            setShowAddVault(true);
+          }}
+          onAdd2FA={() => {
+            setEditingOtpService(null);
+            setOtpService('');
+            setOtpAccount('');
+            setOtpSecret('');
+            setOtpDigits(6);
+            setOtpPeriod(30);
+            setOtpAlgorithm('SHA1');
+            setShowAddOtp(true);
+          }}
+          onScanQr={() => setIsScanningQr(true)}
+          onSync={() => { refreshVault(true); refreshOTPs(true); }}
+        />
+
+        {/* Add / Edit Login Credential Modal */}
+        <AddCredentialModal
+          isOpen={showAddVault}
+          onClose={() => setShowAddVault(false)}
+          editingService={editingVaultService}
+          service={service}
+          setService={setService}
+          username={vaultUsername}
+          setUsername={setVaultUsername}
+          password={credential}
+          setPassword={setCredential}
+          onGeneratePassword={generateMobilePassword}
+          onSave={onSavePassword}
+          getPasswordScore={getPasswordScore}
+        />
 
         {/* Add / Edit 2FA Authenticator Modal */}
         <AddOtpModal

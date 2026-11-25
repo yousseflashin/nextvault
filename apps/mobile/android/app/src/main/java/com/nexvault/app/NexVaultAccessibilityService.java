@@ -105,10 +105,10 @@ public class NexVaultAccessibilityService extends AccessibilityService {
     private static final String BLACKLIST_REGEX = ".*\\b("
         + "address|addr|street|city|state|zip|zipcode|postal|postcode|country|province|region|county|"
         + "apt|suite|unit|floor|building|po_box|pobox|door|delivery|shipping|billing|destination|location|"
-        + "search|query|filter|find|keyword|"
+        + "search|query|filter|find|keyword|discover|explore|tag|tags|caption|title|"
         + "first_name|firstname|fname|last_name|lastname|lname|middle_name|full_name|fullname|cardholder|bday|birthday|gender|sex|tax|vat|company|"
         + "card|cvv|cvc|exp|coupon|promo|discount|voucher|"
-        + "comment|message|note|notes|bio|description|feedback|review|subject|qty|quantity|amount|price"
+        + "comment|message|chat|conversation|reply|dm|note|notes|bio|description|feedback|review|subject|qty|quantity|amount|price"
         + ")\\b.*";
 
     @Override
@@ -221,9 +221,6 @@ public class NexVaultAccessibilityService extends AccessibilityService {
 
         // 4. Query credentials matching this domain/package
         List<JSONObject> matchingCreds = findCredentialsForDomain(targetDomain);
-        if (matchingCreds.isEmpty()) {
-            matchingCreds = getAllCredentials();
-        }
         Rect nodeBounds = new Rect();
         node.getBoundsInScreen(nodeBounds);
 
@@ -245,6 +242,23 @@ public class NexVaultAccessibilityService extends AccessibilityService {
                 fillNodeText(node, generated);
                 hideOverlay();
             });
+        } else if (isUser && (hasAdjacentPasswordField() || isBrowser)) {
+            // In browser or known login form, suggest saved credentials if available
+            List<JSONObject> allCreds = getAllCredentials();
+            if (!allCreds.isEmpty()) {
+                final String fallbackDomain = targetDomain;
+                JSONObject topCred = allCreds.get(0);
+                String serviceName = topCred.optString("service", fallbackDomain);
+                String username = topCred.optString("username", "");
+                String password = topCred.optString("password", "");
+
+                showOverlay(serviceName, username, false, nodeBounds, (view) -> {
+                    performAutofill(fallbackDomain, username, password, isPass);
+                    hideOverlay();
+                });
+            } else {
+                hideOverlay();
+            }
         } else {
             hideOverlay();
         }
@@ -257,7 +271,8 @@ public class NexVaultAccessibilityService extends AccessibilityService {
         CharSequence className = node.getClassName();
         if (className != null) {
             String cls = className.toString().toLowerCase(Locale.ROOT);
-            if (cls.contains("searchview") || cls.contains("searchbar") || cls.contains("searchautocomplete")) {
+            if (cls.contains("searchview") || cls.contains("searchbar") || cls.contains("searchautocomplete")
+                || cls.contains("search") || cls.contains("query")) {
                 return true;
             }
         }
@@ -273,7 +288,9 @@ public class NexVaultAccessibilityService extends AccessibilityService {
         }
 
         String probe = getNodeProbe(node);
-        if (probe.contains("search") || probe.contains("query") || probe.contains("filter") || probe.contains("find") || probe.contains("keyword") || probe.contains("lookup")) {
+        if (probe.contains("search") || probe.contains("query") || probe.contains("filter")
+            || probe.contains("find") || probe.contains("keyword") || probe.contains("lookup")
+            || probe.contains("discover") || probe.contains("explore") || probe.contains("browse")) {
             return true;
         }
 
@@ -287,6 +304,7 @@ public class NexVaultAccessibilityService extends AccessibilityService {
             String lowerId = viewId.toLowerCase(Locale.ROOT);
             if (lowerId.contains("search") || lowerId.contains("query") || lowerId.contains("filter")
                 || lowerId.contains("find") || lowerId.contains("lookup") || lowerId.contains("keyword")
+                || lowerId.contains("discover") || lowerId.contains("explore")
                 || lowerId.contains("omnibox") || lowerId.contains("url_bar") || lowerId.contains("address_bar")) {
                 return true;
             }
@@ -300,14 +318,32 @@ public class NexVaultAccessibilityService extends AccessibilityService {
 
     private boolean isPasswordNode(AccessibilityNodeInfo node) {
         if (isBlacklistedNode(node)) return false;
-        if (node.isPassword()) return true;
 
         int inputType = node.getInputType();
         int variation = inputType & 0x00000ff0;
-        if (variation == 0x00000080
-            || variation == 0x00000090
-            || variation == 0x000000e0
-            || variation == 0x00000010) {
+
+        // Strict Android InputType password variation check
+        if (variation == 0x00000080  // TYPE_TEXT_VARIATION_PASSWORD
+            || variation == 0x00000090  // TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+            || variation == 0x000000e0  // TYPE_TEXT_VARIATION_WEB_PASSWORD
+            || variation == 0x00000010) { // TYPE_NUMBER_VARIATION_PASSWORD
+            return true;
+        }
+
+        // Only rely on node.isPassword() if it has actual password inputType or text variation
+        // This avoids apps misflagging search / sensitive inputs with isPassword(true) without password InputType
+        if (node.isPassword()) {
+            if ((inputType & 0x00000080) != 0 || variation != 0) {
+                return true;
+            }
+            String probe = getNodeProbe(node);
+            if (probe.matches(".*\\b(password|passwd|pwd|passcode|secret_key|master_key)\\b.*")) {
+                return true;
+            }
+            // If probe contains search words, reject even if isPassword() was true
+            if (probe.contains("search") || probe.contains("find") || probe.contains("query")) {
+                return false;
+            }
             return true;
         }
 
@@ -317,8 +353,16 @@ public class NexVaultAccessibilityService extends AccessibilityService {
 
     private boolean isUsernameNode(AccessibilityNodeInfo node) {
         if (node == null || !node.isEditable()) return false;
-        if (isPasswordNode(node)) return false;
         if (isBlacklistedNode(node)) return false;
+        if (isPasswordNode(node)) return false;
+
+        // If the probe has any search/query keywords, never consider it a username
+        String probe = getNodeProbe(node);
+        if (probe.contains("search") || probe.contains("query") || probe.contains("filter")
+            || probe.contains("find") || probe.contains("lookup") || probe.contains("keyword")
+            || probe.contains("discover") || probe.contains("explore")) {
+            return false;
+        }
 
         int inputType = node.getInputType();
         int variation = inputType & 0x00000ff0;
@@ -328,7 +372,6 @@ public class NexVaultAccessibilityService extends AccessibilityService {
             return true;
         }
 
-        String probe = getNodeProbe(node);
         if (probe.matches(".*\\b(username|user_id|userid|user_name|login_id|login|signin|sign_in|member_id|handle|email)\\b.*")) {
             return true;
         }

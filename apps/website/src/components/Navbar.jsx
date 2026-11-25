@@ -18,42 +18,39 @@ export default function Navbar() {
     <header className="sticky top-0 z-50 backdrop-blur-xl bg-dw-bg/85 border-b border-dw-border">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
         {/* Brand */}
-        <a href="#" className="flex items-center gap-2.5 group shrink-0" onClick={closeMenu}>
-          <div className="w-8 h-8 rounded-lg bg-dw-surface2 border border-dw-border group-hover:border-dw-green/60 transition flex items-center justify-center p-1 shadow-glow">
-            <img src="/icon.png" alt="NexVault" className="w-full h-full rounded object-contain" />
+        <a href="#" className="flex items-center gap-3 group shrink-0" onClick={closeMenu}>
+          <div className="w-9 h-9 rounded-xl bg-dw-surface2 border border-dw-border group-hover:border-dw-green/60 transition-all flex items-center justify-center p-1 shadow-glow group-hover:scale-105">
+            <img src="/icon.png" alt="NexVault" className="w-full h-full rounded-lg object-contain" />
           </div>
           <div className="flex flex-col">
             <span className="font-sans font-extrabold text-base tracking-tight text-white leading-none">
               Nex<span className="text-dw-green">Vault</span>
-              <span className="hidden sm:inline text-dw-dim ml-1.5 text-[11px] font-mono font-normal">
-                // ZERO-CLOUD
-              </span>
             </span>
-            <span className="text-[10px] font-mono text-dw-muted mt-0.5">
-              {currentTag} · {desktopSize} / {mobileSize}
+            <span className="text-[11px] font-mono text-dw-muted mt-0.5">
+              {currentTag} · P2P Mesh
             </span>
           </div>
         </a>
 
         {/* Desktop Navigation Links */}
-        <nav className="hidden lg:flex items-center gap-6 text-xs font-mono text-dw-muted">
-          <a href="#features" className="hover:text-dw-green transition py-1">
-            [ 01. Capabilities ]
+        <nav className="hidden lg:flex items-center gap-7 text-xs font-medium text-dw-muted">
+          <a href="#features" className="hover:text-white transition py-1">
+            Capabilities
           </a>
-          <a href="#architecture" className="hover:text-dw-cyan transition py-1">
-            [ 02. Protocol ]
+          <a href="#architecture" className="hover:text-white transition py-1">
+            Protocol
           </a>
           <a href="#downloads" className="hover:text-white transition py-1">
-            [ 03. Releases ]
+            Releases
           </a>
-          <a href="#release-strategy" className="hover:text-dw-green transition py-1">
-            [ 04. Update Pipeline ]
+          <a href="#release-strategy" className="hover:text-white transition py-1">
+            Pipeline
           </a>
         </nav>
 
         {/* Status Pill, Action & Mobile Menu Button */}
         <div className="flex items-center gap-2.5 sm:gap-3">
-          <span className="hidden md:inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-[11px] font-mono text-dw-green bg-dw-surface border border-dw-border">
+          <span className="hidden md:inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11px] font-mono text-dw-green bg-dw-green/10 border border-dw-green/30">
             <span className="w-1.5 h-1.5 rounded-full bg-dw-green animate-pulse"></span>
             <span>SHA-256 VERIFIED</span>
           </span>
@@ -61,11 +58,11 @@ export default function Navbar() {
           <a
             href="#downloads"
             onClick={closeMenu}
-            className="px-3.5 sm:px-4 py-2 rounded-lg text-xs font-mono font-bold uppercase tracking-wider text-black bg-gradient-to-r from-dw-green to-dw-cyan hover:opacity-90 transition shadow-glow flex items-center gap-1.5"
+            className="px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider text-black bg-gradient-to-r from-dw-green to-dw-cyan hover:opacity-95 transition-all active:scale-95 shadow-glow flex items-center gap-2"
           >
             <span>Get {currentTag}</span>
-            <span className="hidden sm:inline text-[10px] opacity-80">
-              ({clientPlatform.recommended === 'mobile' ? mobileSize : desktopSize})
+            <span className="w-5 h-5 rounded-full bg-black/15 flex items-center justify-center text-[10px] font-black">
+              ↓
             </span>
           </a>
 
