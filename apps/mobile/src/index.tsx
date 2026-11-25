@@ -2058,8 +2058,8 @@ function App() {
       const r = await (window as any).nexVault.initializeExistingUser(t.tokenId, t.publicKey, t.signature, password, t.expiresAt);
       if (!r.success) throw new Error(r.error);
       setUnlocked(true);
-      syncAutofillCredentials();
       await mergeNativeAutofillCredentials();
+      syncAutofillCredentials();
       setStatus('Unlocked: ' + r.tokenId);
       refreshVault(false);
       refreshOTPs(false);

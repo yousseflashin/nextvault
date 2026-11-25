@@ -33,6 +33,17 @@ public class AutofillBridgePlugin extends Plugin {
         result.put("credentialsJson", NativeCredentialStore.readCredentials(getContext()));
         call.resolve(result);
     }
+    @PluginMethod
+    public void readPendingCredentials(PluginCall call) {
+        JSObject result = new JSObject();
+        result.put("credentialsJson", NativeCredentialStore.readPending(getContext()));
+        call.resolve(result);
+    }
+    @PluginMethod
+    public void clearPendingCredentials(PluginCall call) {
+        NativeCredentialStore.clearPending(getContext());
+        call.resolve();
+    }
 
     @PluginMethod
     public void openSettings(PluginCall call) {

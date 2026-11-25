@@ -236,6 +236,35 @@ const argv = process.argv.slice(2);
 const flags = new Set(argv.filter((a) => a.startsWith('--')));
 const positional = argv.filter((a) => !a.startsWith('--'));
 
+if (flags.has('--help') || flags.has('-h')) {
+  console.log(`
+====================================================
+  NexVault Unified Release CLI
+====================================================
+
+  Usage:
+    npm run release                       Complete patch release (test, build, manifest, commit, tag, push, upload)
+    npm run release -- minor              Minor version bump
+    npm run release -- 0.2.0              Explicit semver
+    npm run release -- --upload           Enforce upload to GitHub Releases
+    npm run release -- --upload-only      Upload existing ./release/ binaries without rebuild
+    npm run release -- --target=mobile    Mobile-only release (Android APK)
+    npm run release -- --target=desktop   Desktop-only release (AppImage)
+    npm run release -- --dry-run          Preview release without changing files or git
+    npm run release -- --no-build         Bump and push only (delegate build to CI)
+    npm run release -- --no-push          Build and measure locally without git push
+    npm run release -- --verify vX.Y.Z    Verify workspace manifests match tag
+`);
+  process.exit(0);
+}
+
+if (flags.has('--upload-only')) {
+  const ver = positional[0] || readRootVersion();
+  log(`Uploading existing release artifacts for v${ver}...`);
+  run('node', ['scripts/upload-release.mjs', ver]);
+  process.exit(0);
+}
+
 let target = 'all';
 for (const f of flags) {
   if (f.startsWith('--target=')) {
@@ -267,13 +296,15 @@ const dryRun = flags.has('--dry-run');
 const push = !flags.has('--no-push');
 const noBuild = flags.has('--no-build');
 const skipTests = flags.has('--no-test');
-const noUpload = flags.has('--no-upload');
+const forceUpload = flags.has('--upload');
+const noUpload = flags.has('--no-upload') && !forceUpload;
 
 console.log('====================================================');
 console.log(`  NexVault Professional Release Pipeline`);
 console.log(`  Target:  ${target}`);
 console.log(`  Version: v${current} → ${tag}${dryRun ? '  (DRY RUN)' : ''}`);
 console.log(`  Build:   ${noBuild ? 'Skipped (--no-build)' : 'Full Build & Measure'}`);
+console.log(`  Upload:  ${forceUpload ? 'Enforced (--upload)' : (noUpload ? 'Disabled' : 'Auto if GITHUB_TOKEN present')}`);
 console.log('====================================================\n');
 
 // Guard rails
@@ -371,8 +402,10 @@ if (!noUpload && !noBuild) {
   if (hasToken) {
     log('GitHub token found — uploading release artifacts...');
     run('node', ['scripts/upload-release.mjs', next]);
+  } else if (forceUpload) {
+    fail('Upload requested (--upload) but no GITHUB_TOKEN or GH_TOKEN found in environment or .env.dev!');
   } else {
-    log('Note: GITHUB_TOKEN not set. Artifacts are ready in ./release/. GitHub Actions will publish, or run npm run release:upload manually.');
+    log('Note: GITHUB_TOKEN not set. Artifacts are ready in ./release/. GitHub Actions will publish, or run npm run release -- --upload.');
   }
 } else {
   log('[6/6] Skipping GitHub Release upload.');

@@ -344,7 +344,7 @@ public class NexVaultAutofillService extends AutofillService {
 
         // 4. Inspect Android InputType
         int variation = inputType & 0x00000ff0;
-        if (variation == 0x80 || variation == 0x90 || variation == 0xe0 || variation == 0x10 || (inputType & 0x00000081) != 0) {
+        if (variation == 0x80 || variation == 0x90 || variation == 0xe0 || (inputType & 0x00000fff) == 0x81 || (variation == 0x10 && (inputType & 0x0f) == 0x02)) {
             password = true;
         }
         if (variation == 0x20 || variation == 0xd0) {
@@ -563,11 +563,35 @@ public class NexVaultAutofillService extends AutofillService {
                     }
                 }
 
+                // 1. Save to dedicated pending queue (strictly preserved for encrypted vault ingestion)
+                JSONArray pending = new JSONArray(NativeCredentialStore.readPending(this));
+                JSONObject pendingEntry = null;
+                for (int i = 0; i < pending.length(); i++) {
+                    JSONObject c = pending.getJSONObject(i);
+                    if (cleanDomain.equalsIgnoreCase(c.optString("service")) && values.username.equalsIgnoreCase(c.optString("username"))) {
+                        pendingEntry = c;
+                        break;
+                    }
+                }
+                if (pendingEntry == null) {
+                    pendingEntry = new JSONObject();
+                    pendingEntry.put("service", cleanDomain);
+                    pending.put(pendingEntry);
+                }
+                if (!values.username.isEmpty()) {
+                    pendingEntry.put("username", values.username);
+                }
+                pendingEntry.put("password", values.password);
+                pendingEntry.put("updatedAt", System.currentTimeMillis());
+                NativeCredentialStore.writePending(this, pending.toString());
+
+                // 2. Also update active autofill cache for immediate subsequent filling
                 JSONArray credentials = new JSONArray(NativeCredentialStore.read(this));
                 JSONObject entry = null;
                 for (int i = 0; i < credentials.length(); i++) {
                     JSONObject candidate = credentials.getJSONObject(i);
-                    if (matches(cleanDomain, candidate.optString("service"))) {
+                    if (cleanDomain.equalsIgnoreCase(candidate.optString("service")) &&
+                        (values.username.isEmpty() || values.username.equalsIgnoreCase(candidate.optString("username")))) {
                         entry = candidate;
                         break;
                     }
@@ -630,7 +654,7 @@ public class NexVaultAutofillService extends AutofillService {
             boolean isUsername = false;
 
             int variation = inputType & 0x00000ff0;
-            if (variation == 0x80 || variation == 0x90 || variation == 0xe0 || variation == 0x10 || (inputType & 0x00000081) != 0) {
+            if (variation == 0x80 || variation == 0x90 || variation == 0xe0 || (inputType & 0x00000fff) == 0x81 || (variation == 0x10 && (inputType & 0x0f) == 0x02)) {
                 isPassword = true;
             }
             if (variation == 0x20 || variation == 0xd0) {

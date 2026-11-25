@@ -12,11 +12,12 @@ import javax.crypto.spec.GCMParameterSpec;
 final class NativeCredentialStore {
     private static final String PREFS = "nexvault_autofill";
     private static final String DATA = "credentials";
+    private static final String PENDING_DATA = "pending_credentials";
     private static final String KEY_ALIAS = "nexvault.autofill.credentials";
 
     private NativeCredentialStore() {}
 
-    static void write(Context context, String value) throws Exception {
+    private static void writeKeyed(Context context, String key, String value) throws Exception {
         byte[] iv = new byte[12];
         new java.security.SecureRandom().nextBytes(iv);
         Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
@@ -27,12 +28,12 @@ final class NativeCredentialStore {
         System.arraycopy(ciphertext, 0, payload, iv.length, ciphertext.length);
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit()
-            .putString(DATA, Base64.encodeToString(payload, Base64.NO_WRAP))
+            .putString(key, Base64.encodeToString(payload, Base64.NO_WRAP))
             .apply();
     }
 
-    static String read(Context context) {
-        String stored = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(DATA, "[]");
+    private static String readKeyed(Context context, String key) {
+        String stored = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(key, "[]");
         if (stored == null || stored.isEmpty()) return "[]";
         try {
             byte[] payload = Base64.decode(stored, Base64.NO_WRAP);
@@ -47,12 +48,33 @@ final class NativeCredentialStore {
             return stored.startsWith("[") ? stored : "[]";
         }
     }
+
+    static void write(Context context, String value) throws Exception {
+        writeKeyed(context, DATA, value);
+    }
+
+    static String read(Context context) {
+        return readKeyed(context, DATA);
+    }
+
     static String readCredentials(Context context) {
         return read(context);
     }
 
     static void clear(Context context) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply();
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(DATA).apply();
+    }
+
+    static void writePending(Context context, String value) throws Exception {
+        writeKeyed(context, PENDING_DATA, value);
+    }
+
+    static String readPending(Context context) {
+        return readKeyed(context, PENDING_DATA);
+    }
+
+    static void clearPending(Context context) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(PENDING_DATA).apply();
     }
 
     private static SecretKey getKey() throws Exception {

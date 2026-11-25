@@ -20,6 +20,8 @@ const AutofillBridge = registerPlugin<{
   syncCredentials(options: { credentialsJson: string }): Promise<void>;
   readCredentials(): Promise<{ credentialsJson: string }>;
   clearCredentials(): Promise<void>;
+  readPendingCredentials(): Promise<{ credentialsJson: string }>;
+  clearPendingCredentials(): Promise<void>;
   openSettings(): Promise<void>;
   isEnabled(): Promise<{ enabled: boolean }>;
   openAccessibilitySettings(): Promise<void>;
@@ -508,8 +510,10 @@ async function unlockEnvelope(password: string, env: VaultEnvelope): Promise<Mob
   sessionIter = env.iter;
   cachedState = JSON.parse(naclUtil.encodeUTF8(plain));
   touchOfflineHeartbeat();
+  try {
+    await mergeNativeAutofillCredentials();
+  } catch {}
   syncAutofillCredentials(cachedState);
-  mergeNativeAutofillCredentials().catch(() => {});
   return cachedState as MobileVaultState;
 }
 
@@ -837,30 +841,49 @@ export function emergencyNukeVault() {
 
 export async function mergeNativeAutofillCredentials() {
   if (typeof window === 'undefined' || (window as any).Capacitor?.getPlatform?.() !== 'android') return;
-  let result;
+  let pendingResult: any = null;
   try {
-    result = await AutofillBridge.readCredentials();
-  } catch {
-    return;
-  }
-  const nativeCredentials = JSON.parse(result?.credentialsJson || '[]');
+    pendingResult = await AutofillBridge.readPendingCredentials();
+  } catch {}
+  let activeResult: any = null;
+  try {
+    activeResult = await AutofillBridge.readCredentials();
+  } catch {}
+
+  const pendingCredentials = JSON.parse(pendingResult?.credentialsJson || '[]');
+  const activeCredentials = JSON.parse(activeResult?.credentialsJson || '[]');
+  const incoming = [
+    ...(Array.isArray(pendingCredentials) ? pendingCredentials : []),
+    ...(Array.isArray(activeCredentials) ? activeCredentials : [])
+  ];
+
   const state = loadVault();
-  if (!state || !Array.isArray(nativeCredentials)) return;
+  if (!state || !incoming.length) return;
 
   let changed = false;
-  for (const nativeCredential of nativeCredentials) {
-    const service = String(nativeCredential.service || '').trim();
-    const password = String(nativeCredential.password || '');
+  for (const nativeCredential of incoming) {
+    const service = String(nativeCredential.service || nativeCredential.rawService || '').trim();
+    const password = String(nativeCredential.password || nativeCredential.credential || '');
     if (!service || !password) continue;
+    const username = String(nativeCredential.username || '').trim();
     const target = normalizeDomain(service);
-    const existingIdx = state.passwords.findIndex(entry => normalizeDomain(entry.service) === target);
+
+    const existingIdx = state.passwords.findIndex(entry => {
+      const matchDomain = normalizeDomain(entry.service) === target;
+      if (!matchDomain) return false;
+      const entryUser = String(entry.username || '').trim().toLowerCase();
+      const nativeUser = username.toLowerCase();
+      // If both have usernames, they must match. If either is empty, match if domain matches.
+      return (!entryUser || !nativeUser || entryUser === nativeUser);
+    });
+
     if (existingIdx >= 0) {
       const existing = state.passwords[existingIdx];
-      if (existing.credential === password && (existing.username || '') === (nativeCredential.username || '')) {
+      if (existing.credential === password && (existing.username || '') === username) {
         continue;
       }
       existing.credential = password;
-      if (nativeCredential.username) existing.username = nativeCredential.username;
+      if (username) existing.username = username;
       existing.updatedAt = Date.now();
       existing.logicalCounter = (existing.logicalCounter || 0) + 1;
       changed = true;
@@ -868,7 +891,7 @@ export async function mergeNativeAutofillCredentials() {
       state.passwords.push({
         service,
         credential: password,
-        username: nativeCredential.username || '',
+        username,
         createdAt: new Date().toISOString(),
         updatedAt: Date.now(),
         logicalCounter: 1,
@@ -881,6 +904,9 @@ export async function mergeNativeAutofillCredentials() {
     saveVault(state);
     notifyVaultUpdated();
   }
+  try {
+    await AutofillBridge.clearPendingCredentials();
+  } catch {}
 }
 
 export async function openAutofillSettings() {
