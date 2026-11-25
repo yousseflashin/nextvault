@@ -181,18 +181,8 @@ public class NexVaultAutofillService extends AutofillService {
             }
 
             // 2. Fallback Credential Suggestions:
-            // Like Google Password Manager: If domain did not match or if in a browser where URL bar was not exposed,
-            // offer top vault credentials so the user can select their account!
-            if (!matched && !fields.isEmpty() && credentials.length() > 0 && !isExcludedPackage(domain)) {
-                int limit = Math.min(credentials.length(), 6);
-                for (int i = 0; i < limit; i++) {
-                    JSONObject credential = credentials.getJSONObject(i);
-                    String service = credential.optString("service", "Saved Login");
-                    Dataset.Builder dataset = createDataset(service, credential.optString("username"), credential.optString("password"), fields);
-                    response.addDataset(dataset.build());
-                    hasDatasets = true;
-                }
-            }
+            // Removed arbitrary dumping of unrelated credentials. Autofill should ONLY offer
+            // credentials that legitimately match the current application package or website domain.
 
             // 3. ONLY provide "⚡ Generate strong password" dataset if an actual password field exists!
             if (hasActualPassword) {
@@ -487,47 +477,89 @@ public class NexVaultAutofillService extends AutofillService {
         String normDomain = normalize(domain);
         String normService = normalize(service);
 
-        // 1. Direct host match or subdomain match
-        if (normDomain.equals(normService)
-            || normDomain.endsWith("." + normService)
-            || normService.endsWith("." + normDomain)) {
+        // Never match against generic browser packages as credentials
+        if (isBrowserPackage(normDomain) || isBrowserPackage(normService)) {
+            return false;
+        }
+
+        // 1. Direct host match (e.g. "github.com" == "github.com")
+        if (normDomain.equalsIgnoreCase(normService)) {
             return true;
         }
 
-        // 2. Base stem match (e.g. "github" matches "github.com", "google" matches "accounts.google.com")
-        String stemDomain = extractStem(normDomain);
-        String stemService = extractStem(normService);
-        if (!stemDomain.isEmpty() && !stemService.isEmpty()) {
-            if (stemDomain.equalsIgnoreCase(stemService)
-                || normDomain.contains(stemService)
-                || normService.contains(stemDomain)) {
-                return true;
-            }
+        // 2. Subdomain match (e.g. "auth.github.com" ends with ".github.com")
+        if (normDomain.endsWith("." + normService) || normService.endsWith("." + normDomain)) {
+            return true;
         }
 
-        // 3. Package segment matching for native Android applications (e.g. "com.spotify.music" -> "spotify")
-        if (normDomain.contains(".")) {
-            String[] segments = normDomain.split("\\.");
-            for (String segment : segments) {
-                if (segment.length() > 2
-                    && !segment.equals("com") && !segment.equals("android") && !segment.equals("app") && !segment.equals("org") && !segment.equals("google")
-                    && (segment.equalsIgnoreCase(stemService) || segment.contains(stemService) || stemService.contains(segment))) {
-                    return true;
-                }
-            }
+        // 3. Extract root domain (e.g. "accounts.google.com" -> "google.com")
+        String rootDomain = extractRootDomain(normDomain);
+        String rootService = extractRootDomain(normService);
+        if (!rootDomain.isEmpty() && !rootService.isEmpty() && rootDomain.equalsIgnoreCase(rootService)) {
+            return true;
         }
-        if (normService.contains(".")) {
-            String[] segments = normService.split("\\.");
-            for (String segment : segments) {
-                if (segment.length() > 2
-                    && !segment.equals("com") && !segment.equals("android") && !segment.equals("app") && !segment.equals("org") && !segment.equals("google")
-                    && (segment.equalsIgnoreCase(stemDomain) || segment.contains(stemDomain) || stemDomain.contains(segment))) {
+
+        // 4. Android native package name matching (e.g. "com.spotify.music" -> brand: "spotify")
+        String brandDomain = extractBrandToken(normDomain);
+        String brandService = extractBrandToken(normService);
+
+        if (!brandDomain.isEmpty() && !brandService.isEmpty()) {
+            if (brandDomain.equalsIgnoreCase(brandService)) {
+                return true;
+            }
+            // Allow exact prefix match for compounds (e.g. "instagramapp" starts with "instagram")
+            if (brandDomain.length() >= 5 && brandService.length() >= 5) {
+                if (brandDomain.startsWith(brandService) || brandService.startsWith(brandDomain)) {
                     return true;
                 }
             }
         }
 
         return false;
+    }
+
+    private static String extractRootDomain(String host) {
+        if (host == null || host.isEmpty()) return "";
+        String clean = host.toLowerCase(Locale.ROOT);
+        String[] parts = clean.split("\\.");
+        if (parts.length < 2) return clean;
+
+        if (parts.length >= 3) {
+            String lastTwo = parts[parts.length - 2] + "." + parts[parts.length - 1];
+            if (lastTwo.equals("co.uk") || lastTwo.equals("com.br") || lastTwo.equals("co.jp") || lastTwo.equals("com.au")) {
+                return parts[parts.length - 3] + "." + lastTwo;
+            }
+        }
+        return parts[parts.length - 2] + "." + parts[parts.length - 1];
+    }
+
+    private static String extractBrandToken(String value) {
+        if (value == null || value.isEmpty()) return "";
+        String clean = value.toLowerCase(Locale.ROOT);
+
+        // If it's a domain name with a standard TLD, get the primary brand label
+        if (!clean.contains("package:") && (clean.endsWith(".com") || clean.endsWith(".org") || clean.endsWith(".net") || clean.endsWith(".io") || clean.endsWith(".ai") || clean.endsWith(".app") || clean.endsWith(".dev"))) {
+            String root = extractRootDomain(clean);
+            int dot = root.indexOf('.');
+            return (dot > 0) ? root.substring(0, dot) : root;
+        }
+
+        // Android package name extraction (e.g. "com.spotify.music", "org.telegram.messenger")
+        String[] segments = clean.split("\\.");
+        for (int i = segments.length - 1; i >= 0; i--) {
+            String seg = segments[i];
+            if (seg.length() < 3) continue;
+            // Filter out common package boilerplates
+            if (seg.equals("com") || seg.equals("org") || seg.equals("net") || seg.equals("io")
+                || seg.equals("android") || seg.equals("app") || seg.equals("mobile") || seg.equals("client")
+                || seg.equals("ui") || seg.equals("services") || seg.equals("messenger") || seg.equals("frontpage")
+                || seg.equals("music") || seg.equals("video") || seg.equals("shopping") || seg.equals("release")
+                || seg.equals("katana") || seg.equals("browser") || seg.equals("application")) {
+                continue;
+            }
+            return seg;
+        }
+        return "";
     }
 
     private boolean isBrowserPackage(String value) {
@@ -538,14 +570,6 @@ public class NexVaultAutofillService extends AutofillService {
             || normalized.contains("opera")
             || normalized.contains("edge")
             || normalized.contains("browser");
-    }
-
-    private String extractStem(String host) {
-        if (host == null || host.isEmpty()) return "";
-        int lastDot = host.lastIndexOf('.');
-        String withoutTld = (lastDot > 0) ? host.substring(0, lastDot) : host;
-        int prevDot = withoutTld.lastIndexOf('.');
-        return (prevDot >= 0) ? withoutTld.substring(prevDot + 1) : withoutTld;
     }
 
     private String normalize(String value) {

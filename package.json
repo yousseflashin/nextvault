@@ -1,14 +1,19 @@
 {
   "name": "@nexvault/root",
   "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "version": "0.1.53",
   "license": "GPL-3.0-or-later",
   "scripts": {
     "start": "npm run start:website",
     "build": "npm run build:website",
-    "test": "npm run test:core && npm run test:relay",
+    "test": "npm run test:core && npm run test:relay && npm run test:threat",
     "test:core": "npm --prefix packages/core test",
     "test:relay": "npm --prefix apps/relay test",
+    "test:threat": "NODE_PATH=../../node_modules jest --runInBand packages/threat-engine",
     "start:desktop": "npm --prefix apps/desktop run start",
     "build:desktop": "node scripts/sync-assets.mjs && node scripts/sync-core.mjs && npm --prefix apps/desktop run build",
     "start:mobile": "npm --prefix apps/mobile run start",

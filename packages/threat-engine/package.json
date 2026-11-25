@@ -1,0 +1,14 @@
+{
+  "name": "@nexvault/threat-engine",
+  "version": "0.1.53",
+  "description": "NextVault Threat Defense & Endpoint Security Ecosystem Engine",
+  "main": "index.js",
+  "license": "GPL-3.0-or-later",
+  "scripts": {
+    "test": "NODE_PATH=../../node_modules jest --runInBand"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "jest": "^29.7.0"
+  }
+}
