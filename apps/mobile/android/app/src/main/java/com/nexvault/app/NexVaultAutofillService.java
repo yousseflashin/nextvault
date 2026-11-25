@@ -120,6 +120,7 @@ public class NexVaultAutofillService extends AutofillService {
                     break;
                 }
             }
+            // Only associate adjacent preceding field as username if an actual password exists
             if (!hasUsername && hasActualPassword) {
                 for (int i = 0; i < fields.size(); i++) {
                     if (fields.get(i).password && i > 0) {
@@ -129,19 +130,7 @@ public class NexVaultAutofillService extends AutofillService {
                     }
                 }
             }
-            if (!hasUsername && !hasActualPassword) {
-                for (Field f : fields) {
-                    if (f.focused || f.username) {
-                        f.username = true;
-                        hasUsername = true;
-                        break;
-                    }
-                }
-                if (!hasUsername && !fields.isEmpty()) {
-                    fields.get(0).username = true;
-                    hasUsername = true;
-                }
-            }
+            // Strictly remove fields that are not genuine passwords or usernames
             fields.removeIf(field -> !field.password && !field.username);
 
             // Fallback for native apps: use hosting activity package name
@@ -201,16 +190,16 @@ public class NexVaultAutofillService extends AutofillService {
             }
 
             boolean hasSaveInfo = false;
-            if (!passwordIds.isEmpty() || !usernameIds.isEmpty()) {
+            // ONLY attach SaveInfo if an actual password field exists on screen!
+            // Never prompt to save on standalone inputs (search bars, chat messages, filters, search queries).
+            if (!passwordIds.isEmpty()) {
                 int saveType = SaveInfo.SAVE_DATA_TYPE_PASSWORD;
                 if (!usernameIds.isEmpty()) {
                     saveType |= SaveInfo.SAVE_DATA_TYPE_USERNAME;
                 }
 
-                AutofillId[] reqIds = !passwordIds.isEmpty() 
-                    ? passwordIds.toArray(new AutofillId[0]) 
-                    : usernameIds.toArray(new AutofillId[0]);
-                AutofillId[] optIds = !passwordIds.isEmpty() && !usernameIds.isEmpty()
+                AutofillId[] reqIds = passwordIds.toArray(new AutofillId[0]);
+                AutofillId[] optIds = !usernameIds.isEmpty()
                     ? usernameIds.toArray(new AutofillId[0])
                     : null;
 
@@ -413,9 +402,9 @@ public class NexVaultAutofillService extends AutofillService {
         String combined = (probe + " " + hintText).toLowerCase(Locale.ROOT);
 
         // Strict search & utility rejection: search, query, filter, find, keyword, omnibox MUST ALWAYS be blacklisted!
-        if (combined.matches(".*\\b(search|query|filter|find|keyword|lookup|discover|explore|browse|omnibox|url_bar|location_bar|address_bar|search_box|search_src_text)\\b.*")
+        if (combined.matches(".*\\b(search|query|filter|find|keyword|keywords|lookup|discover|explore|browse|omnibox|url_bar|location_bar|address_bar|search_box|search_src_text|q|term|terms)\\b.*")
             || combined.contains("search") || combined.contains("query") || combined.contains("filter")
-            || combined.contains("discover") || combined.contains("explore")) {
+            || combined.contains("discover") || combined.contains("explore") || combined.equals("q")) {
             return true;
         }
 
@@ -649,8 +638,16 @@ public class NexVaultAutofillService extends AutofillService {
                 JSONObject pendingEntry = null;
                 for (int i = 0; i < pending.length(); i++) {
                     JSONObject c = pending.getJSONObject(i);
-                    if (cleanDomain.equalsIgnoreCase(c.optString("service")) && 
-                        (values.username.isEmpty() || values.username.equalsIgnoreCase(c.optString("username")))) {
+                    String existingUser = c.optString("username", "").trim();
+                    boolean userMatches;
+                    if (!values.username.isEmpty() && !existingUser.isEmpty()) {
+                        userMatches = values.username.equalsIgnoreCase(existingUser);
+                    } else if (values.username.isEmpty() && existingUser.isEmpty()) {
+                        userMatches = true;
+                    } else {
+                        userMatches = false; // Never overwrite an existing user with an empty username or vice versa!
+                    }
+                    if (cleanDomain.equalsIgnoreCase(c.optString("service")) && userMatches) {
                         pendingEntry = c;
                         break;
                     }
@@ -672,8 +669,16 @@ public class NexVaultAutofillService extends AutofillService {
                 JSONObject entry = null;
                 for (int i = 0; i < credentials.length(); i++) {
                     JSONObject candidate = credentials.getJSONObject(i);
-                    if (cleanDomain.equalsIgnoreCase(candidate.optString("service")) &&
-                        (values.username.isEmpty() || values.username.equalsIgnoreCase(candidate.optString("username")))) {
+                    String existingUser = candidate.optString("username", "").trim();
+                    boolean userMatches;
+                    if (!values.username.isEmpty() && !existingUser.isEmpty()) {
+                        userMatches = values.username.equalsIgnoreCase(existingUser);
+                    } else if (values.username.isEmpty() && existingUser.isEmpty()) {
+                        userMatches = true;
+                    } else {
+                        userMatches = false; // Never overwrite!
+                    }
+                    if (cleanDomain.equalsIgnoreCase(candidate.optString("service")) && userMatches) {
                         entry = candidate;
                         break;
                     }

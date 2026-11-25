@@ -865,8 +865,12 @@ export async function mergeNativeAutofillCredentials() {
       if (!matchDomain) return false;
       const entryUser = String(entry.username || '').trim().toLowerCase();
       const nativeUser = username.toLowerCase();
-      // If both have usernames, they must match. If either is empty, match if domain matches.
-      return (!entryUser || !nativeUser || entryUser === nativeUser);
+      // Only match if usernames are identical
+      if (entryUser && nativeUser) {
+        return entryUser === nativeUser;
+      }
+      // If either username is empty, only match if BOTH are empty
+      return !entryUser && !nativeUser;
     });
 
     if (existingIdx >= 0) {
