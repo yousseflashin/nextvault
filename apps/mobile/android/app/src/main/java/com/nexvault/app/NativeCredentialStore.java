@@ -29,7 +29,7 @@ final class NativeCredentialStore {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit()
             .putString(key, Base64.encodeToString(payload, Base64.NO_WRAP))
-            .apply();
+            .commit();
     }
 
     private static String readKeyed(Context context, String key) {
@@ -62,7 +62,7 @@ final class NativeCredentialStore {
     }
 
     static void clear(Context context) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(DATA).apply();
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(DATA).commit();
     }
 
     static void writePending(Context context, String value) throws Exception {
@@ -74,7 +74,7 @@ final class NativeCredentialStore {
     }
 
     static void clearPending(Context context) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(PENDING_DATA).apply();
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(PENDING_DATA).commit();
     }
 
     private static SecretKey getKey() throws Exception {

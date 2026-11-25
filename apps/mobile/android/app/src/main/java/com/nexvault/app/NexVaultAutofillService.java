@@ -129,6 +129,19 @@ public class NexVaultAutofillService extends AutofillService {
                     }
                 }
             }
+            if (!hasUsername && !hasActualPassword) {
+                for (Field f : fields) {
+                    if (f.focused || f.username) {
+                        f.username = true;
+                        hasUsername = true;
+                        break;
+                    }
+                }
+                if (!hasUsername && !fields.isEmpty()) {
+                    fields.get(0).username = true;
+                    hasUsername = true;
+                }
+            }
             fields.removeIf(field -> !field.password && !field.username);
 
             // Fallback for native apps: use hosting activity package name
@@ -568,7 +581,7 @@ public class NexVaultAutofillService extends AutofillService {
                             collectSavedValues(window.getRootViewNode(), values);
                         }
                     }
-                    if (values.domain.isEmpty() && activity != null && !isBrowserPackage(activityPackage)) {
+                    if (values.domain.isEmpty() && activity != null) {
                         values.domain = activity.getPackageName();
                     }
                 }
@@ -579,8 +592,12 @@ public class NexVaultAutofillService extends AutofillService {
                 values.username = values.candidateUsername;
             }
 
+            if (values.domain.isEmpty()) {
+                values.domain = "saved-login";
+            }
+
             // Save ONLY if an actual password was entered and domain is not excluded
-            if (!values.domain.isEmpty() && !values.password.isEmpty() && !isExcludedPackage(values.domain)) {
+            if (!values.password.isEmpty() && !isExcludedPackage(values.domain)) {
                 String cleanDomain = normalize(values.domain);
                 if (cleanDomain.startsWith("package:")) {
                     cleanDomain = cleanDomain.substring(8);
