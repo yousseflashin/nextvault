@@ -1808,7 +1808,7 @@ function App() {
     let hiddenAt: number | null = null;
     let lastActive = Date.now();
     const touch = () => { lastActive = Date.now(); };
-    const onVisibility = () => {
+    const onVisibility = async () => {
       if (document.hidden) {
         hiddenAt = Date.now();
       } else if (hiddenAt && Date.now() - hiddenAt > 2 * 60 * 1000) {
@@ -1816,6 +1816,11 @@ function App() {
       } else {
         hiddenAt = null;
         touch();
+        // Returning from other apps (browser/login) — merge any freshly saved credentials!
+        try {
+          await mergeNativeAutofillCredentials();
+          await refreshVault(false);
+        } catch {}
       }
     };
     const idle = setInterval(() => {
@@ -2254,7 +2259,11 @@ function App() {
   async function refreshVault(interactive = true) {
     if (interactive) setIsSyncing(true);
     try {
+      // 1. Merge any credentials saved by native Android autofill while app was in background
+      await mergeNativeAutofillCredentials();
+      // 2. Request peer synchronization over P2P mesh
       await (window as any).nexVault.syncWithPeers();
+      // 3. Fetch up-to-date password list
       const r = await (window as any).nexVault.listPasswords();
       setVaultItems(r.entries || []);
       if (interactive) showToast(`Refreshed ${r.entries?.length || 0} credentials`);

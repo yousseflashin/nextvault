@@ -837,8 +837,13 @@ export function emergencyNukeVault() {
 
 export async function mergeNativeAutofillCredentials() {
   if (typeof window === 'undefined' || (window as any).Capacitor?.getPlatform?.() !== 'android') return;
-  const result = await AutofillBridge.readCredentials();
-  const nativeCredentials = JSON.parse(result.credentialsJson || '[]');
+  let result;
+  try {
+    result = await AutofillBridge.readCredentials();
+  } catch {
+    return;
+  }
+  const nativeCredentials = JSON.parse(result?.credentialsJson || '[]');
   const state = loadVault();
   if (!state || !Array.isArray(nativeCredentials)) return;
 
@@ -848,24 +853,34 @@ export async function mergeNativeAutofillCredentials() {
     const password = String(nativeCredential.password || '');
     if (!service || !password) continue;
     const target = normalizeDomain(service);
-    const existing = state.passwords.find(entry => normalizeDomain(entry.service) === target);
-    if (existing && existing.credential === password && (existing.username || '') === (nativeCredential.username || '')) continue;
-    if (existing) {
+    const existingIdx = state.passwords.findIndex(entry => normalizeDomain(entry.service) === target);
+    if (existingIdx >= 0) {
+      const existing = state.passwords[existingIdx];
+      if (existing.credential === password && (existing.username || '') === (nativeCredential.username || '')) {
+        continue;
+      }
       existing.credential = password;
-      existing.username = nativeCredential.username || '';
+      if (nativeCredential.username) existing.username = nativeCredential.username;
       existing.updatedAt = Date.now();
+      existing.logicalCounter = (existing.logicalCounter || 0) + 1;
+      changed = true;
     } else {
       state.passwords.push({
         service,
         credential: password,
         username: nativeCredential.username || '',
         createdAt: new Date().toISOString(),
-        updatedAt: Date.now()
+        updatedAt: Date.now(),
+        logicalCounter: 1,
+        peerId: state.devicePublicKey
       });
+      changed = true;
     }
-    changed = true;
   }
-  if (changed) saveVault(state);
+  if (changed) {
+    saveVault(state);
+    notifyVaultUpdated();
+  }
 }
 
 export async function openAutofillSettings() {

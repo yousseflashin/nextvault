@@ -203,6 +203,7 @@ public class NexVaultAutofillService extends AutofillService {
                 if (optionalIds != null && optionalIds.length > 0) {
                     saveInfoBuilder.setOptionalIds(optionalIds);
                 }
+                // Also trigger save when views become invisible or when user submits/clicks
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                     saveInfoBuilder.setFlags(SaveInfo.FLAG_SAVE_ON_ALL_VIEWS_INVISIBLE);
                 }
@@ -547,24 +548,40 @@ public class NexVaultAutofillService extends AutofillService {
 
             // Save ONLY if an actual password was entered and domain is not excluded
             if (!values.domain.isEmpty() && !values.password.isEmpty() && !isExcludedPackage(values.domain)) {
+                // If domain looks like an Android package (e.g. com.spotify.music), normalize it cleanly
+                String cleanDomain = values.domain;
+                if (cleanDomain.startsWith("package:")) {
+                    cleanDomain = cleanDomain.substring(8);
+                }
+                if (cleanDomain.contains(".")) {
+                    String[] parts = cleanDomain.split("\\.");
+                    for (String part : parts) {
+                        if (part.length() > 2 && !part.equals("com") && !part.equals("android") && !part.equals("app") && !part.equals("org") && !part.equals("net")) {
+                            // Keep domain as clean hostname/service
+                            break;
+                        }
+                    }
+                }
+
                 JSONArray credentials = new JSONArray(NativeCredentialStore.read(this));
                 JSONObject entry = null;
                 for (int i = 0; i < credentials.length(); i++) {
                     JSONObject candidate = credentials.getJSONObject(i);
-                    if (matches(values.domain, candidate.optString("service"))) {
+                    if (matches(cleanDomain, candidate.optString("service"))) {
                         entry = candidate;
                         break;
                     }
                 }
                 if (entry == null) {
                     entry = new JSONObject();
-                    entry.put("service", values.domain);
+                    entry.put("service", cleanDomain);
                     credentials.put(entry);
                 }
                 if (!values.username.isEmpty()) {
                     entry.put("username", values.username);
                 }
                 entry.put("password", values.password);
+                entry.put("updatedAt", System.currentTimeMillis());
                 NativeCredentialStore.write(this, credentials.toString());
             }
             callback.onSuccess();
