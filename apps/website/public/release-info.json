@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "version": "0.1.46",
   "tag": "v0.1.46",
-  "publishedAt": "2026-11-25T00:40:14.299Z",
+  "publishedAt": "2026-11-25T00:51:04.332Z",
   "releaseUrl": "https://github.com/yousseflashin/nextvault/releases/tag/v0.1.46",
   "desktop": {
     "platform": "linux-x86_64",
@@ -10,9 +10,9 @@
     "format": "AppImage",
     "filename": "NexVault-0.1.46-x86_64.AppImage",
     "url": "https://github.com/yousseflashin/nextvault/releases/download/v0.1.46/NexVault-0.1.46-x86_64.AppImage",
-    "size": 132116351,
+    "size": 132116349,
     "sizeFormatted": "126.0 MB",
-    "sha256": "8db143d16e143c601b125c4c2f9530257562c69e5ab825cc2db751151d142d97",
+    "sha256": "97000e5cd15bb18e2bf31df7fca83c6561be207d4d562ec6c7f978651e67b712",
     "requirements": "Linux x86_64 · glibc 2.35+ (Ubuntu 22.04+, Debian 12+, Fedora 36+)"
   },
   "mobile": {
