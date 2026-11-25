@@ -280,42 +280,60 @@ async function main() {
   }
   console.log('');
 
-  // 4. Upload each asset
-  const existingAssets = release.assets || [];
-  const uploadNames = new Set(filesToUpload);
-  for (const asset of existingAssets) {
-    const isBinary = /\.(apk|AppImage)$/i.test(asset.name || '');
-    if (isBinary && !uploadNames.has(asset.name)) {
-      console.log(`Removing obsolete release asset "${asset.name}"...`);
-      await githubRequest(`https://api.github.com/repos/${GITHUB_REPO}/releases/assets/${asset.id}`, {
-        method: 'DELETE'
-      });
-      console.log('  ✓ Removed obsolete binary.');
-    }
-  }
+  // 4. Upload each asset with live state refresh and automatic retry
   for (const fileName of filesToUpload) {
     const filePath = join(releaseDir, fileName);
     const stats = statSync(filePath);
     const size = stats.size;
 
-    // Check if asset already exists in release
-    const existing = existingAssets.find(a => a.name === fileName);
-    if (existing) {
-      console.log(`Asset "${fileName}" already exists on GitHub (ID: ${existing.id}). Replacing...`);
-      await githubRequest(`https://api.github.com/repos/${GITHUB_REPO}/releases/assets/${existing.id}`, {
-        method: 'DELETE'
-      });
-      console.log(`  ✓ Removed old asset.`);
-    }
+    let attempt = 0;
+    const maxAttempts = 3;
+    while (attempt < maxAttempts) {
+      attempt++;
+      try {
+        // Query live assets list from GitHub to handle any starter or conflicting assets
+        const assetsRes = await githubRequest(`https://api.github.com/repos/${GITHUB_REPO}/releases/${release.id}/assets`);
+        const liveAssets = assetsRes.data || [];
+        const existing = liveAssets.find(a => a.name === fileName);
+        if (existing && existing.state === 'uploaded' && existing.size === size) {
+          console.log(`  ✓ Asset "${fileName}" is already successfully uploaded on GitHub (${(size / 1024 / 1024).toFixed(1)} MB). Skipping.`);
+          break;
+        }
+        if (existing) {
+          console.log(`Asset "${fileName}" exists on GitHub (ID: ${existing.id}, state: ${existing.state || 'ready'}). Replacing...`);
+          await githubRequest(`https://api.github.com/repos/${GITHUB_REPO}/releases/assets/${existing.id}`, {
+            method: 'DELETE'
+          });
+          console.log(`  ✓ Removed old asset.`);
+          await new Promise(r => setTimeout(r, 3000));
+        }
 
-    const uploadUrl = `https://uploads.github.com/repos/${GITHUB_REPO}/releases/${release.id}/assets?name=${encodeURIComponent(fileName)}`;
-    await uploadAssetStream({
-      uploadUrl,
-      filePath,
-      fileName,
-      fileSize: size
-    });
-    console.log(`  ✓ Successfully attached "${fileName}" to Release ${tag}!`);
+        const uploadUrl = `https://uploads.github.com/repos/${GITHUB_REPO}/releases/${release.id}/assets?name=${encodeURIComponent(fileName)}`;
+        await uploadAssetStream({
+          uploadUrl,
+          filePath,
+          fileName,
+          fileSize: size
+        });
+        console.log(`  ✓ Successfully attached "${fileName}" to Release ${tag}!`);
+        break;
+      } catch (err) {
+        console.warn(`\n  ⚠ Upload of "${fileName}" attempt ${attempt}/${maxAttempts} failed: ${err.message}`);
+        // Clean up any failed "starter" asset created by GitHub before retrying
+        try {
+          const probe = await githubRequest(`https://api.github.com/repos/${GITHUB_REPO}/releases/${release.id}/assets`);
+          const stuck = (probe.data || []).find(a => a.name === fileName);
+          if (stuck) {
+            await githubRequest(`https://api.github.com/repos/${GITHUB_REPO}/releases/assets/${stuck.id}`, { method: 'DELETE' });
+            console.log(`  ✓ Cleaned up incomplete asset.`);
+          }
+        } catch {}
+
+        if (attempt >= maxAttempts) throw err;
+        console.log(`  Retrying in ${attempt * 3}s...`);
+        await new Promise(r => setTimeout(r, attempt * 3000));
+      }
+    }
   }
 
   // generate-release-manifest.mjs already synced the complete schema-v2

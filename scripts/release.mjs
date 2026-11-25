@@ -399,20 +399,22 @@ if (push) {
 // 6. Upload to GitHub Releases (if token present and not disabled)
 if (!noUpload && !noBuild) {
   log('[6/6] Checking for GitHub Release upload capability...');
-  const envDevPath = join(ROOT, '.env.dev');
   let hasToken = Boolean(process.env.GITHUB_TOKEN || process.env.GH_TOKEN || tokenArg);
-  if (!hasToken && existsSync(envDevPath)) {
-    const devContent = readFileSync(envDevPath, 'utf8');
-    if (/GITHUB_TOKEN=[\w-]{20,}/.test(devContent)) hasToken = true;
+  if (!hasToken) {
+    for (const f of ['.env', '.env.local', '.env.dev']) {
+      const p = join(ROOT, f);
+      if (existsSync(p)) {
+        const c = readFileSync(p, 'utf8');
+        if (/GITHUB_TOKEN=[\w-]{20,}/.test(c)) { hasToken = true; break; }
+      }
+    }
   }
 
-  if (hasToken) {
-    log('GitHub token found — uploading release artifacts...');
+  if (hasToken || forceUpload) {
+    log('Launching release uploader...');
     const uploadArgs = ['scripts/upload-release.mjs', next];
     if (tokenArg) uploadArgs.push(tokenArg);
     run('node', uploadArgs);
-  } else if (forceUpload) {
-    fail('Upload requested (--upload) but no GITHUB_TOKEN found in environment, .env.dev, or --token=...');
   } else {
     log('Note: GITHUB_TOKEN not set. Artifacts are ready in ./release/. GitHub Actions will publish, or run npm run release -- --upload.');
   }
