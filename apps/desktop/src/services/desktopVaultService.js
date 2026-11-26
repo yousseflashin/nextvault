@@ -168,6 +168,65 @@ class DesktopVaultService {
   }
 
   /**
+   * Deletes all passwords and generates tombstones.
+   */
+  deleteAllPasswords() {
+    const context = this.getUserContext();
+    if (!context) throw new Error('Vault is locked');
+    const user = this.database.getUser(context.username);
+    if (!user) throw new Error('User not found');
+    const now = Date.now();
+    return this.database.deleteAllPasswords(user.id, now);
+  }
+
+  /**
+   * Deletes all OTP secrets and generates tombstones.
+   */
+  deleteAllOTPs() {
+    const context = this.getUserContext();
+    if (!context) throw new Error('Vault is locked');
+    const user = this.database.getUser(context.username);
+    if (!user) throw new Error('User not found');
+    const now = Date.now();
+    return this.database.deleteAllOTPs(user.id, now);
+  }
+
+  /**
+   * Deletes all vault entries (both passwords and OTPs).
+   */
+  deleteAllVault() {
+    const pwdRes = this.deleteAllPasswords();
+    const otpRes = this.deleteAllOTPs();
+    return {
+      passwordsCount: pwdRes.count || 0,
+      otpsCount: otpRes.count || 0,
+      deletedServices: [...(pwdRes.deletedServices || []), ...(otpRes.deletedServices || [])]
+    };
+  }
+
+  /**
+   * Retrieves a single password by service name.
+   */
+  getPassword(serviceName) {
+    const context = this.getUserContext();
+    if (!context) throw new Error('Vault is locked');
+    const user = this.database.getUser(context.username);
+    if (!user) throw new Error('User not found');
+    const p = this.database.getPassword(user.id, serviceName);
+    if (!p) return null;
+    const credential = this.database.decryptData(p.encrypted_data, context.encryptionKey, p.iv);
+    return {
+      service: p.service_name,
+      username: p.username || '',
+      password: credential,
+      otpSecret: p.otp_secret || '',
+      updatedAt: p.updated_at,
+      logicalCounter: p.logical_counter,
+      peerId: p.peer_id
+    };
+  }
+
+  /**
    * Deletes an OTP secret and creates a tombstone.
    */
   deleteOTP(serviceName) {

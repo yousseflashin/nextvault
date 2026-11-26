@@ -51,12 +51,12 @@ export default function DownloadsSection() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="text-center max-w-3xl mx-auto mb-10 sm:mb-14">
-          <div className="inline-flex flex-wrap items-center justify-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-mono uppercase tracking-widest text-dw-green bg-dw-surface border border-dw-border mb-4">
-            <span className="w-2 h-2 rounded-full bg-dw-green animate-pulse"></span>
-            <span>OFFICIAL RELEASE MANIFEST · {releaseTag}</span>
+          <div className="inline-flex flex-wrap items-center justify-center gap-2 px-3 py-1 rounded-md text-xs font-mono text-dw-green bg-dw-surface border border-dw-border mb-4">
+            <span className="w-1.5 h-1.5 rounded-full bg-dw-green"></span>
+            <span>Official release manifest · {releaseTag}</span>
             {publishedDate && <span className="text-dw-dim">({publishedDate})</span>}
           </div>
-          <h2 className="text-2xl sm:text-4xl font-extrabold text-white tracking-tight">
+          <h2 className="text-2xl sm:text-4xl font-medium text-white tracking-tight">
             Equip Your Hardware Enclave
           </h2>
           <p className="text-sm sm:text-base text-dw-muted mt-3 leading-relaxed">
@@ -103,10 +103,10 @@ export default function DownloadsSection() {
               mobileFilter === 'mobile' ? 'hidden md:flex' : 'flex'
             } ${
               recommended === 'mobile' ? 'order-2 md:order-1' : 'order-1'
-            } p-5 sm:p-8 rounded-2xl cyber-card border transition flex-col justify-between group ${
+            } p-5 sm:p-8 rounded-xl bg-dw-surface border transition flex-col justify-between group ${
               recommended === 'desktop'
-                ? 'border-dw-green/50 shadow-glow'
-                : 'border-dw-border hover:border-dw-green/50'
+                ? 'border-dw-green'
+                : 'border-dw-border hover:border-dw-borderHover'
             }`}
           >
             <div>
@@ -176,10 +176,10 @@ export default function DownloadsSection() {
                 href={desktopUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-full py-3.5 px-5 rounded-xl text-xs font-mono font-bold uppercase tracking-wider text-black bg-gradient-to-r from-dw-green to-dw-cyan hover:opacity-90 transition shadow-glow flex items-center justify-center gap-2"
+                className="w-full py-3 px-4 rounded-lg text-xs font-mono font-medium text-black bg-dw-green hover:bg-emerald-400 transition flex items-center justify-center gap-2"
               >
                 <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                 </svg>
                 <span>Download Desktop AppImage ({desktopSize})</span>
               </a>
@@ -217,10 +217,10 @@ export default function DownloadsSection() {
               mobileFilter === 'desktop' ? 'hidden md:flex' : 'flex'
             } ${
               recommended === 'mobile' ? 'order-1 md:order-2' : 'order-2'
-            } p-5 sm:p-8 rounded-2xl cyber-card border transition flex-col justify-between group ${
+            } p-5 sm:p-8 rounded-xl bg-dw-surface border transition flex-col justify-between group ${
               recommended === 'mobile'
-                ? 'border-dw-cyan/60 shadow-glowCyan'
-                : 'border-dw-border hover:border-dw-cyan/50'
+                ? 'border-dw-green'
+                : 'border-dw-border hover:border-dw-borderHover'
             }`}
           >
             <div>
@@ -290,14 +290,14 @@ export default function DownloadsSection() {
                 href={mobileUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className={`w-full py-3.5 px-5 rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition flex items-center justify-center gap-2 ${
+                className={`w-full py-3 px-4 rounded-lg text-xs font-mono font-medium transition flex items-center justify-center gap-2 ${
                   recommended === 'mobile'
-                    ? 'text-black bg-gradient-to-r from-dw-cyan to-dw-green shadow-glowCyan'
-                    : 'text-white bg-dw-surface2 border border-dw-border hover:border-dw-cyan hover:bg-dw-surface'
+                    ? 'text-black bg-dw-green hover:bg-emerald-400'
+                    : 'text-white bg-dw-surface2 border border-dw-border hover:bg-dw-surface'
                 }`}
               >
                 <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
                 </svg>
                 <span>Download Android APK ({mobileSize})</span>
               </a>
@@ -331,12 +331,12 @@ export default function DownloadsSection() {
         </div>
 
         {/* Cryptographic Verification Hub Bar */}
-        <div className="p-4 sm:p-6 rounded-2xl cyber-card border border-dw-border font-mono text-xs flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 mb-12">
+        <div className="p-4 sm:p-6 rounded-xl bg-dw-surface border border-dw-border font-mono text-xs flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 mb-12">
           <div className="flex items-center gap-3 min-w-0">
-            <span className="w-2.5 h-2.5 rounded-full bg-dw-green animate-pulse shrink-0"></span>
+            <span className="w-2 h-2 rounded-full bg-dw-green shrink-0"></span>
             <div className="min-w-0">
               <span className="text-dw-muted block text-[11px]">
-                Verify Downloaded Artifacts Against <code className="text-dw-cyan">SHA256SUMS.txt</code>:
+                Verify Downloaded Artifacts Against <code className="text-white">SHA256SUMS.txt</code>:
               </span>
               <strong className="text-white select-all truncate block mt-0.5">{verifyBothCmd}</strong>
             </div>

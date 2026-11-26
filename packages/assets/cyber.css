@@ -6,71 +6,71 @@
    ============================================================ */
 
 :root {
-  /* Google Material 3 Expressive Tonal Surfaces */
-  --nv-bg: #070a11;
-  --nv-bg-2: #0b101d;
-  --nv-surface-dim: #090e18;
-  --nv-surface: #0f1526;
-  --nv-surface-2: #141d33;
-  --nv-surface-hover: #18223a;
-  --nv-surface-active: #1e2a47;
-  --nv-surface-container-low: #101728;
-  --nv-surface-container: #141c30;
-  --nv-surface-container-high: #19243c;
-  --nv-surface-container-highest: #202c49;
+  /* Quiet Ink Neutral Ramp */
+  --nv-bg: #0b0d14;
+  --nv-bg-2: #07080d;
+  --nv-surface-dim: #07080d;
+  --nv-surface: #11141c;
+  --nv-surface-2: #1a1e28;
+  --nv-surface-hover: #1f2533;
+  --nv-surface-active: #252c3d;
+  --nv-surface-container-low: #0d1017;
+  --nv-surface-container: #11141c;
+  --nv-surface-container-high: #161a24;
+  --nv-surface-container-highest: #1c212e;
 
-  /* M3 Elevation Hairlines & Dividers */
-  --nv-border: rgba(255, 255, 255, 0.08);
-  --nv-border-subtle: rgba(255, 255, 255, 0.04);
-  --nv-border-strong: rgba(255, 255, 255, 0.16);
-  --nv-border-active: #00e599;
+  /* Quiet Elevation Hairlines */
+  --nv-border: rgba(238, 240, 245, 0.08);
+  --nv-border-subtle: rgba(238, 240, 245, 0.04);
+  --nv-border-strong: rgba(238, 240, 245, 0.14);
+  --nv-border-active: #10b981;
 
-  /* M3 Primary Palette (Radiant Emerald Mint) */
-  --nv-primary: #00e599;
-  --nv-primary-hover: #00c784;
-  --nv-primary-light: rgba(0, 229, 153, 0.12);
-  --nv-primary-container: rgba(0, 229, 153, 0.16);
-  --nv-on-primary: #04120b;
-  --nv-glow-primary: 0 0 20px rgba(0, 229, 153, 0.28);
+  /* Single Restrained Accent (Emerald) */
+  --nv-primary: #10b981;
+  --nv-primary-hover: #059669;
+  --nv-primary-light: rgba(16, 185, 129, 0.10);
+  --nv-primary-container: rgba(16, 185, 129, 0.12);
+  --nv-on-primary: #ffffff;
+  --nv-glow-primary: none;
 
-  /* M3 Secondary Accent (Electric Cyan) */
-  --nv-accent: #00d4ff;
-  --nv-accent-hover: #00b8e6;
-  --nv-accent-light: rgba(0, 212, 255, 0.12);
-  --nv-accent-container: rgba(0, 212, 255, 0.16);
-  --nv-on-accent: #041018;
-  --nv-glow-accent: 0 0 20px rgba(0, 212, 255, 0.25);
+  /* Secondary Accent matches primary to prevent dual-color rainbow glow */
+  --nv-accent: #10b981;
+  --nv-accent-hover: #059669;
+  --nv-accent-light: rgba(16, 185, 129, 0.10);
+  --nv-accent-container: rgba(16, 185, 129, 0.12);
+  --nv-on-accent: #ffffff;
+  --nv-glow-accent: none;
 
-  /* M3 Semantic State Colors */
-  --nv-danger: #ff5252;
-  --nv-danger-hover: #ff3838;
-  --nv-danger-light: rgba(255, 82, 82, 0.14);
-  --nv-warning: #ffb74d;
-  --nv-warning-hover: #ffa726;
-  --nv-warning-light: rgba(255, 183, 77, 0.14);
+  /* Semantic State Colors */
+  --nv-danger: #e5484d;
+  --nv-danger-hover: #dc2626;
+  --nv-danger-light: rgba(229, 72, 77, 0.12);
+  --nv-warning: #f59e0b;
+  --nv-warning-hover: #d97706;
+  --nv-warning-light: rgba(245, 158, 11, 0.12);
 
-  /* M3 High-Contrast Typography */
-  --nv-text: #f8fafc;
-  --nv-text-secondary: #94a3b8;
-  --nv-muted: #64748b;
+  /* Three Distinct Text Roles */
+  --nv-text: #eef0f5;
+  --nv-text-secondary: #a3a9b8;
+  --nv-muted: #7a8296;
 
   --nv-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --nv-font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
 
-  /* Google Material 3 Shape Tokens */
-  --nv-radius-xs: 6px;
-  --nv-radius-sm: 10px;
-  --nv-radius: 16px;
-  --nv-radius-lg: 20px;
-  --nv-radius-xl: 24px;
-  --nv-radius-xxl: 28px;
+  /* Nested Radii (Controls 8-10px, Cards 12-14px) */
+  --nv-radius-xs: 4px;
+  --nv-radius-sm: 8px;
+  --nv-radius: 10px;
+  --nv-radius-lg: 14px;
+  --nv-radius-xl: 18px;
+  --nv-radius-xxl: 22px;
   --nv-radius-pill: 9999px;
 
-  /* M3 Motion & Spring Physics */
-  --nv-ease-spring: cubic-bezier(0.2, 0, 0, 1);
-  --nv-ease-emphasized: cubic-bezier(0.05, 0.7, 0.1, 1);
-  --nv-card-shadow: 0 4px 20px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  --nv-card-shadow-elevated: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 20px rgba(0, 229, 153, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  /* Motion & Depth */
+  --nv-ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  --nv-ease-emphasized: cubic-bezier(0.22, 1, 0.36, 1);
+  --nv-card-shadow: 0 1px 3px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --nv-card-shadow-elevated: 0 4px 16px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.07);
 }
 
 * { box-sizing: border-box; }
@@ -98,21 +98,20 @@ html, body {
   border-radius: var(--nv-radius-lg);
   padding: 1.25rem 1.4rem;
   box-shadow: var(--nv-card-shadow);
-  transition: all 0.22s var(--nv-ease-spring);
+  transition: background-color 0.15s var(--nv-ease-spring), border-color 0.15s var(--nv-ease-spring);
 }
 
 .nv-card-hover:hover {
   border-color: var(--nv-border-strong);
   background: var(--nv-surface-hover);
   box-shadow: var(--nv-card-shadow-elevated);
-  transform: translateY(-1px);
 }
 
 .nv-card-hover:active {
   transform: scale(0.99);
 }
 
-/* ---------- Material 3 Ergonomic Buttons ---------- */
+/* ---------- Buttons (Quiet Industrial Craft) ---------- */
 .nv-btn {
   display: inline-flex;
   align-items: center;
@@ -120,31 +119,26 @@ html, body {
   gap: 0.5rem;
   font-family: var(--nv-font-sans);
   font-size: 0.86rem;
-  font-weight: 600;
-  letter-spacing: 0.01em;
+  font-weight: 500;
   color: var(--nv-on-primary);
   background: var(--nv-primary);
   border: 1px solid transparent;
-  border-radius: var(--nv-radius-pill);
-  padding: 0.58rem 1.2rem;
-  min-height: 42px;
+  border-radius: var(--nv-radius);
+  padding: 0.5rem 1.1rem;
+  min-height: 38px;
   cursor: pointer;
   user-select: none;
-  transition: all 0.22s var(--nv-ease-spring);
-  box-shadow: 0 2px 8px rgba(0, 229, 153, 0.22);
+  transition: background-color 0.15s var(--nv-ease-spring), border-color 0.15s var(--nv-ease-spring), transform 0.12s var(--nv-ease-spring);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
   position: relative;
-  overflow: hidden;
 }
 
 .nv-btn:hover {
   background: var(--nv-primary-hover);
-  box-shadow: 0 4px 16px rgba(0, 229, 153, 0.38), var(--nv-glow-primary);
-  transform: translateY(-1px);
 }
 
 .nv-btn:active {
-  transform: scale(0.97);
-  box-shadow: 0 1px 4px rgba(0, 229, 153, 0.2);
+  transform: scale(0.98);
 }
 
 .nv-btn:disabled {
@@ -156,54 +150,49 @@ html, body {
 
 .nv-btn-ghost {
   color: var(--nv-text);
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--nv-surface-2);
   border: 1px solid var(--nv-border);
   box-shadow: none;
 }
 
 .nv-btn-ghost:hover {
-  background: rgba(255, 255, 255, 0.09);
+  background: var(--nv-surface-hover);
   border-color: var(--nv-border-strong);
   color: #fff;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
 }
 
 .nv-btn-ghost:active {
-  transform: scale(0.97);
-  background: rgba(255, 255, 255, 0.12);
+  transform: scale(0.98);
+  background: var(--nv-surface-active);
 }
 
 .nv-btn-accent, .nv-btn-cyan {
   color: var(--nv-on-accent);
-  background: var(--nv-accent);
-  box-shadow: 0 2px 8px rgba(0, 212, 255, 0.25);
+  background: var(--nv-primary);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
 .nv-btn-accent:hover, .nv-btn-cyan:hover {
-  background: var(--nv-accent-hover);
-  box-shadow: 0 4px 16px rgba(0, 212, 255, 0.38), var(--nv-glow-accent);
-  transform: translateY(-1px);
+  background: var(--nv-primary-hover);
 }
 
 .nv-btn-accent:active, .nv-btn-cyan:active {
-  transform: scale(0.97);
+  transform: scale(0.98);
 }
 
 .nv-btn-danger {
   color: #ffffff;
   background: var(--nv-danger);
-  box-shadow: 0 2px 8px rgba(255, 82, 82, 0.25);
+  border-radius: var(--nv-radius);
+  box-shadow: none;
 }
 
 .nv-btn-danger:hover {
   background: var(--nv-danger-hover);
-  box-shadow: 0 4px 16px rgba(255, 82, 82, 0.4);
-  transform: translateY(-1px);
 }
 
 .nv-btn-danger:active {
-  transform: scale(0.97);
+  transform: scale(0.98);
 }
 
 .nv-btn-sm {

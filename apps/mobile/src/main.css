@@ -56,13 +56,12 @@
   width: 28px;
   height: 28px;
   border-radius: 7px;
-  background: rgba(16, 185, 129, 0.12);
-  border: 1px solid rgba(16, 185, 129, 0.3);
+  background: var(--nv-surface-2);
+  border: 1px solid var(--nv-border);
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  box-shadow: 0 0 12px rgba(16, 185, 129, 0.2);
   flex-shrink: 0;
   position: relative;
 }
@@ -152,8 +151,8 @@
 .nv-extension-item-info span,
 .nv-extension-copy-note,
 .nv-extension-empty { color: #8da4be; font-size: 0.68rem; }
-.nv-extension-status { gap: 0.35rem; text-transform: uppercase; letter-spacing: 0.05em; }
-.nv-extension-status .dot { width: 6px; height: 6px; border-radius: 50%; background: #00ff9d; box-shadow: 0 0 6px #00ff9d; }
+.nv-extension-status { gap: 0.35rem; }
+.nv-extension-status .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--nv-primary); }
 
 .nv-extension-nav { display: flex; gap: 0.25rem; padding: 0.45rem; background: var(--nv-bg-2); border-bottom: 1px solid var(--nv-border); }
 .nv-extension-nav-btn { flex: 1; padding: 0.45rem 0.35rem; border: 0; border-radius: 4px; background: transparent; color: var(--nv-muted); font: inherit; font-size: 0.74rem; cursor: pointer; }
@@ -262,12 +261,11 @@
   height: 44px;
   border-radius: 12px;
   background: rgba(0, 229, 153, 0.16);
-  border: 1.5px solid rgba(0, 229, 153, 0.4);
+  border: 1px solid var(--nv-border);
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  box-shadow: 0 0 16px rgba(0, 229, 153, 0.35);
   flex-shrink: 0;
 }
 
@@ -811,25 +809,24 @@
   width: 56px;
   height: 56px;
   border-radius: 16px;
-  background: linear-gradient(135deg, var(--nv-primary), #00c8ff);
+  background: var(--nv-primary);
   color: #07090e;
   border: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 16px rgba(0, 229, 153, 0.4), 0 8px 24px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.15);
   cursor: pointer;
   z-index: 50;
-  transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1), box-shadow 0.2s ease;
+  transition: transform 0.15s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .nv-fab:hover {
-  transform: scale(1.06);
-  box-shadow: 0 6px 20px rgba(0, 229, 153, 0.55), 0 10px 28px rgba(0, 0, 0, 0.7);
+  transform: scale(1.02);
 }
 
 .nv-fab:active {
-  transform: scale(0.94);
+  transform: scale(0.96);
 }
 
 /* Material 3 Filter Chips */
@@ -850,29 +847,27 @@
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.5rem 1.05rem;
+  padding: 0.45rem 0.95rem;
   border-radius: var(--nv-radius-pill, 9999px);
   font-size: 0.82rem;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  background: var(--nv-surface-container, #141c30);
+  font-weight: 500;
+  background: var(--nv-surface);
   border: 1px solid var(--nv-border);
   color: var(--nv-text-secondary);
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+  transition: background-color 0.15s var(--nv-ease-spring), border-color 0.15s var(--nv-ease-spring);
   white-space: nowrap;
 }
 
 .nv-m3-chip:hover {
-  background: var(--nv-surface-container-high, #19243c);
+  background: var(--nv-surface-hover);
   color: #fff;
 }
 
 .nv-m3-chip.active {
-  background: var(--nv-primary-container, rgba(0, 229, 153, 0.16));
+  background: var(--nv-surface-2);
   border-color: var(--nv-primary);
   color: #fff;
-  box-shadow: 0 0 14px rgba(0, 229, 153, 0.25);
 }
 
 /* QR Code Scanner Viewfinder */
@@ -906,8 +901,7 @@
   left: 6px;
   right: 6px;
   height: 2px;
-  background: linear-gradient(90deg, transparent, var(--nv-primary), #00c8ff, transparent);
-  box-shadow: 0 0 12px var(--nv-primary);
+  background: var(--nv-primary);
   animation: nvScanLaser 2s ease-in-out infinite alternate;
   pointer-events: none;
 }
@@ -1072,7 +1066,6 @@
 
 .nv-popup-status.connected .dot {
   background: var(--nv-primary);
-  box-shadow: 0 0 8px var(--nv-primary);
 }
 
 .nv-popup-input, .nv-popup-textarea {

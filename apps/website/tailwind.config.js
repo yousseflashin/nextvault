@@ -5,32 +5,32 @@ export default {
     extend: {
       colors: {
         dw: {
-          bg: '#070a11',
-          bg2: '#0b101d',
-          surface: '#0f1526',
-          surface2: '#141d33',
-          border: 'rgba(255, 255, 255, 0.08)',
-          borderHover: 'rgba(255, 255, 255, 0.18)',
-          green: '#00e599',
-          greenDim: '#00c784',
-          cyan: '#00d4ff',
-          amber: '#ffb74d',
-          red: '#ff5252',
-          text: '#f8fafc',
-          muted: '#94a3b8',
-          dim: '#64748b'
+          bg: '#0b0d14',
+          bg2: '#07080d',
+          surface: '#11141c',
+          surface2: '#1a1e28',
+          border: 'rgba(238, 240, 245, 0.08)',
+          borderHover: 'rgba(238, 240, 245, 0.16)',
+          green: '#10b981',
+          greenDim: '#059669',
+          cyan: '#10b981',
+          amber: '#f59e0b',
+          red: '#e5484d',
+          text: '#eef0f5',
+          muted: '#a3a9b8',
+          dim: '#7a8296'
         },
         nv: {
-          bg: '#070a11',
-          bg2: '#0b101d',
-          surface: '#0f1526',
-          surface2: '#141d33',
-          primary: '#00e599',
-          primarydim: '#00c784',
-          accent: '#00d4ff',
-          danger: '#ff5252',
-          text: '#f8fafc',
-          muted: '#94a3b8',
+          bg: '#0b0d14',
+          bg2: '#07080d',
+          surface: '#11141c',
+          surface2: '#1a1e28',
+          primary: '#10b981',
+          primarydim: '#059669',
+          accent: '#10b981',
+          danger: '#e5484d',
+          text: '#eef0f5',
+          muted: '#a3a9b8',
         }
       },
       fontFamily: {
@@ -38,12 +38,12 @@ export default {
         sans: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif']
       },
       boxShadow: {
-        glow: '0 0 20px rgba(0, 229, 153, 0.32)',
-        glowCyan: '0 0 20px rgba(0, 212, 255, 0.30)',
-        deep: '0 16px 40px -8px rgba(0, 0, 0, 0.8)'
+        glow: 'none',
+        glowCyan: 'none',
+        deep: '0 8px 24px rgba(0, 0, 0, 0.4)'
       },
       transitionTimingFunction: {
-        spring: 'cubic-bezier(0.2, 0, 0, 1)'
+        spring: 'cubic-bezier(0.22, 1, 0.36, 1)'
       }
     }
   },

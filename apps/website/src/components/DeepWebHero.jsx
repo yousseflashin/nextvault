@@ -120,45 +120,45 @@ export default function DeepWebHero() {
           <div className="lg:col-span-6 text-left">
             {/* Top Status & Release Telemetry Badge */}
             <div className="flex flex-wrap items-center gap-2 mb-5">
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[11px] font-mono uppercase tracking-widest text-dw-green bg-dw-surface/90 border border-dw-border">
-                <span className="w-2 h-2 rounded-full bg-dw-green animate-pulse"></span>
-                <span>P2P MESH // ZERO-CLOUD AIRGAP</span>
+              <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-md text-[12px] font-mono text-dw-green bg-dw-surface border border-dw-border">
+                <span className="w-1.5 h-1.5 rounded-full bg-dw-green"></span>
+                <span>Peer-to-peer sync · Zero cloud</span>
               </div>
               <a
                 href="#downloads"
-                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[11px] font-mono text-dw-cyan bg-dw-cyan/10 border border-dw-cyan/30 hover:border-dw-cyan transition"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] font-mono text-dw-text bg-dw-surface border border-dw-border hover:border-dw-green transition"
               >
-                <span>RELEASE {currentTag}</span>
+                <span>Release {currentTag}</span>
                 <span className="text-dw-dim">·</span>
-                <span className="text-white">SHA-256 SIGNED</span>
+                <span className="text-dw-muted">Verified checksum</span>
               </a>
             </div>
 
-            <h1 className="text-3xl sm:text-5xl lg:text-[3.5rem] font-extrabold tracking-tight text-white mb-5 leading-[1.1]">
+            <h1 className="text-3xl sm:text-5xl lg:text-[3.25rem] font-medium tracking-tight text-white mb-5 leading-[1.15]">
               Decentralized key sovereignty. <br />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-dw-green via-dw-cyan to-white font-mono">
-                No Cloud. No Telemetry.
+              <span className="block text-dw-muted font-normal text-2xl sm:text-4xl lg:text-[2.75rem] mt-1">
+                Local enclaves. Zero telemetry.
               </span>
             </h1>
 
             <p className="text-sm sm:text-base lg:text-lg text-dw-muted mb-6 leading-relaxed max-w-xl">
               NexVault secures your credentials and TOTP 2FA secrets inside a local SQLCipher AES-256 hardware enclave on{' '}
-              <strong className="text-white font-semibold">Linux Desktop</strong> and{' '}
-              <strong className="text-white font-semibold">Android Mobile</strong>. Devices sync peer-to-peer over X25519 WebRTC with verified in-app updates.
+              <strong className="text-white font-medium">Linux Desktop</strong> and{' '}
+              <strong className="text-white font-medium">Android Mobile</strong>. Devices sync peer-to-peer over X25519 WebRTC with verified in-app updates.
             </p>
 
-            {/* Platform Target Switcher (Auto-detects Mobile vs Desktop) */}
-            <div className="max-w-xl mb-6 p-4 rounded-2xl cyber-card border border-dw-border space-y-3.5">
+            {/* Platform Target Switcher */}
+            <div className="max-w-xl mb-6 p-4 rounded-xl bg-dw-surface border border-dw-border space-y-3.5">
               <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-dw-border font-mono text-[11px]">
                 <div className="flex items-center gap-2">
-                  <span className="text-dw-muted">Target Enclave:</span>
-                  <div className="inline-flex p-0.5 rounded-lg bg-black/60 border border-dw-border">
+                  <span className="text-dw-muted">Target Platform:</span>
+                  <div className="inline-flex p-0.5 rounded-lg bg-black/40 border border-dw-border">
                     <button
                       type="button"
                       onClick={() => setSelectedPlatform('desktop')}
-                      className={`px-2.5 py-1 rounded-md font-bold transition flex items-center gap-1.5 ${
+                      className={`px-2.5 py-1 rounded-md font-medium transition flex items-center gap-1.5 ${
                         selectedPlatform === 'desktop'
-                          ? 'bg-dw-green/20 text-dw-green border border-dw-green/40'
+                          ? 'bg-dw-surface2 text-white border border-dw-border'
                           : 'text-dw-muted hover:text-white'
                       }`}
                     >
@@ -168,9 +168,9 @@ export default function DeepWebHero() {
                     <button
                       type="button"
                       onClick={() => setSelectedPlatform('mobile')}
-                      className={`px-2.5 py-1 rounded-md font-bold transition flex items-center gap-1.5 ${
+                      className={`px-2.5 py-1 rounded-md font-medium transition flex items-center gap-1.5 ${
                         selectedPlatform === 'mobile'
-                          ? 'bg-dw-cyan/20 text-dw-cyan border border-dw-cyan/40'
+                          ? 'bg-dw-surface2 text-white border border-dw-border'
                           : 'text-dw-muted hover:text-white'
                       }`}
                     >
@@ -189,32 +189,32 @@ export default function DeepWebHero() {
                 <a
                   href={desktopUrl}
                   onMouseEnter={() => setSelectedPlatform('desktop')}
-                  className={`px-5 py-4 rounded-2xl font-sans text-xs uppercase tracking-wider transition-all duration-200 active:scale-95 flex items-center justify-between gap-3 ${
+                  className={`px-4 py-3 rounded-lg font-sans text-xs transition duration-150 active:scale-98 flex items-center justify-between gap-3 ${
                     selectedPlatform === 'desktop'
-                      ? 'font-bold text-black bg-gradient-to-r from-dw-green to-dw-cyan shadow-glow'
-                      : 'font-semibold text-dw-text bg-dw-surface hover:bg-dw-surface2 border border-dw-border hover:border-dw-green/50'
+                      ? 'font-medium text-black bg-dw-green'
+                      : 'font-normal text-dw-text bg-dw-surface2 hover:bg-dw-surface border border-dw-border'
                   }`}
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
-                      selectedPlatform === 'desktop' ? 'bg-black/15 text-black' : 'bg-white/5 text-dw-green'
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                      selectedPlatform === 'desktop' ? 'bg-black/10 text-black' : 'bg-white/5 text-dw-green'
                     }`}>
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                       </svg>
                     </div>
                     <div className="text-left truncate">
-                      <span className="block leading-tight font-extrabold text-[13px]">Desktop {currentTag}</span>
-                      <span className={`block text-[11px] font-normal font-mono ${selectedPlatform === 'desktop' ? 'text-black/75' : 'text-dw-muted'}`}>
+                      <span className="block leading-tight font-medium text-[13px]">Desktop {currentTag}</span>
+                      <span className={`block text-[11px] font-mono ${selectedPlatform === 'desktop' ? 'text-black/75' : 'text-dw-muted'}`}>
                         AppImage · {desktopSize}
                       </span>
                     </div>
                   </div>
                   {recommended === 'desktop' && (
-                    <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold shrink-0 ${
-                      selectedPlatform === 'desktop' ? 'bg-black/20 text-black' : 'bg-dw-green/15 text-dw-green'
+                    <span className={`text-[10px] px-2 py-0.5 rounded font-mono shrink-0 ${
+                      selectedPlatform === 'desktop' ? 'bg-black/15 text-black' : 'bg-dw-green/10 text-dw-green'
                     }`}>
-                      RECOMMENDED
+                      Default
                     </span>
                   )}
                 </a>
@@ -222,32 +222,32 @@ export default function DeepWebHero() {
                 <a
                   href={mobileUrl}
                   onMouseEnter={() => setSelectedPlatform('mobile')}
-                  className={`px-5 py-4 rounded-2xl font-sans text-xs uppercase tracking-wider transition-all duration-200 active:scale-95 flex items-center justify-between gap-3 ${
+                  className={`px-4 py-3 rounded-lg font-sans text-xs transition duration-150 active:scale-98 flex items-center justify-between gap-3 ${
                     selectedPlatform === 'mobile'
-                      ? 'font-bold text-black bg-gradient-to-r from-dw-cyan to-dw-green shadow-glowCyan'
-                      : 'font-semibold text-dw-text bg-dw-surface hover:bg-dw-surface2 border border-dw-border hover:border-dw-cyan/50'
+                      ? 'font-medium text-black bg-dw-green'
+                      : 'font-normal text-dw-text bg-dw-surface2 hover:bg-dw-surface border border-dw-border'
                   }`}
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
-                      selectedPlatform === 'mobile' ? 'bg-black/15 text-black' : 'bg-white/5 text-dw-cyan'
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                      selectedPlatform === 'mobile' ? 'bg-black/10 text-black' : 'bg-white/5 text-dw-green'
                     }`}>
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
                       </svg>
                     </div>
                     <div className="text-left truncate">
-                      <span className="block leading-tight font-extrabold text-[13px]">Android {currentTag}</span>
-                      <span className={`block text-[11px] font-normal font-mono ${selectedPlatform === 'mobile' ? 'text-black/75' : 'text-dw-muted'}`}>
+                      <span className="block leading-tight font-medium text-[13px]">Android {currentTag}</span>
+                      <span className={`block text-[11px] font-mono ${selectedPlatform === 'mobile' ? 'text-black/75' : 'text-dw-muted'}`}>
                         APK · {mobileSize}
                       </span>
                     </div>
                   </div>
                   {recommended === 'mobile' && (
-                    <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold shrink-0 ${
-                      selectedPlatform === 'mobile' ? 'bg-black/20 text-black' : 'bg-dw-cyan/15 text-dw-cyan'
+                    <span className={`text-[10px] px-2 py-0.5 rounded font-mono shrink-0 ${
+                      selectedPlatform === 'mobile' ? 'bg-black/15 text-black' : 'bg-dw-green/10 text-dw-green'
                     }`}>
-                      RECOMMENDED
+                      Default
                     </span>
                   )}
                 </a>
@@ -507,13 +507,13 @@ export default function DeepWebHero() {
                         type="button"
                         onClick={triggerSync}
                         disabled={isSyncing}
-                        className="w-full py-2.5 px-4 rounded-lg bg-dw-surface hover:bg-dw-surface2 border border-dw-green/40 text-dw-green hover:text-white transition flex items-center justify-center gap-2 font-bold text-xs"
+                        className="w-full py-2 px-3 rounded-md bg-dw-surface hover:bg-dw-surface2 border border-dw-border text-dw-green hover:text-white transition flex items-center justify-center gap-2 font-mono text-xs"
                       >
-                        <span className={isSyncing ? 'animate-spin' : ''}>⚡</span>
+                        <span className={`w-2 h-2 rounded-full bg-dw-green ${isSyncing ? 'animate-spin' : ''}`}></span>
                         <span>
                           {isSyncing
-                            ? 'Exchanging Encrypted X25519 Envelope...'
-                            : 'Simulate Desktop ⇄ Mobile WebRTC Sync'}
+                            ? 'Exchanging X25519 envelope...'
+                            : 'Test WebRTC mesh sync'}
                         </span>
                       </button>
                       <div className="flex items-center justify-between text-[10px] text-dw-muted mt-2 px-1">
@@ -678,8 +678,8 @@ export default function DeepWebHero() {
                     </div>
 
                     {tamperTriggered && (
-                      <div className="p-2.5 rounded-lg bg-dw-red/10 border border-dw-red/40 text-[11px] text-dw-red animate-pulse">
-                        ⚠️ TAMPER ALERT DETECTED: Enclave keys frozen. Trust Ledger hash chain appended.
+                      <div className="p-2.5 rounded-md bg-dw-red/10 border border-dw-red/30 text-[11px] text-dw-red font-mono">
+                        Tamper Alert: Enclave keys frozen. Trust ledger hash chain appended.
                       </div>
                     )}
                   </div>

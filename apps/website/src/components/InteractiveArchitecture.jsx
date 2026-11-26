@@ -193,9 +193,11 @@ export default function InteractiveArchitecture() {
 
             {/* Bottom Security Guarantee */}
             <div className="mt-4 pt-3 border-t border-dw-border flex items-start gap-2.5 text-[11px]">
-              <span className="text-dw-green text-sm shrink-0">🛡️</span>
+              <svg className="w-4 h-4 text-dw-green shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              </svg>
               <span className="text-dw-muted leading-normal">
-                <strong className="text-white">Security Guarantee: </strong>
+                <strong className="text-white font-medium">Security Guarantee: </strong>
                 {currentProto.guarantee}
               </span>
             </div>

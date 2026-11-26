@@ -142,9 +142,8 @@ export default function BentoCapabilities() {
                 <button
                   type="button"
                   onClick={() => setAutofillClicked(!autofillClicked)}
-                  className="absolute right-1 top-1 bottom-1 px-2.5 rounded bg-dw-green/20 hover:bg-dw-green/30 text-dw-green text-[10px] font-bold transition flex items-center gap-1"
+                  className="absolute right-1 top-1 bottom-1 px-2.5 rounded bg-dw-green/20 hover:bg-dw-green/30 text-dw-green text-[10px] font-medium transition flex items-center gap-1"
                 >
-                  <span>🛡️</span>
                   <span>{autofillClicked ? 'Filled' : 'Fill'}</span>
                 </button>
               </div>

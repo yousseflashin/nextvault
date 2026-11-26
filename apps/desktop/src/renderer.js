@@ -237,10 +237,10 @@
       if (!inp) return;
       if (inp.type === 'password') {
         inp.type = 'text';
-        if (btnEl) btnEl.textContent = '🔒';
+        if (btnEl) btnEl.textContent = 'Hide';
       } else {
         inp.type = 'password';
-        if (btnEl) btnEl.textContent = '👁';
+        if (btnEl) btnEl.textContent = 'Show';
       }
     }
 
@@ -407,18 +407,18 @@
           </div>
           <div class="vault-actions">
             <button class="nv-btn nv-btn-sm" id="btn-pass-${encService}" onclick="copyPassword(decodeURIComponent('${encService}'))" title="Copy password">
-              ⚡ Pass
+              Copy Password
             </button>
             ${e.username ? `
               <button class="nv-btn nv-btn-ghost nv-btn-sm" id="btn-user-${encUser}" onclick="copyUsername(decodeURIComponent('${encUser}'))" title="Copy username">
-                👤 User
+                Copy User
               </button>
             ` : ''}
-            <button class="nv-btn-icon" onclick="editPassword(decodeURIComponent('${encService}'))" title="Edit credential">
-              ✏️
+            <button class="nv-btn nv-btn-ghost nv-btn-sm" onclick="editPassword(decodeURIComponent('${encService}'))" title="Edit credential">
+              Edit
             </button>
-            <button class="nv-btn-icon" style="color: var(--nv-danger);" onclick="deletePassword(decodeURIComponent('${encService}'))" title="Delete credential">
-              🗑
+            <button class="nv-btn nv-btn-ghost nv-btn-sm" style="color: var(--nv-danger);" onclick="deletePassword(decodeURIComponent('${encService}'))" title="Delete credential">
+              Delete
             </button>
           </div>
         </div>
@@ -941,13 +941,13 @@
             </div>
             <div style="display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap;">
               <button class="nv-btn nv-btn-sm" style="font-size: 0.7rem; padding: 0.25rem 0.5rem;" onclick="grantPeerExtensionUI('${escapeHtml(d.deviceId)}', '1week')">
-                ⚡ +1W Safe
+                +1 Week
               </button>
-              <button class="nv-btn nv-btn-accent nv-btn-sm" style="font-size: 0.7rem; padding: 0.25rem 0.5rem;" onclick="grantPeerExtensionUI('${escapeHtml(d.deviceId)}', '1month')">
-                ⚡ +1M Safe
+              <button class="nv-btn nv-btn-ghost nv-btn-sm" style="font-size: 0.7rem; padding: 0.25rem 0.5rem;" onclick="grantPeerExtensionUI('${escapeHtml(d.deviceId)}', '1month')">
+                +1 Month
               </button>
               <button class="nv-btn nv-btn-ghost nv-btn-sm" style="font-size: 0.7rem; padding: 0.25rem 0.5rem;" onclick="requestPeerToExtendUI('${escapeHtml(d.deviceId)}', '1week')">
-                🔔 Prompt
+                Prompt
               </button>
               <button class="nv-btn nv-btn-ghost nv-btn-sm" style="color: var(--nv-danger); font-size: 0.7rem; padding: 0.25rem 0.5rem;" onclick="removeTrustedDeviceUI('${escapeHtml(d.deviceId)}')">
                 Revoke
@@ -1006,12 +1006,12 @@
       canvas: null,
       ctx: null,
       nodes: [
-        { id: 0, name: "This Node (Linux)", type: "desktop", icon: "🖥️", x: 0.5, y: 0.5, isLocal: true, safeHours: 24, latency: 0, status: "Local Enclave", color: "#10b981", deviceId: "local" }
+        { id: 0, name: "This Node (Linux)", type: "desktop", icon: "DESK", x: 0.5, y: 0.5, isLocal: true, safeHours: 24, latency: 0, status: "Local Enclave", color: "#10b981", deviceId: "local" }
       ],
       defaultDemoNodes: [
-        { id: 1, name: "Pixel 8 Pro (Android)", type: "mobile", icon: "📱", x: 0.22, y: 0.35, isLocal: false, safeHours: 18.2, latency: 16, status: "Direct P2P WebRTC", color: "#0ea5e9", deviceId: "peer-pixel" },
-        { id: 2, name: "Laptop Node (macOS)", type: "laptop", icon: "💻", x: 0.78, y: 0.35, isLocal: false, safeHours: 23.8, latency: 12, status: "Direct P2P WebRTC", color: "#10b981", deviceId: "peer-mac" },
-        { id: 3, name: "Remote Peer (Workstation)", type: "desktop", icon: "🖥️", x: 0.50, y: 0.82, isLocal: false, safeHours: 720, latency: 8, status: "Direct P2P WebRTC", color: "#f59e0b", deviceId: "peer-linux" }
+        { id: 1, name: "Pixel 8 Pro (Android)", type: "mobile", icon: "MOB", x: 0.22, y: 0.35, isLocal: false, safeHours: 18.2, latency: 16, status: "Direct P2P WebRTC", color: "#10b981", deviceId: "peer-pixel" },
+        { id: 2, name: "Laptop Node (macOS)", type: "laptop", icon: "LAP", x: 0.78, y: 0.35, isLocal: false, safeHours: 23.8, latency: 12, status: "Direct P2P WebRTC", color: "#10b981", deviceId: "peer-mac" },
+        { id: 3, name: "Remote Peer (Workstation)", type: "desktop", icon: "DESK", x: 0.50, y: 0.82, isLocal: false, safeHours: 720, latency: 8, status: "Direct P2P WebRTC", color: "#10b981", deviceId: "peer-linux" }
       ],
       packets: [],
       ripples: [],
@@ -1061,7 +1061,7 @@
       },
 
       updateNodes(trustedDevices) {
-        const local = this.nodes[0] || { id: 0, name: "This Node (Linux)", type: "desktop", icon: "🖥️", x: 0.5, y: 0.5, isLocal: true, safeHours: 24, latency: 0, status: "Local Enclave", color: "#10b981", deviceId: "local" };
+        const local = this.nodes[0] || { id: 0, name: "This Node (Linux)", type: "desktop", icon: "DESK", x: 0.5, y: 0.5, isLocal: true, safeHours: 24, latency: 0, status: "Local Enclave", color: "#10b981", deviceId: "local" };
         if (!trustedDevices || !trustedDevices.length) {
           this.nodes = [local, ...this.defaultDemoNodes];
           if ($('mesh-topo-status')) $('mesh-topo-status').textContent = 'Serverless Demo Mesh';
@@ -1081,14 +1081,14 @@
             id: idx + 1,
             name: d.deviceName || 'NexVault Peer',
             type: isPhone ? 'mobile' : 'laptop',
-            icon: isPhone ? '📱' : '💻',
+            icon: isPhone ? 'MOB' : 'LAP',
             x: Math.max(0.15, Math.min(0.85, x)),
             y: Math.max(0.15, Math.min(0.85, y)),
             isLocal: false,
             safeHours: 24,
             latency: 12 + (idx * 4),
             status: 'P2P WebRTC Direct',
-            color: '#0ea5e9',
+            color: '#10b981',
             deviceId: d.deviceId
           });
         });
@@ -1148,7 +1148,7 @@
         }
 
         const durLabel = duration === '1week' ? '+7 Days' : '+30 Days';
-        this.showToast(`⚡ Beaming Safe Period Extension to peer "${targetNode.name}" (${durLabel})...`);
+        this.showToast(`Safe period extension sent to "${targetNode.name}" (${durLabel})`);
         this.addPacket(0, this.nodes.indexOf(targetNode), 'extension-grant', { duration, durLabel, targetName: targetNode.name });
 
         if (targetNode.deviceId && targetNode.deviceId !== 'peer-mac' && targetNode.deviceId !== 'peer-pixel' && window.electronAPI?.grantPeerExtension) {
@@ -1157,14 +1157,14 @@
       },
 
       pingAllPeers() {
-        this.showToast('📡 P2P ping broadcasted across all encrypted mesh channels');
+        this.showToast('P2P discovery ping sent across mesh');
         for (let i = 1; i < this.nodes.length; i++) {
           setTimeout(() => this.addPacket(0, i, 'ping', { latency: this.nodes[i].latency }), i * 110);
         }
       },
 
       simulateVaultSync() {
-        this.showToast('🔄 Synchronizing encrypted records peer-to-peer across mesh...');
+        this.showToast('Synchronizing vault records peer-to-peer...');
         for (let i = 1; i < this.nodes.length; i++) {
           setTimeout(() => this.addPacket(0, i, 'sync', {}), i * 120);
         }
@@ -1481,17 +1481,17 @@
     }
 
     async function triggerImmediateNuke() {
-      const first = confirm('☢️ EMERGENCY NUKE WARNING: This will permanently destroy all local encryption keys, shred the SQLCipher database, and close NexVault. Proceed?');
+      const first = confirm('Emergency Reset: This will permanently destroy all local encryption keys, erase the encrypted database, and exit. Proceed?');
       if (!first) return;
-      const second = confirm('FINAL VERIFICATION: Are you absolutely certain? This operation CANNOT be undone.');
+      const second = confirm('Final Confirmation: Are you certain? This action cannot be undone.');
       if (!second) return;
       try {
-        setStatus('Executing Emergency Cryptographic Nuke...');
+        setStatus('Executing emergency vault reset...');
         await window.nexVault.triggerEmergencyNuke(true);
         lockVault();
         window.location.reload();
       } catch (e) {
-        setStatus('Nuke error: ' + e.message);
+        setStatus('Reset error: ' + e.message);
       }
     }
 
@@ -1730,7 +1730,7 @@
           $('update-banner').style.display = 'flex';
 
           if ($('settings-update-desc')) {
-            $('settings-update-desc').textContent = `🚀 Update v${info.latestVersion} is ready to install! (Installed: v${info.currentVersion}${sizeStr}${shaStr})`;
+            $('settings-update-desc').textContent = `Update v${info.latestVersion} is ready to install (Installed: v${info.currentVersion}${sizeStr}${shaStr})`;
           }
           if ($('settings-update-btn')) {
             $('settings-update-btn').style.display = 'inline-flex';
@@ -1917,7 +1917,7 @@
           gridLog(`Peer joined: ${peer.deviceName || 'Peer'} (${peer.deviceId})`);
           loadTrustedDevicesUI();
           if (typeof desktopMeshVisualizer !== 'undefined') {
-            desktopMeshVisualizer.showToast(`📡 Mesh peer joined: ${peer.deviceName || 'Peer'}`);
+            desktopMeshVisualizer.showToast(`Peer linked: ${peer.deviceName || 'Peer'}`);
           }
         });
       }
@@ -1926,7 +1926,7 @@
           gridLog(`Device paired: "${deviceName}" (${peerId})`);
           loadTrustedDevicesUI();
           if (typeof desktopMeshVisualizer !== 'undefined') {
-            desktopMeshVisualizer.showToast(`🎉 New peer linked to mesh: "${deviceName}"!`);
+            desktopMeshVisualizer.showToast(`Peer linked to mesh: "${deviceName}"`);
           }
         });
       }
@@ -1981,7 +1981,7 @@
       if (window.nexVault.onExtensionRejected) {
         window.nexVault.onExtensionRejected((data) => {
           hidePendingExtensionBanner();
-          setStatus(`❌ Extension request declined: ${data.reason || 'Declined'}`);
+          setStatus(`Extension request declined: ${data.reason || 'Declined'}`);
         });
       }
       if (window.nexVault.onExtensionGrantReceived) {
@@ -1989,7 +1989,7 @@
           if (typeof desktopMeshVisualizer !== 'undefined') {
             desktopMeshVisualizer.handleIncomingExtensionGrant(grant);
           }
-          setStatus(`⚡ Safe period extended by "${grant.grantedBy || grant.granterDeviceName || 'Peer'}" until ${new Date(grant.expiresAt).toLocaleDateString()}!`);
+          setStatus(`Safe period extended by "${grant.grantedBy || grant.granterDeviceName || 'Peer'}" until ${new Date(grant.expiresAt).toLocaleDateString()}`);
           refreshSecurityStatus();
           loadTrustLedger();
         });
@@ -1999,15 +1999,15 @@
           if (typeof desktopMeshVisualizer !== 'undefined') {
             desktopMeshVisualizer.handleGrantAck(ack);
           }
-          setStatus(`✓ Peer confirmed safe period extension applied!`);
+          setStatus(`Peer confirmed safe period extension applied`);
         });
       }
       if (window.nexVault.onExtensionPromptReceived) {
         window.nexVault.onExtensionPromptReceived((prompt) => {
           if (typeof desktopMeshVisualizer !== 'undefined') {
-            desktopMeshVisualizer.showToast(`🔔 Peer "${prompt.fromDeviceName || 'Peer'}" prompted you to check in!`);
+            desktopMeshVisualizer.showToast(`Peer "${prompt.fromDeviceName || 'Peer'}" prompted check-in`);
           }
-          setStatus(`🔔 Peer "${prompt.fromDeviceName || 'Peer'}" prompted you to check in`);
+          setStatus(`Peer "${prompt.fromDeviceName || 'Peer'}" prompted check-in`);
         });
       }
     }
@@ -2185,14 +2185,14 @@
           parsedImportData.passwords.slice(0, 40).forEach(p => {
             const item = document.createElement('div');
             item.className = 'nv-import-tag';
-            item.innerHTML = `<span>🔑 <strong>${escapeHtml(p.service)}</strong> ${p.username ? '(' + escapeHtml(p.username) + ')' : ''}</span><span style="color:var(--nv-muted);">Password</span>`;
+            item.innerHTML = `<span><strong>${escapeHtml(p.service)}</strong> ${p.username ? '(' + escapeHtml(p.username) + ')' : ''}</span><span style="color:var(--nv-muted);">Password</span>`;
             list.appendChild(item);
           });
 
           parsedImportData.otps.slice(0, 40).forEach(o => {
             const item = document.createElement('div');
             item.className = 'nv-import-tag';
-            item.innerHTML = `<span>⏳ <strong>${escapeHtml(o.service)}</strong></span><span style="color:var(--nv-primary);">2FA TOTP</span>`;
+            item.innerHTML = `<span><strong>${escapeHtml(o.service)}</strong></span><span style="color:var(--nv-primary);">2FA TOTP</span>`;
             list.appendChild(item);
           });
 

@@ -19,15 +19,15 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
         {/* Brand */}
         <a href="#" className="flex items-center gap-3 group shrink-0" onClick={closeMenu}>
-          <div className="w-9 h-9 rounded-xl bg-dw-surface2 border border-dw-border group-hover:border-dw-green/60 transition-all flex items-center justify-center p-1 shadow-glow group-hover:scale-105">
-            <img src="/icon.png" alt="NexVault" className="w-full h-full rounded-lg object-contain" />
+          <div className="w-8 h-8 rounded-lg bg-dw-surface2 border border-dw-border flex items-center justify-center p-1">
+            <img src="/icon.png" alt="NexVault" className="w-full h-full rounded object-contain" />
           </div>
           <div className="flex flex-col">
-            <span className="font-sans font-extrabold text-base tracking-tight text-white leading-none">
+            <span className="font-sans font-medium text-sm tracking-tight text-white leading-none">
               Nex<span className="text-dw-green">Vault</span>
             </span>
             <span className="text-[11px] font-mono text-dw-muted mt-0.5">
-              {currentTag} · P2P Mesh
+              {currentTag} · Peer mesh
             </span>
           </div>
         </a>
@@ -50,20 +50,18 @@ export default function Navbar() {
 
         {/* Status Pill, Action & Mobile Menu Button */}
         <div className="flex items-center gap-2.5 sm:gap-3">
-          <span className="hidden md:inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11px] font-mono text-dw-green bg-dw-green/10 border border-dw-green/30">
-            <span className="w-1.5 h-1.5 rounded-full bg-dw-green animate-pulse"></span>
-            <span>SHA-256 VERIFIED</span>
+          <span className="hidden md:inline-flex items-center gap-2 px-2.5 py-1 rounded-md text-[11px] font-mono text-dw-muted bg-dw-surface border border-dw-border">
+            <span className="w-1.5 h-1.5 rounded-full bg-dw-green"></span>
+            <span>Verified build</span>
           </span>
 
           <a
             href="#downloads"
             onClick={closeMenu}
-            className="px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider text-black bg-gradient-to-r from-dw-green to-dw-cyan hover:opacity-95 transition-all active:scale-95 shadow-glow flex items-center gap-2"
+            className="px-3.5 py-1.5 rounded-md text-xs font-medium text-black bg-dw-green hover:bg-emerald-400 transition flex items-center gap-2"
           >
             <span>Get {currentTag}</span>
-            <span className="w-5 h-5 rounded-full bg-black/15 flex items-center justify-center text-[10px] font-black">
-              ↓
-            </span>
+            <span className="text-[11px]">↓</span>
           </a>
 
           {/* Mobile Drawer Toggle */}

@@ -202,7 +202,7 @@ function MobileMeshVisualizer({
     const target = selectedNode && !selectedNode.isLocal ? selectedNode : peers[0];
     const targetIdx = nodesRef.current.indexOf(target);
     const durLabel = dur === '1week' ? '+7 Days' : '+30 Days';
-    showToast(`⚡ Beaming Safe Period Extension to "${target.name}" (${durLabel})...`);
+    showToast(`Safe period extension sent to "${target.name}" (${durLabel})`);
     addPacket(0, targetIdx, 'extension-grant', { dur, durLabel, targetName: target.name });
     if (target.deviceId && target.deviceId !== 'peer-mac' && target.deviceId !== 'peer-linux') {
       onExtendPeer(target.deviceId, dur);
@@ -210,14 +210,14 @@ function MobileMeshVisualizer({
   };
 
   const handlePing = () => {
-    showToast('📡 Radar ping broadcasted to all mesh peers');
+    showToast('Discovery ping broadcasted to all mesh peers');
     for (let i = 1; i < nodesRef.current.length; i++) {
       setTimeout(() => addPacket(0, i, 'ping', {}), i * 120);
     }
   };
 
   const handleSync = () => {
-    showToast('🔄 Syncing encrypted credentials with mesh peers...');
+    showToast('Syncing credentials with mesh peers...');
     for (let i = 1; i < nodesRef.current.length; i++) {
       setTimeout(() => addPacket(0, i, 'sync', {}), i * 140);
     }
@@ -435,14 +435,14 @@ function MobileMeshVisualizer({
           <span style={{ fontWeight: 600, fontSize: '0.85rem', color: '#fff' }}>Mesh Neural Topology</span>
         </div>
         <div style={{ display: 'flex', gap: '0.35rem' }}>
-          <button className="nv-btn nv-btn-sm" onClick={() => handleBeam('1week')} style={{ background: 'linear-gradient(135deg, #10b981, #0ea5e9)', color: '#000', fontWeight: 600, fontSize: '0.72rem', padding: '0.25rem 0.5rem' }}>
-            ⚡ Extend
+          <button className="nv-btn nv-btn-sm" onClick={() => handleBeam('1week')} style={{ fontSize: '0.72rem', padding: '0.25rem 0.5rem' }}>
+            Extend
           </button>
           <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={handlePing} style={{ fontSize: '0.72rem', padding: '0.25rem 0.5rem' }}>
-            📡 Ping
+            Ping
           </button>
           <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={handleSync} style={{ fontSize: '0.72rem', padding: '0.25rem 0.5rem' }}>
-            🔄 Sync
+            Sync
           </button>
         </div>
       </div>
@@ -460,7 +460,6 @@ function MobileMeshVisualizer({
           }}>
             <div>
               <div style={{ fontWeight: 700, color: '#fff', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <span>{selectedNode.icon}</span>
                 <span>{selectedNode.name}</span>
                 {selectedNode.isLocal && <span className="nv-badge success" style={{ fontSize: '0.6rem', marginLeft: '4px' }}>Local</span>}
               </div>
@@ -471,10 +470,10 @@ function MobileMeshVisualizer({
             {!selectedNode.isLocal && (
               <div style={{ display: 'flex', gap: '0.35rem' }}>
                 <button className="nv-btn nv-btn-sm" onClick={() => handleBeam('1week')} style={{ fontSize: '0.68rem', padding: '0.25rem 0.45rem' }}>
-                  ⚡ +1W
+                  +1 Week
                 </button>
-                <button className="nv-btn nv-btn-accent nv-btn-sm" onClick={() => handleBeam('1month')} style={{ fontSize: '0.68rem', padding: '0.25rem 0.45rem' }}>
-                  ⚡ +1M
+                <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={() => handleBeam('1month')} style={{ fontSize: '0.68rem', padding: '0.25rem 0.45rem' }}>
+                  +1 Month
                 </button>
               </div>
             )}
@@ -734,7 +733,7 @@ function AddOtpModal({
       <div className="nv-modal" onClick={e => e.stopPropagation()}>
         <div className="nv-modal-header">
           <div className="nv-modal-title">
-            {editingService ? '✏️ Edit 2FA Authenticator' : '⚡ Add 2FA Authenticator'}
+            {editingService ? 'Edit Authenticator' : 'Add Authenticator'}
           </div>
           <button className="nv-btn-icon" onClick={onClose} title="Close">✕</button>
         </div>
@@ -745,11 +744,10 @@ function AddOtpModal({
             <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.25rem' }}>
               <button
                 type="button"
-                className="nv-btn nv-btn-accent nv-btn-sm"
+                className="nv-btn nv-btn-ghost nv-btn-sm"
                 style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '0.65rem' }}
                 onClick={() => { onClose(); onOpenScanner(); }}
               >
-                <span>📷</span>
                 <span>Scan QR Code</span>
               </button>
               <input
@@ -1025,7 +1023,7 @@ function AddCredentialModal({
                 style={{ padding: '0.2rem 0.6rem', fontSize: '0.72rem', height: 26, minHeight: 26 }}
                 onClick={onGeneratePassword}
               >
-                ⚡ Generate Strong
+                Generate
               </button>
             </div>
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
@@ -1040,11 +1038,11 @@ function AddCredentialModal({
               <button
                 type="button"
                 className="nv-btn-icon"
-                style={{ position: 'absolute', right: 6, width: 28, height: 28, minWidth: 28, minHeight: 28, background: 'transparent', border: 'none' }}
+                style={{ position: 'absolute', right: 6, width: 28, height: 28, minWidth: 28, minHeight: 28, background: 'transparent', border: 'none', color: 'var(--nv-muted)', fontSize: '0.75rem' }}
                 onClick={() => setShowPassword(p => !p)}
                 title={showPassword ? 'Hide password' : 'Show password'}
               >
-                {showPassword ? '👁️' : '🔒'}
+                {showPassword ? 'Hide' : 'Show'}
               </button>
             </div>
 
@@ -1145,9 +1143,9 @@ function SpeedDialMenu({
           className="nv-speed-dial-item"
           onClick={() => { onClose(); onAdd2FA(); }}
         >
-          <span className="nv-speed-dial-icon" style={{ background: 'rgba(0, 229, 153, 0.18)', color: '#00e599' }}>⚡</span>
+          <span className="nv-speed-dial-icon" style={{ background: 'rgba(16, 185, 129, 0.12)', color: 'var(--nv-primary)', fontSize: '0.75rem', fontWeight: 600 }}>2FA</span>
           <div style={{ textAlign: 'left' }}>
-            <div style={{ fontWeight: 700, fontSize: '0.86rem', color: '#fff' }}>Add 2FA Authenticator</div>
+            <div style={{ fontWeight: 600, fontSize: '0.86rem', color: '#fff' }}>Add 2FA Authenticator</div>
             <div style={{ fontSize: '0.7rem', color: 'var(--nv-muted)' }}>Enter key manually (RFC 6238)</div>
           </div>
         </button>
@@ -1157,9 +1155,9 @@ function SpeedDialMenu({
           className="nv-speed-dial-item"
           onClick={() => { onClose(); onAddLogin(); }}
         >
-          <span className="nv-speed-dial-icon" style={{ background: 'rgba(147, 51, 234, 0.18)', color: '#c084fc' }}>🔑</span>
+          <span className="nv-speed-dial-icon" style={{ background: 'rgba(255, 255, 255, 0.08)', color: 'var(--nv-text)', fontSize: '0.75rem', fontWeight: 600 }}>KEY</span>
           <div style={{ textAlign: 'left' }}>
-            <div style={{ fontWeight: 700, fontSize: '0.86rem', color: '#fff' }}>New Login Credential</div>
+            <div style={{ fontWeight: 600, fontSize: '0.86rem', color: '#fff' }}>New Login Credential</div>
             <div style={{ fontSize: '0.7rem', color: 'var(--nv-muted)' }}>Site, username, password</div>
           </div>
         </button>
@@ -1287,13 +1285,13 @@ function BulkImportModal({
               <div className="nv-import-preview">
                 {parsed.passwords.slice(0, 30).map((p, i) => (
                   <div className="nv-import-tag" key={'p-' + i}>
-                    <span>🔑 <strong>{p.service}</strong> {p.username ? `(${p.username})` : ''}</span>
+                    <span><strong>{p.service}</strong> {p.username ? `(${p.username})` : ''}</span>
                     <span style={{ color: 'var(--nv-muted)', fontSize: '0.7rem' }}>Password</span>
                   </div>
                 ))}
                 {parsed.otps.slice(0, 30).map((o, i) => (
                   <div className="nv-import-tag" key={'o-' + i}>
-                    <span>⏳ <strong>{o.service}</strong></span>
+                    <span><strong>{o.service}</strong></span>
                     <span style={{ color: 'var(--nv-primary)', fontSize: '0.7rem' }}>2FA TOTP</span>
                   </div>
                 ))}
@@ -1945,18 +1943,18 @@ function App() {
   function onGrantPeerExtension(targetPeerId: string, duration: string = '1week') {
     const res = grantPeerSecurityExtension(targetPeerId, duration);
     if (res.success) {
-      showToast(`⚡ Safe Period Extension (${duration}) beamed to peer!`);
-      log(`⚡ Safe Period Extension (${duration}) beamed to peer ${targetPeerId}`);
+      showToast(`Safe period extension (${duration}) sent to peer`);
+      log(`Safe period extension (${duration}) sent to peer ${targetPeerId}`);
     } else {
-      showToast(res.error || 'Failed to beam extension');
+      showToast(res.error || 'Failed to send extension');
     }
   }
 
   function onRequestPeerToExtend(targetPeerId: string, duration: string = '1week') {
     const res = requestPeerToExtend(targetPeerId, duration);
     if (res.success) {
-      showToast('🔔 Extension prompt dispatched to peer');
-      log(`🔔 Extension prompt dispatched to peer ${targetPeerId}`);
+      showToast('Extension prompt sent to peer');
+      log(`Extension prompt sent to peer ${targetPeerId}`);
     } else {
       showToast(res.error || 'Failed to prompt peer');
     }
@@ -1968,13 +1966,13 @@ function App() {
       localStorage.setItem('nexvault_offline_deadline', new Date(Date.now() + dayMs).toISOString());
     }
     setSecurityDeadlineStatus(getSecurityWindowStatus());
-    showToast('Check-in confirmed! 24-hour heartbeat reset.');
+    showToast('Check-in confirmed: 24-hour window reset');
   }
 
   async function onEmergencyNuke() {
-    const first = confirm('☢️ EMERGENCY NUKE WARNING: This will permanently wipe all local encryption keys, saved passwords, and 2FA accounts from this mobile node. Proceed?');
+    const first = confirm('Emergency Reset: This will permanently wipe all local encryption keys, saved passwords, and 2FA accounts from this mobile node. Proceed?');
     if (!first) return;
-    const second = confirm('FINAL VERIFICATION: Are you absolutely certain? This operation CANNOT be undone.');
+    const second = confirm('Final Confirmation: Are you certain? This action cannot be undone.');
     if (!second) return;
     try {
       emergencyNukeVault();
@@ -2600,19 +2598,20 @@ function App() {
           </div>
           <div className="nv-vault-actions">
             <button
-              className="nv-btn-icon"
+              className="nv-btn nv-btn-ghost nv-btn-sm"
+              style={{ fontSize: '0.72rem', padding: '0.2rem 0.45rem' }}
               onClick={() => v.isOtp ? editOTP(v.service) : editPassword(v.service)}
               title="Edit"
             >
-              ✏️
+              Edit
             </button>
             <button
-              className="nv-btn-icon"
-              style={{ color: 'var(--nv-danger)' }}
+              className="nv-btn nv-btn-ghost nv-btn-sm"
+              style={{ color: 'var(--nv-danger)', fontSize: '0.72rem', padding: '0.2rem 0.45rem' }}
               onClick={() => v.isOtp ? deleteOTP(v.service) : deletePassword(v.service)}
               title="Delete"
             >
-              🗑
+              Delete
             </button>
           </div>
         </div>
@@ -2649,7 +2648,7 @@ function App() {
                 onClick={() => copyPassword(v.service)}
                 title="Copy password"
               >
-                {isPassCopied ? '✓ Copied Password' : '⚡ Copy Password'}
+                {isPassCopied ? 'Copied' : 'Copy Password'}
               </button>
             )}
             {v.username && !v.isOtp && (
@@ -2659,7 +2658,7 @@ function App() {
                 onClick={() => copyUsername(v.username!)}
                 title="Copy username"
               >
-                {isUserCopied ? '✓ Copied User' : '👤 User'}
+                {isUserCopied ? 'Copied' : 'Copy User'}
               </button>
             )}
           </div>
@@ -3015,21 +3014,21 @@ function App() {
                       </div>
                       <button className="nv-btn nv-btn-ghost" onClick={copyBootstrapToken}>Copy Account Token</button>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', margin: '0.5rem 0' }}>
-                        <button className="nv-btn nv-btn-accent" onClick={async () => {
+                        <button className="nv-btn nv-btn-ghost" onClick={async () => {
                           await openAccessibilitySettings();
                           setQuickFillStatus('Enable NexVault Overlay in Accessibility');
                           showToast('Enable "NexVault Autofill Overlay" under Downloaded Apps');
                         }}>
-                          🛡️ Enable Chrome &amp; Browser Overlay
+                          Enable Browser Overlay
                         </button>
                         <button className="nv-btn nv-btn-ghost" onClick={() => setShowRestrictedGuide(true)}>
-                          🔓 Fix "Restricted Setting" Error (Android 13/14+)
+                          Fix Restricted Setting (Android 13/14+)
                         </button>
                         <button className="nv-btn nv-btn-ghost" onClick={async () => {
                           await openAutofillSettings();
                           setQuickFillStatus('Choose NexVault as Autofill service');
                         }}>
-                          ⚙️ Open Standard Android Autofill
+                          Open Android Autofill Settings
                         </button>
                       </div>
                       <button className="nv-btn nv-btn-danger" onClick={onLockVault}>Lock Mobile Vault</button>
@@ -3869,10 +3868,10 @@ function App() {
                               <span style={{ fontWeight: 600, color: '#fff' }}>{d.deviceName || 'Peer Node'}</span>
                               <div style={{ display: 'flex', gap: '0.25rem' }}>
                                 <button className="nv-btn nv-btn-sm" style={{ fontSize: '0.65rem', padding: '0.2rem 0.45rem' }} onClick={() => onGrantPeerExtension(d.deviceId, '1week')}>
-                                  ⚡ +1W
+                                  +1 Week
                                 </button>
-                                <button className="nv-btn nv-btn-accent nv-btn-sm" style={{ fontSize: '0.65rem', padding: '0.2rem 0.45rem' }} onClick={() => onGrantPeerExtension(d.deviceId, '1month')}>
-                                  ⚡ +1M
+                                <button className="nv-btn nv-btn-ghost nv-btn-sm" style={{ fontSize: '0.65rem', padding: '0.2rem 0.45rem' }} onClick={() => onGrantPeerExtension(d.deviceId, '1month')}>
+                                  +1 Month
                                 </button>
                               </div>
                             </div>
@@ -3893,17 +3892,16 @@ function App() {
                     </p>
                   </Card>
 
-                  {/* Danger Zone: Emergency Nuke */}
-                  <Card style={{ borderColor: 'rgba(239, 68, 68, 0.35)', background: 'rgba(239, 68, 68, 0.04)' }}>
-                    <div style={{ fontWeight: 600, color: 'var(--nv-danger)', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                      <span>⚠️</span>
-                      <span>Emergency Cryptographic Destruction</span>
+                  {/* Danger Zone: Emergency Reset */}
+                  <Card style={{ borderColor: 'rgba(229, 72, 77, 0.35)', background: 'rgba(229, 72, 77, 0.04)' }}>
+                    <div style={{ fontWeight: 600, color: 'var(--nv-danger)', marginBottom: '0.35rem' }}>
+                      Emergency Vault Reset
                     </div>
                     <p style={{ fontSize: '0.75rem', color: 'var(--nv-muted)', margin: '0 0 0.75rem' }}>
                       Self-destruct protocol: Immediately purges all credentials, 2FA tokens, Android hardware keystore autofill cache, and local encryption keys from this device.
                     </p>
                     <button className="nv-btn nv-btn-danger nv-btn-sm" onClick={onEmergencyNuke}>
-                      ☠️ Emergency Cryptographic Nuke
+                      Initiate Emergency Reset
                     </button>
                   </Card>
                 </div>
@@ -3926,7 +3924,7 @@ function App() {
                       }}
                       onClick={() => setActiveTab('settings')}
                     >
-                      ⚙️ Preferences &amp; Autofill
+                      Preferences &amp; Autofill
                     </button>
                     <button
                       type="button"
@@ -3940,15 +3938,14 @@ function App() {
                       }}
                       onClick={() => setActiveTab('security')}
                     >
-                      🛡️ Security Safeguards
+                      Security Safeguards
                     </button>
                   </div>
                   {/* The 1Password Autofill Engine Card */}
                   <Card style={{ marginBottom: '1rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-                      <div style={{ fontWeight: 600, color: '#fff', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span>⚡</span>
-                        <span>Mobile Autofill (The 1Password Method)</span>
+                      <div style={{ fontWeight: 600, color: '#fff' }}>
+                        Mobile Autofill (The 1Password Method)
                       </div>
                       <span className={`nv-badge ${sysAutofillEnabled ? 'success' : 'warning'}`}>
                         {sysAutofillEnabled ? 'Framework Active' : 'Setup Required'}
@@ -3970,8 +3967,8 @@ function App() {
                         Powers inline autofill chips directly above your keyboard and in app dropdowns across all native Android applications.
                       </p>
                       <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                        <button className="nv-btn nv-btn-accent nv-btn-sm" onClick={openAutofillSettings}>
-                          ⚙️ Set NexVault as Autofill Service
+                        <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={openAutofillSettings}>
+                          Set as Autofill Service
                         </button>
                         <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={async () => {
                           try {
@@ -4008,27 +4005,27 @@ function App() {
                         <li>Tap <strong>"Restart Chrome"</strong> to apply.</li>
                       </ol>
                       <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                        <button className="nv-btn nv-btn-sm" style={{ background: '#3b82f6', color: '#fff', fontWeight: 600 }} onClick={openChrome}>
-                          🚀 Open Google Chrome
+                        <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={openChrome}>
+                          Open Google Chrome
                         </button>
                         <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={() => {
                           if (navigator?.clipboard) {
                             navigator.clipboard.writeText('chrome://flags#enable-autofill-virtual-view-structure');
-                            showToast('Copied Chrome Flag URL to clipboard! Paste in Chrome address bar.');
+                            showToast('Copied Chrome flag URL to clipboard');
                           }
                         }}>
-                          📋 Copy Chrome Flag URL
+                          Copy Flag URL
                         </button>
                       </div>
                     </div>
 
                     {/* Step 3: Other Browsers Notice */}
-                    <div style={{ background: 'rgba(16, 185, 129, 0.05)', padding: '0.65rem', borderRadius: 'var(--nv-radius-sm)', border: '1px solid rgba(16, 185, 129, 0.2)', marginBottom: '0.75rem' }}>
-                      <div style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--nv-primary)', marginBottom: '0.2rem' }}>
-                        🌐 Other Browsers &amp; Native Apps:
+                    <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '0.65rem', borderRadius: 'var(--nv-radius-sm)', border: '1px solid var(--nv-border)', marginBottom: '0.75rem' }}>
+                      <div style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--nv-text)', marginBottom: '0.2rem' }}>
+                        Other Browsers &amp; Native Apps:
                       </div>
                       <p style={{ fontSize: '0.70rem', color: 'var(--nv-text-secondary)', margin: 0, lineHeight: '1.4' }}>
-                        <strong>Firefox, Brave, Microsoft Edge, Opera, Samsung Internet</strong>, and all native apps support NexVault out of the box with zero extra setup!
+                        Firefox, Brave, Microsoft Edge, Opera, Samsung Internet, and all native apps support NexVault out of the box with zero extra setup.
                       </p>
                     </div>
 
@@ -4046,10 +4043,10 @@ function App() {
                             await openAccessibilitySettings();
                             showToast('Enable "NexVault Autofill Overlay" under Downloaded Apps');
                           }}>
-                            ⚙️ {a11yEnabled ? 'Configure Overlay' : 'Enable Overlay in Accessibility'}
+                            {a11yEnabled ? 'Configure Overlay' : 'Enable Overlay in Accessibility'}
                           </button>
                           <button className="nv-btn nv-btn-ghost nv-btn-sm" onClick={() => setShowRestrictedGuide(true)}>
-                            🔓 Fix Restricted Setting
+                            Fix Restricted Setting
                           </button>
                         </div>
                       </div>
