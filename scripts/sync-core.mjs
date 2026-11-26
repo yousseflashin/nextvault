@@ -9,7 +9,8 @@ const SRC = join(ROOT, 'packages', 'core');
 
 const TARGETS = [
   join(ROOT, 'apps', 'desktop', 'node_modules', '@nexvault', 'core'),
-  join(ROOT, 'apps', 'relay', 'node_modules', '@nexvault', 'core')
+  join(ROOT, 'apps', 'relay', 'node_modules', '@nexvault', 'core'),
+  join(ROOT, 'apps', 'mobile', 'node_modules', '@nexvault', 'core')
 ];
 
 for (const target of TARGETS) {

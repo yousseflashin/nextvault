@@ -1,53 +1,7 @@
 const { normalizeDomain } = require('../domainUtils');
+const { mergeCredentials } = require('../conflictResolver');
 
 describe('Credential Merge & Inbound Queue Ingestion Logic', () => {
-  function mergeCredentials(vaultPasswords, incomingList, devicePublicKey = 'device-test-1') {
-    const passwords = [...vaultPasswords];
-    let changed = false;
-
-    for (const item of incomingList) {
-      const service = String(item.service || item.rawService || '').trim();
-      const password = String(item.password || item.credential || '');
-      if (!service || !password) continue;
-      const username = String(item.username || '').trim();
-      const target = normalizeDomain(service);
-
-      const existingIdx = passwords.findIndex(entry => {
-        const matchDomain = normalizeDomain(entry.service) === target;
-        if (!matchDomain) return false;
-        const entryUser = String(entry.username || '').trim().toLowerCase();
-        const nativeUser = username.toLowerCase();
-        return (!entryUser || !nativeUser || entryUser === nativeUser);
-      });
-
-      if (existingIdx >= 0) {
-        const existing = passwords[existingIdx];
-        if (existing.credential === password && (existing.username || '') === username) {
-          continue;
-        }
-        passwords[existingIdx] = {
-          ...existing,
-          credential: password,
-          username: username || existing.username,
-          updatedAt: Date.now(),
-          logicalCounter: (existing.logicalCounter || 0) + 1
-        };
-        changed = true;
-      } else {
-        passwords.push({
-          service,
-          credential: password,
-          username,
-          createdAt: new Date().toISOString(),
-          updatedAt: Date.now(),
-          logicalCounter: 1,
-          peerId: devicePublicKey
-        });
-        changed = true;
-      }
-    }
-    return { passwords, changed };
-  }
 
   test('315-credential vault increments to 316 when receiving fresh Android autofill save', () => {
     // Generate 315 existing mock credentials

@@ -7,6 +7,10 @@
 import nacl from 'tweetnacl';
 import naclUtil from 'tweetnacl-util';
 import { registerPlugin } from '@capacitor/core';
+import { compareLogicalClocks, mergeCredentials } from '@nexvault/core/conflictResolver';
+import SyncEngine from '@nexvault/core/syncEngine';
+import { normalizeDomain } from '@nexvault/core/domainUtils';
+import { parseOtpAuthUri, parseCsvRows, parseBulkImport } from '@nexvault/core/importParser';
 import {
   BUILD_VERSION as CURRENT_VERSION,
   GITHUB_REPO,
@@ -63,32 +67,7 @@ export interface StoredOTP {
   algorithm?: string;
 }
 
-export function compareLogicalClocks(
-  a: { counter?: number; logicalCounter?: number; peerId?: string; updatedAt?: number },
-  b: { counter?: number; logicalCounter?: number; peerId?: string; updatedAt?: number }
-): number {
-  const ca = Number(a?.counter ?? a?.logicalCounter) || 0;
-  const cb = Number(b?.counter ?? b?.logicalCounter) || 0;
-  if (ca > cb) return 1;
-  if (ca < cb) return -1;
-  if (ca > 0 && cb > 0) {
-    const pa = String(a?.peerId || '');
-    const pb = String(b?.peerId || '');
-    if (pa > pb) return 1;
-    if (pa < pb) return -1;
-    return 0;
-  }
-  const ua = Number(a?.updatedAt) || 0;
-  const ub = Number(b?.updatedAt) || 0;
-  if (ua > ub) return 1;
-  if (ua < ub) return -1;
-  return 0;
-}
-
-export function normalizeDomain(service: string): string {
-  if (!service) return '';
-  return String(service).trim().toLowerCase().replace(/^(https?:\/\/)?(www\.)?/, '').replace(/\/.*$/, '');
-}
+export { compareLogicalClocks, normalizeDomain };
 
 export interface TrustedPeerInfo {
   deviceId: string;
@@ -115,201 +94,7 @@ export interface MobileVaultState {
   deletedRecords?: { service: string; type: 'password' | 'otp'; deletedAt: number; logicalCounter?: number; peerId?: string }[];
 }
 
-export function parseOtpAuthUri(uri: string): { service: string; account: string; secret: string; algorithm?: string; digits?: number; period?: number } | null {
-  if (!uri || typeof uri !== 'string') return null;
-  const clean = uri.trim();
-  if (!clean.startsWith('otpauth://')) return null;
-
-  try {
-    const url = new URL(clean);
-    let label = decodeURIComponent(url.pathname.replace(/^\//, ''));
-    let service = label;
-    let account = '';
-
-    if (label.includes(':')) {
-      const parts = label.split(':');
-      service = parts[0].trim();
-      account = parts.slice(1).join(':').trim();
-    }
-
-    const secret = url.searchParams.get('secret');
-    const issuer = url.searchParams.get('issuer');
-    if (issuer) service = issuer.trim();
-
-    if (!secret) return null;
-
-    return {
-      service: service || '2FA Service',
-      account,
-      secret: secret.replace(/\s+/g, '').toUpperCase(),
-      algorithm: url.searchParams.get('algorithm') || 'SHA1',
-      digits: parseInt(url.searchParams.get('digits') || '6', 10),
-      period: parseInt(url.searchParams.get('period') || '30', 10)
-    };
-  } catch {
-    return null;
-  }
-}
-
-export function parseCsvRows(text: string): string[][] {
-  const lines: string[][] = [];
-  let row: string[] = [''];
-  let inQuotes = false;
-
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    const next = text[i + 1];
-
-    if (ch === '"') {
-      if (inQuotes && next === '"') {
-        row[row.length - 1] += '"';
-        i++;
-      } else {
-        inQuotes = !inQuotes;
-      }
-    } else if (ch === ',' && !inQuotes) {
-      row.push('');
-    } else if ((ch === '\r' || ch === '\n') && !inQuotes) {
-      if (ch === '\r' && next === '\n') i++;
-      if (row.length > 1 || row[0] !== '') {
-        lines.push(row);
-      }
-      row = [''];
-    } else {
-      row[row.length - 1] += ch;
-    }
-  }
-
-  if (row.length > 1 || (row.length === 1 && row[0] !== '')) {
-    lines.push(row);
-  }
-
-  return lines;
-}
-
-function cleanServiceUrl(service: string): string {
-  if (!service) return 'Service';
-  let s = String(service).trim();
-  if (s.startsWith('http://') || s.startsWith('https://')) {
-    try {
-      const u = new URL(s);
-      return u.hostname.replace(/^www\./, '') || s;
-    } catch {
-      return s;
-    }
-  }
-  return s;
-}
-
-export function parseBulkImport(rawContent: string): { passwords: { service: string; username: string; credential: string }[]; otps: { service: string; secret: string }[]; totalCount: number } {
-  if (!rawContent || typeof rawContent !== 'string') {
-    return { passwords: [], otps: [], totalCount: 0 };
-  }
-
-  const trimmed = rawContent.trim();
-  const passwords: { service: string; username: string; credential: string }[] = [];
-  const otps: { service: string; secret: string }[] = [];
-
-  // 1. JSON
-  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-    try {
-      const data = JSON.parse(trimmed);
-      const items = Array.isArray(data)
-        ? data
-        : (data.items || data.passwords || data.credentials || data.logins || []);
-
-      for (const item of items) {
-        if (item.login) {
-          const serviceName = item.name || (item.login.uris && item.login.uris[0]?.uri) || 'Service';
-          const service = cleanServiceUrl(serviceName);
-          if (item.login.password) {
-            passwords.push({
-              service,
-              username: item.login.username || '',
-              credential: item.login.password
-            });
-          }
-          if (item.login.totp) {
-            const parsedUri = parseOtpAuthUri(item.login.totp);
-            const secret = parsedUri ? parsedUri.secret : item.login.totp.replace(/\s+/g, '').toUpperCase();
-            otps.push({ service, secret });
-          }
-          continue;
-        }
-
-        const serviceRaw = item.service || item.name || item.title || item.url || item.website || '';
-        const service = cleanServiceUrl(serviceRaw);
-        const username = item.username || item.user || item.login || item.email || '';
-        const credential = item.credential || item.password || item.pass || '';
-        const otpRaw = item.secret || item.totp || item.otp || item.otpSecret || '';
-
-        if (service && credential) passwords.push({ service, username, credential });
-        if (service && otpRaw) {
-          const parsed = parseOtpAuthUri(otpRaw);
-          const secret = parsed ? parsed.secret : otpRaw.replace(/\s+/g, '').toUpperCase();
-          otps.push({ service, secret });
-        }
-      }
-
-      if (passwords.length > 0 || otps.length > 0) {
-        return { passwords, otps, totalCount: passwords.length + otps.length };
-      }
-    } catch {}
-  }
-
-  // 2. Lines of otpauth:// URIs
-  const lines = trimmed.split('\n').map(l => l.trim()).filter(Boolean);
-  const uriMatches = lines.filter(l => l.startsWith('otpauth://'));
-  if (uriMatches.length > 0 && uriMatches.length >= lines.length / 2) {
-    for (const uri of uriMatches) {
-      const parsed = parseOtpAuthUri(uri);
-      if (parsed) otps.push({ service: parsed.service, secret: parsed.secret });
-    }
-    return { passwords, otps, totalCount: otps.length };
-  }
-
-  // 3. CSV
-  const rows = parseCsvRows(trimmed);
-  if (rows.length >= 2) {
-    const headers = rows[0].map(h => h.trim().toLowerCase());
-    const serviceIdx = headers.findIndex(h =>
-      ['service', 'name', 'title', 'url', 'website', 'login_uri'].includes(h)
-    );
-    const userIdx = headers.findIndex(h =>
-      ['username', 'user', 'login', 'email', 'login_username'].includes(h)
-    );
-    const passIdx = headers.findIndex(h =>
-      ['password', 'pass', 'credential', 'login_password'].includes(h)
-    );
-    const totpIdx = headers.findIndex(h =>
-      ['totp', 'otp', '2fa', 'secret', 'login_totp'].includes(h)
-    );
-
-    if (passIdx >= 0 || totpIdx >= 0 || (serviceIdx >= 0 && userIdx >= 0)) {
-      for (let i = 1; i < rows.length; i++) {
-        const r = rows[i];
-        if (!r || r.every(cell => !cell.trim())) continue;
-
-        let service = (serviceIdx >= 0 && r[serviceIdx]) ? r[serviceIdx].trim() : `Entry ${i}`;
-        service = cleanServiceUrl(service);
-
-        const username = (userIdx >= 0 && r[userIdx]) ? r[userIdx].trim() : '';
-        const credential = (passIdx >= 0 && r[passIdx]) ? r[passIdx].trim() : '';
-        const totpRaw = (totpIdx >= 0 && r[totpIdx]) ? r[totpIdx].trim() : '';
-
-        if (credential) passwords.push({ service, username, credential });
-        if (totpRaw) {
-          const parsed = parseOtpAuthUri(totpRaw);
-          const secret = parsed ? parsed.secret : totpRaw.replace(/\s+/g, '').toUpperCase();
-          otps.push({ service, secret });
-        }
-      }
-      return { passwords, otps, totalCount: passwords.length + otps.length };
-    }
-  }
-
-  return { passwords, otps, totalCount: passwords.length + otps.length };
-}
+export { parseOtpAuthUri, parseCsvRows, parseBulkImport };
 
 export function isPeerTrusted(peerId: string, state: MobileVaultState): boolean {
   if (!state.trustedPeers) return false;
@@ -852,51 +637,9 @@ export async function mergeNativeAutofillCredentials() {
   const state = loadVault();
   if (!state) return;
 
-  let changed = false;
-  for (const nativeCredential of incoming) {
-    const service = String(nativeCredential.service || nativeCredential.rawService || '').trim();
-    const password = String(nativeCredential.password || nativeCredential.credential || '');
-    if (!service || !password) continue;
-    const username = String(nativeCredential.username || '').trim();
-    const target = normalizeDomain(service);
-
-    const existingIdx = state.passwords.findIndex(entry => {
-      const matchDomain = normalizeDomain(entry.service) === target;
-      if (!matchDomain) return false;
-      const entryUser = String(entry.username || '').trim().toLowerCase();
-      const nativeUser = username.toLowerCase();
-      // Only match if usernames are identical
-      if (entryUser && nativeUser) {
-        return entryUser === nativeUser;
-      }
-      // If either username is empty, only match if BOTH are empty
-      return !entryUser && !nativeUser;
-    });
-
-    if (existingIdx >= 0) {
-      const existing = state.passwords[existingIdx];
-      if (existing.credential === password && (existing.username || '') === username) {
-        continue;
-      }
-      existing.credential = password;
-      if (username) existing.username = username;
-      existing.updatedAt = Date.now();
-      existing.logicalCounter = (existing.logicalCounter || 0) + 1;
-      changed = true;
-    } else {
-      state.passwords.push({
-        service,
-        credential: password,
-        username,
-        createdAt: new Date().toISOString(),
-        updatedAt: Date.now(),
-        logicalCounter: 1,
-        peerId: state.devicePublicKey
-      });
-      changed = true;
-    }
-  }
-  if (changed) {
+  const result = mergeCredentials(state.passwords, incoming, state.devicePublicKey);
+  if (result.changed) {
+    state.passwords = result.passwords as StoredCredential[];
     saveVault(state);
     notifyVaultUpdated();
   }
@@ -1382,154 +1125,17 @@ function applyVaultSync(vaultData: any, callbacks?: GridCallbacks, fromPeerId?: 
   if (!state) return;
   if (!state.deletedRecords) state.deletedRecords = [];
 
-  let stateChanged = false;
-  let importedPasswords = 0;
-  let importedOTPs = 0;
+  const result = SyncEngine.reconcileVaultData(state, vaultData, fromPeerId);
 
-  // 1. Process any incoming tombstones / deletions with Lamport logical clock
-  if (Array.isArray(vaultData.deleted)) {
-    for (const d of vaultData.deleted) {
-      if (!d || !d.service) continue;
-      const target = normalizeDomain(d.service);
-      const remoteDeletedAt = Number(d.deletedAt) || Number(d.deleted_at) || Date.now();
-      const remoteClock = { counter: Number(d.logicalCounter) || 0, peerId: d.peerId || fromPeerId || '', updatedAt: remoteDeletedAt };
-
-      if (d.type === 'otp') {
-        const localIdx = state.otps.findIndex(o => normalizeDomain(o.service) === target);
-        if (localIdx >= 0) {
-          const localClock = { counter: Number(state.otps[localIdx].logicalCounter) || 0, peerId: state.otps[localIdx].peerId || '', updatedAt: Number(state.otps[localIdx].updatedAt) || 0 };
-          if (compareLogicalClocks(remoteClock, localClock) >= 0) {
-            state.otps.splice(localIdx, 1);
-            stateChanged = true;
-          }
-        }
-      } else {
-        const localIdx = state.passwords.findIndex(p => normalizeDomain(p.service) === target);
-        if (localIdx >= 0) {
-          const localClock = { counter: Number(state.passwords[localIdx].logicalCounter) || 0, peerId: state.passwords[localIdx].peerId || '', updatedAt: Number(state.passwords[localIdx].updatedAt) || 0 };
-          if (compareLogicalClocks(remoteClock, localClock) >= 0) {
-            state.passwords.splice(localIdx, 1);
-            stateChanged = true;
-          }
-        }
-      }
-
-      const existingTombIdx = state.deletedRecords.findIndex(r => normalizeDomain(r.service) === target && r.type === d.type);
-      if (existingTombIdx >= 0) {
-        const existingTomb = state.deletedRecords[existingTombIdx];
-        if (compareLogicalClocks(remoteClock, { counter: existingTomb.logicalCounter, peerId: existingTomb.peerId, updatedAt: existingTomb.deletedAt }) > 0) {
-          state.deletedRecords[existingTombIdx].deletedAt = remoteDeletedAt;
-          state.deletedRecords[existingTombIdx].logicalCounter = remoteClock.counter;
-          state.deletedRecords[existingTombIdx].peerId = remoteClock.peerId;
-        }
-      } else {
-        state.deletedRecords.push({ service: d.service, type: d.type, deletedAt: remoteDeletedAt, logicalCounter: remoteClock.counter, peerId: remoteClock.peerId });
-      }
-    }
-  }
-
-  // 2. Reconcile passwords with Lamport logical clock
-  if (Array.isArray(vaultData.passwords)) {
-    for (const p of vaultData.passwords) {
-      if (!p.service || !p.credential) continue;
-      const target = normalizeDomain(p.service);
-      const remoteUpdatedAt = Number(p.updatedAt) || (p.createdAt ? new Date(p.createdAt).getTime() : Date.now());
-      const remoteClock = { counter: Number(p.logicalCounter) || 0, peerId: p.peerId || fromPeerId || '', updatedAt: remoteUpdatedAt };
-
-      const tomb = state.deletedRecords.find(r => normalizeDomain(r.service) === target && r.type === 'password');
-      if (tomb) {
-        const tombClock = { counter: Number(tomb.logicalCounter) || 0, peerId: tomb.peerId || '', updatedAt: Number(tomb.deletedAt) || 0 };
-        if (compareLogicalClocks(tombClock, remoteClock) >= 0) {
-          continue; // Tombstone is logically newer than incoming password
-        }
-      }
-
-      if (tomb && compareLogicalClocks(remoteClock, { counter: tomb.logicalCounter, peerId: tomb.peerId, updatedAt: tomb.deletedAt }) > 0) {
-        state.deletedRecords = state.deletedRecords.filter(r => !(normalizeDomain(r.service) === target && r.type === 'password'));
-      }
-
-      const existingIdx = state.passwords.findIndex(x => normalizeDomain(x.service) === target);
-      if (existingIdx >= 0) {
-        const localPwd = state.passwords[existingIdx];
-        const localClock = { counter: Number(localPwd.logicalCounter) || 0, peerId: localPwd.peerId || '', updatedAt: Number(localPwd.updatedAt) || 0 };
-        if (compareLogicalClocks(remoteClock, localClock) > 0) {
-          state.passwords[existingIdx] = {
-            service: p.service,
-            credential: p.credential,
-            username: p.username || '',
-            otpSecret: p.otpSecret || localPwd.otpSecret || '',
-            createdAt: p.createdAt || localPwd.createdAt || new Date().toISOString(),
-            updatedAt: remoteUpdatedAt,
-            logicalCounter: remoteClock.counter,
-            peerId: remoteClock.peerId
-          };
-          stateChanged = true;
-          importedPasswords++;
-        }
-      } else {
-        state.passwords.push({
-          service: p.service,
-          credential: p.credential,
-          username: p.username || '',
-          otpSecret: p.otpSecret || '',
-          createdAt: p.createdAt || new Date().toISOString(),
-          updatedAt: remoteUpdatedAt,
-          logicalCounter: remoteClock.counter,
-          peerId: remoteClock.peerId
-        });
-        stateChanged = true;
-        importedPasswords++;
-      }
-    }
-  }
-
-  // 3. Reconcile OTPs with LWW
-  if (Array.isArray(vaultData.otps)) {
-    for (const o of vaultData.otps) {
-      if (!o.service || !o.secret) continue;
-      const target = normalizeDomain(o.service);
-      const remoteUpdatedAt = Number(o.updatedAt) || (o.createdAt ? new Date(o.createdAt).getTime() : Date.now());
-
-      const tomb = state.deletedRecords.find(r => normalizeDomain(r.service) === target && r.type === 'otp');
-      if (tomb && Number(tomb.deletedAt) >= remoteUpdatedAt) {
-        continue;
-      }
-
-      if (tomb && remoteUpdatedAt > tomb.deletedAt) {
-        state.deletedRecords = state.deletedRecords.filter(r => !(normalizeDomain(r.service) === target && r.type === 'otp'));
-      }
-
-      const existingIdx = state.otps.findIndex(x => normalizeDomain(x.service) === target);
-      if (existingIdx >= 0) {
-        const localUpdatedAt = Number(state.otps[existingIdx].updatedAt) || (state.otps[existingIdx].createdAt ? new Date(state.otps[existingIdx].createdAt).getTime() : 0);
-        if (remoteUpdatedAt > localUpdatedAt) {
-          state.otps[existingIdx] = {
-            service: o.service,
-            secret: o.secret,
-            createdAt: o.createdAt || new Date().toISOString(),
-            updatedAt: remoteUpdatedAt
-          };
-          stateChanged = true;
-          importedOTPs++;
-        }
-      } else {
-        state.otps.push({
-          service: o.service,
-          secret: o.secret,
-          createdAt: o.createdAt || new Date().toISOString(),
-          updatedAt: remoteUpdatedAt
-        });
-        stateChanged = true;
-        importedOTPs++;
-      }
-    }
-  }
-
-  saveVault(state);
-  const cb = callbacks || currentCallbacks;
-  if (stateChanged) {
-    cb?.onLog?.(`🔄 Vault synchronized from peer: ${importedPasswords} passwords, ${importedOTPs} OTPs updated.`);
-    cb?.onVaultSynced?.(importedPasswords + importedOTPs);
+  if (result.stateChanged) {
+    state.passwords = result.passwords as StoredCredential[];
+    state.otps = result.otps as StoredOTP[];
+    state.deletedRecords = result.deletedRecords as any;
+    saveVault(state);
+    const cb = callbacks || currentCallbacks;
+    const importedCount = (result.stats?.appliedPasswords || 0) + (result.stats?.appliedOtps || 0);
+    cb?.onLog?.(`🔄 Vault synchronized from peer: ${result.stats?.appliedPasswords || 0} passwords, ${result.stats?.appliedOtps || 0} OTPs updated.`);
+    cb?.onVaultSynced?.(importedCount);
     notifyVaultUpdated();
   }
 
@@ -1610,26 +1216,11 @@ function broadcastVaultToPeer(peerId: string, arg2: any, arg3?: any, arg4?: any)
 
   if (!state || !socket || socket.readyState !== WebSocket.OPEN) return;
 
+  const wirePayload = SyncEngine.prepareSyncPayload(state);
   const payloadData = {
     type: 'vault-sync',
     vaultData: {
-      passwords: (state.passwords || []).map(p => ({
-        ...p,
-        logicalCounter: p.logicalCounter || 1,
-        peerId: p.peerId || state?.devicePublicKey || '',
-        updatedAt: Number(p.updatedAt) || (p.createdAt ? new Date(p.createdAt).getTime() : Date.now())
-      })),
-      otps: (state.otps || []).map(o => ({
-        ...o,
-        logicalCounter: o.logicalCounter || 1,
-        peerId: o.peerId || state?.devicePublicKey || '',
-        updatedAt: Number(o.updatedAt) || (o.createdAt ? new Date(o.createdAt).getTime() : Date.now())
-      })),
-      deleted: (state.deletedRecords || []).map(d => ({
-        ...d,
-        logicalCounter: d.logicalCounter || 1,
-        peerId: d.peerId || state?.devicePublicKey || ''
-      })),
+      ...wirePayload,
       timestamp: Date.now(),
       isReply
     }

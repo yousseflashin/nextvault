@@ -2,7 +2,8 @@ const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage } = require('electr
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
-const { NexVaultToken, NexVaultCrypto, NexVaultSecurity, NexGrid, NexVaultDatabase, generateTotp, parseBulkImport, parseOtpAuthUri, LamportClock, MultiLeaderReplica } = require('@nexvault/core');
+const { NexVaultToken, NexVaultCrypto, NexVaultSecurity, NexGrid, NexVaultDatabase, generateTotp, parseBulkImport, parseOtpAuthUri, LamportClock, MultiLeaderReplica, SyncEngine } = require('@nexvault/core');
+const DesktopVaultService = require('./services/desktopVaultService');
 const { WebSocketServer } = require('ws');
 const crypto = require('crypto');
 const { setupLinuxDesktopIntegration } = require('./linuxIntegration');
@@ -59,6 +60,7 @@ try {
   }
 } catch {}
 let nexVaultDatabase = new NexVaultDatabase(app.getPath('userData'));
+let desktopVaultService = new DesktopVaultService({ database: nexVaultDatabase, security: nexVaultSecurity });
 let extensionServer;
 const relayClients = new Map();
 const pendingPairingRequests = new Map();
@@ -176,11 +178,6 @@ function syncVaultToPeer(peerId, options = {}) {
       console.warn(`[Desktop] syncVaultToPeer: User not authenticated / vault locked.`);
       return;
     }
-    const user = nexVaultDatabase.getUser(context.username);
-    if (!user) {
-      console.warn(`[Desktop] syncVaultToPeer: User "${context.username}" not found.`);
-      return;
-    }
 
     // Ensure remote public key is registered in nexGrid
     const trustedList = getTrustedDevices();
@@ -189,59 +186,18 @@ function syncVaultToPeer(peerId, options = {}) {
       nexGrid.setPeerPublicKey(peerId, matchedDev.publicKey);
     }
 
-    // Safely retrieve and decrypt all passwords with logical clock and updatedAt
-    const rawPasswords = nexVaultDatabase.getPasswords(user.id) || [];
-    const decryptedPasswords = [];
-    for (const p of rawPasswords) {
-      try {
-        const credential = nexVaultDatabase.decryptData(p.encrypted_data, context.encryptionKey, p.iv);
-        decryptedPasswords.push({
-          service: p.service_name,
-          username: p.username || '',
-          credential,
-          otpSecret: p.otp_secret || '',
-          createdAt: p.created_at,
-          updatedAt: Number(p.updated_at) || (p.created_at ? new Date(p.created_at).getTime() : Date.now()),
-          logicalCounter: Number(p.logical_counter) || 1,
-          peerId: p.peer_id || context.publicKey || ''
-        });
-      } catch (err) {
-        console.error(`[Desktop] Error decrypting password for ${p.service_name}:`, err.message);
-      }
-    }
-
-    // Safely retrieve and decrypt all OTP secrets with logical clock and updatedAt
-    const rawOtps = nexVaultDatabase.getOtpSecrets(user.id) || [];
-    const decryptedOtps = [];
-    for (const o of rawOtps) {
-      try {
-        const secret = nexVaultDatabase.decryptData(o.encrypted_data, context.encryptionKey, o.iv);
-        decryptedOtps.push({
-          service: o.service_name,
-          secret,
-          createdAt: o.created_at,
-          updatedAt: Number(o.updated_at) || (o.created_at ? new Date(o.created_at).getTime() : Date.now()),
-          logicalCounter: Number(o.logical_counter) || 1,
-          peerId: o.peer_id || context.publicKey || ''
-        });
-      } catch (err) {
-        console.error(`[Desktop] Error decrypting OTP for ${o.service_name}:`, err.message);
-      }
-    }
-
-    const deletedRecords = nexVaultDatabase.getDeletedRecords(user.id) || [];
+    const payload = desktopVaultService.getSyncPayload();
+    if (!payload) return;
 
     nexGrid.sendSecureMessage(peerId, {
       type: 'vault-sync',
       vaultData: {
-        passwords: decryptedPasswords,
-        otps: decryptedOtps,
-        deleted: deletedRecords,
+        ...payload,
         timestamp: Date.now(),
         isReply: Boolean(options?.isReply)
       }
     });
-    console.log(`[Desktop] Successfully synchronized vault (${decryptedPasswords.length} passwords, ${decryptedOtps.length} OTPs, ${deletedRecords.length} tombstones, isReply=${Boolean(options?.isReply)}) to peer: ${peerId}`);
+    console.log(`[Desktop] Successfully synchronized vault (${payload.passwords.length} passwords, ${payload.otps.length} OTPs, ${payload.deleted.length} tombstones, isReply=${Boolean(options?.isReply)}) to peer: ${peerId}`);
   } catch (err) {
     console.error(`[Desktop] Error syncing vault to peer "${peerId}":`, err);
   }
@@ -529,111 +485,8 @@ nexGrid.on('vault-sync-received', (fromPeerId, vaultData) => {
       deviceId: fromPeerId,
       deviceName: 'Mesh Peer'
     });
-    const context = nexVaultSecurity.getUserContext();
-    if (!context || !vaultData) return;
-    const user = nexVaultDatabase.getUser(context.username);
-    if (!user) return;
 
-    let stateChanged = false;
-
-    // 1. Process incoming tombstones / deletions with Lamport logical clock
-    if (Array.isArray(vaultData.deleted)) {
-      for (const d of vaultData.deleted) {
-        if (!d || !d.service) continue;
-        const remoteDeletedAt = Number(d.deletedAt) || Date.now();
-        const remoteClock = { counter: Number(d.logicalCounter) || 0, peerId: d.peerId || fromPeerId };
-
-        if (d.type === 'otp') {
-          const localOtp = nexVaultDatabase.getOtpSecretByService(user.id, d.service);
-          if (localOtp) {
-            const localClock = { counter: Number(localOtp.logical_counter) || 0, peerId: localOtp.peer_id || '' };
-            const cmp = LamportClock.compare(remoteClock, localClock);
-            const shouldDelete = (remoteClock.counter > 0 || localClock.counter > 0) ? (cmp >= 0) : (remoteDeletedAt >= (Number(localOtp.updated_at) || 0));
-            if (shouldDelete) {
-              nexVaultDatabase.deleteOtpSecret(user.id, d.service, remoteDeletedAt);
-              stateChanged = true;
-            }
-          } else {
-            nexVaultDatabase.recordTombstone(user.id, d.service, 'otp', remoteDeletedAt, remoteClock.counter, remoteClock.peerId);
-          }
-        } else {
-          const localPwd = nexVaultDatabase.getPassword(user.id, d.service);
-          if (localPwd) {
-            const localClock = { counter: Number(localPwd.logical_counter) || 0, peerId: localPwd.peer_id || '' };
-            const cmp = LamportClock.compare(remoteClock, localClock);
-            const shouldDelete = (remoteClock.counter > 0 || localClock.counter > 0) ? (cmp >= 0) : (remoteDeletedAt >= (Number(localPwd.updated_at) || 0));
-            if (shouldDelete) {
-              nexVaultDatabase.deletePassword(user.id, d.service, remoteDeletedAt, remoteClock.counter, remoteClock.peerId);
-              stateChanged = true;
-            }
-          } else {
-            nexVaultDatabase.recordTombstone(user.id, d.service, 'password', remoteDeletedAt, remoteClock.counter, remoteClock.peerId);
-          }
-        }
-      }
-    }
-
-    // 2. Process incoming passwords with Lamport logical clock reconciliation
-    if (Array.isArray(vaultData.passwords)) {
-      for (const p of vaultData.passwords) {
-        if (!p.service || !p.credential) continue;
-        const remoteUpdatedAt = Number(p.updatedAt) || (p.createdAt ? new Date(p.createdAt).getTime() : Date.now());
-        const remoteClock = { counter: Number(p.logicalCounter) || 0, peerId: p.peerId || fromPeerId };
-
-        const tombstone = nexVaultDatabase.getDeletedRecord(user.id, p.service, 'password');
-        if (tombstone) {
-          const tombstoneClock = { counter: Number(tombstone.logical_counter) || 0, peerId: tombstone.peer_id || '' };
-          if ((tombstoneClock.counter > 0 || remoteClock.counter > 0) ? (LamportClock.compare(tombstoneClock, remoteClock) >= 0) : (Number(tombstone.deleted_at) >= remoteUpdatedAt)) {
-            continue; // Tombstone is logically newer than incoming password
-          }
-        }
-
-        const localPwd = nexVaultDatabase.getPassword(user.id, p.service);
-        if (localPwd) {
-          const localClock = { counter: Number(localPwd.logical_counter) || 0, peerId: localPwd.peer_id || '' };
-          const cmp = LamportClock.compare(remoteClock, localClock);
-          const isRemoteNewer = (remoteClock.counter > 0 || localClock.counter > 0) ? (cmp > 0) : (remoteUpdatedAt > (Number(localPwd.updated_at) || 0));
-          if (isRemoteNewer) {
-            nexVaultDatabase.addPassword(user.id, p.service, p.credential, context.encryptionKey, p.username || '', remoteUpdatedAt, remoteClock.counter, remoteClock.peerId, p.otpSecret || '');
-            stateChanged = true;
-          }
-        } else {
-          nexVaultDatabase.addPassword(user.id, p.service, p.credential, context.encryptionKey, p.username || '', remoteUpdatedAt, remoteClock.counter, remoteClock.peerId, p.otpSecret || '');
-          stateChanged = true;
-        }
-      }
-    }
-
-    // 3. Process incoming OTPs with Lamport logical clock reconciliation
-    if (Array.isArray(vaultData.otps)) {
-      for (const o of vaultData.otps) {
-        if (!o.service || !o.secret) continue;
-        const remoteUpdatedAt = Number(o.updatedAt) || (o.createdAt ? new Date(o.createdAt).getTime() : Date.now());
-        const remoteClock = { counter: Number(o.logicalCounter) || 0, peerId: o.peerId || fromPeerId };
-
-        const tombstone = nexVaultDatabase.getDeletedRecord(user.id, o.service, 'otp');
-        if (tombstone) {
-          const tombstoneClock = { counter: Number(tombstone.logical_counter) || 0, peerId: tombstone.peer_id || '' };
-          if ((tombstoneClock.counter > 0 || remoteClock.counter > 0) ? (LamportClock.compare(tombstoneClock, remoteClock) >= 0) : (Number(tombstone.deleted_at) >= remoteUpdatedAt)) {
-            continue; // Tombstone is logically newer than incoming OTP
-          }
-        }
-
-        const localOtp = nexVaultDatabase.getOtpSecretByService(user.id, o.service);
-        if (localOtp) {
-          const localClock = { counter: Number(localOtp.logical_counter) || 0, peerId: localOtp.peer_id || '' };
-          const cmp = LamportClock.compare(remoteClock, localClock);
-          const isRemoteNewer = (remoteClock.counter > 0 || localClock.counter > 0) ? (cmp > 0) : (remoteUpdatedAt > (Number(localOtp.updated_at) || 0));
-          if (isRemoteNewer) {
-            nexVaultDatabase.addOTP(user.id, o.service, o.secret, context.encryptionKey, remoteUpdatedAt);
-            stateChanged = true;
-          }
-        } else {
-          nexVaultDatabase.addOTP(user.id, o.service, o.secret, context.encryptionKey, remoteUpdatedAt);
-          stateChanged = true;
-        }
-      }
-    }
+    const { stateChanged } = desktopVaultService.reconcilePeerVaultSync(vaultData, fromPeerId);
 
     if (stateChanged && mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('vault-updated');
